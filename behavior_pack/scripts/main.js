@@ -2,9 +2,11 @@ import { BlockPermutation, DynamicPropertiesDefinition, ItemStack, system, world
 import { ActionFormData, MessageFormData, ModalFormData } from "@minecraft/server-ui";
 
 const FLAG_BLOCK = "kingdoms:flag";
+const FLAG_LABEL_ENTITY = "kingdoms:flag_label";
 const STORE_KEY = "kingdoms:data:v1";
 const STORE_LIMIT = 32767;
 const SETTLEMENT_MENU_TITLE = "kingdoms:settlement";
+const CREATION_COST = 15;
 const DAY_TICKS = 24000;
 const TAX_COOLDOWN_TICKS = 25 * 60 * 20;
 const LOOT_WINDOW_TICKS = 5 * 60 * 20;
@@ -47,13 +49,13 @@ const PROTECTED_INTERACTIONS = [
 ];
 
 const SETTLEMENT_TYPES = [
-  { name: "Деревня", hp: 120, radius: 35, tax: 4, minPlayers: 1, defeatReward: 8 },
-  { name: "Большая деревня", hp: 180, radius: 55, tax: 8, minPlayers: 2, defeatReward: 14 },
-  { name: "Городок", hp: 260, radius: 80, tax: 14, minPlayers: 3, defeatReward: 22 },
-  { name: "Большой город", hp: 380, radius: 115, tax: 22, minPlayers: 4, defeatReward: 34 },
-  { name: "Замок", hp: 560, radius: 150, tax: 32, minPlayers: 5, defeatReward: 52 },
-  { name: "Королевство", hp: 780, radius: 220, tax: 44, minPlayers: 7, defeatReward: 80 },
-  { name: "Империя", hp: 1100, radius: 300, tax: 64, minPlayers: 10, defeatReward: 128 }
+  { name: "Деревня", hp: 120, radius: 35, tax: 4, minPlayers: 1, defeatReward: 8, upgradeCost: 0 },
+  { name: "Большая деревня", hp: 180, radius: 55, tax: 8, minPlayers: 2, defeatReward: 14, upgradeCost: 80 },
+  { name: "Городок", hp: 260, radius: 80, tax: 14, minPlayers: 3, defeatReward: 22, upgradeCost: 180 },
+  { name: "Большой город", hp: 380, radius: 115, tax: 22, minPlayers: 4, defeatReward: 34, upgradeCost: 400 },
+  { name: "Замок", hp: 560, radius: 150, tax: 32, minPlayers: 5, defeatReward: 52, upgradeCost: 800 },
+  { name: "Королевство", hp: 780, radius: 220, tax: 44, minPlayers: 7, defeatReward: 80, upgradeCost: 1500 },
+  { name: "Империя", hp: 1100, radius: 300, tax: 64, minPlayers: 10, defeatReward: 128, upgradeCost: 2500 }
 ];
 
 const PREFIXES = [
@@ -67,10 +69,18 @@ const PREFIXES = [
   { name: "Советник", description: "Даёт стратегические решения владельцу и координирует развитие." }
 ];
 
+const flagInteractionCooldown = new Map();
+
 world.beforeEvents.worldInitialize?.subscribe((event) => {
   const definition = new DynamicPropertiesDefinition();
   definition.defineString(STORE_KEY, STORE_LIMIT);
   event.propertyRegistry.registerWorldDynamicProperties(definition);
+  event.blockComponentRegistry?.registerCustomComponent("kingdoms:flag_interaction", {
+    onPlayerInteract: (componentEvent) => {
+      if (!componentEvent.player || !componentEvent.block) return;
+      system.run(() => handleFlagInteraction(componentEvent.player, componentEvent.block));
+    }
+  });
 });
 
 world.afterEvents.playerPlaceBlock?.subscribe((event) => {
@@ -80,14 +90,23 @@ world.afterEvents.playerPlaceBlock?.subscribe((event) => {
 
 world.afterEvents.playerInteractWithBlock?.subscribe((event) => {
   if (event.block.typeId !== FLAG_BLOCK) return;
+  handleFlagInteraction(event.player, event.block);
+});
+
+function handleFlagInteraction(player, block) {
+  const cooldownKey = `${getPlayerName(player)}:${getDimensionId(block.dimension)}:${block.location.x}:${block.location.y}:${block.location.z}`;
+  const lastInteractionTick = flagInteractionCooldown.get(cooldownKey) ?? -20;
+  if (system.currentTick - lastInteractionTick < 10) return;
+  flagInteractionCooldown.set(cooldownKey, system.currentTick);
+
   const data = loadData();
-  const settlement = findSettlementByFlag(data, event.block);
+  const settlement = findSettlementByFlag(data, block);
   if (!settlement) {
-    event.player.sendMessage("§cЭтот флаг не привязан к поселению. Сломайте его и поставьте заново.");
+    player.sendMessage("§cЭтот флаг не привязан к поселению. Сломайте его и поставьте заново.");
     return;
   }
-  system.run(() => openSettlementMenu(event.player, settlement.id));
-});
+  system.run(() => openSettlementMenu(player, settlement.id));
+}
 
 world.beforeEvents.playerBreakBlock?.subscribe((event) => {
   const data = loadData();
@@ -188,32 +207,44 @@ async function beginSettlementCreation(player, block) {
   const dimensionId = getDimensionId(block.dimension);
 
   if (data.settlements.some((settlement) => settlement.creatorName === playerName)) {
-    setBlockToAir(block);
+    removePlacedFlag(block, player);
     player.sendMessage("§cУ вас уже есть поселение. Один создатель может владеть только одним флагом.");
+    return;
+  }
+
+  if (countItem(player, "minecraft:emerald") < CREATION_COST) {
+    removePlacedFlag(block, player);
+    player.sendMessage(`§cДля создания поселения нужно ${CREATION_COST} изумрудов.`);
     return;
   }
 
   const overlap = findTerritoryOverlap(data, block.location, dimensionId, SETTLEMENT_TYPES[0].radius, undefined, undefined);
   if (overlap) {
-    setBlockToAir(block);
+    removePlacedFlag(block, player);
     player.sendMessage(`§cСлишком близко к территории: ${settlementDisplayName(data, overlap)}.`);
     return;
   }
 
   const form = new ModalFormData()
     .title("Создание поселения")
-    .textField("Название поселения", "Например: Новгород", `Поселение ${playerName}`);
+    .textField(`Название поселения (${CREATION_COST} изумрудов)`, "Например: Новгород", `Поселение ${playerName}`);
   const response = await showForm(player, form);
   if (response.canceled) {
-    setBlockToAir(block);
-    player.sendMessage("§7Создание поселения отменено, флаг удалён.");
+    removePlacedFlag(block, player);
+    player.sendMessage("§7Создание поселения отменено, флаг возвращён.");
     return;
   }
 
   const name = cleanName(response.formValues?.[0]);
   if (!name) {
-    setBlockToAir(block);
+    removePlacedFlag(block, player);
     player.sendMessage("§cНазвание не может быть пустым.");
+    return;
+  }
+
+  if (!takeItem(player, "minecraft:emerald", CREATION_COST)) {
+    removePlacedFlag(block, player);
+    player.sendMessage(`§cНе хватает изумрудов. Нужно ${CREATION_COST}.`);
     return;
   }
 
@@ -240,7 +271,7 @@ async function beginSettlementCreation(player, block) {
   data.settlements.push(settlement);
   saveData(data);
   updateFlagLabelFor(settlement);
-  world.sendMessage(`§6[Королевства] §f${playerName} основал(а) ${settlementDisplayName(data, settlement)}.`);
+  world.sendMessage(`§6[Королевства] §f${playerName} основал(а) ${settlementDisplayName(data, settlement)} за ${CREATION_COST} изумрудов.`);
 }
 
 async function openSettlementMenu(player, settlementId) {
@@ -252,10 +283,11 @@ async function openSettlementMenu(player, settlementId) {
   }
 
   const nextType = SETTLEMENT_TYPES[settlement.typeIndex + 1];
+  const upgradeLabel = nextType ? `Улучшить до: ${nextType.name} (${nextType.upgradeCost} изумрудов)` : "Максимум развития";
   const form = new ActionFormData()
     .title(SETTLEMENT_MENU_TITLE)
     .body(settlementInfo(data, settlement))
-    .button(nextType ? `Улучшить до: ${nextType.name}` : "Максимум развития", "textures/ui/kingdoms/icon_upgrade")
+    .button(upgradeLabel, "textures/ui/kingdoms/icon_upgrade")
     .button("Жители", "textures/ui/kingdoms/icon_residents")
     .button("Префиксы", "textures/ui/kingdoms/icon_prefixes")
     .button("О префиксах", "textures/ui/kingdoms/icon_info")
@@ -306,12 +338,17 @@ async function upgradeSettlement(player, settlementId) {
     return;
   }
 
+  if (!takeItem(player, "minecraft:emerald", nextType.upgradeCost)) {
+    player.sendMessage(`§cДля улучшения до "${nextType.name}" нужно ${nextType.upgradeCost} изумрудов.`);
+    return;
+  }
+
   settlement.typeIndex += 1;
   settlement.hp = getMaxHp(settlement);
   settlement.morale = Math.min(100, settlement.morale + 10);
   saveData(data);
   updateFlagLabelFor(settlement);
-  world.sendMessage(`§6[Королевства] §f${settlementDisplayName(data, settlement)} улучшено. Мораль выросла.`);
+  world.sendMessage(`§6[Королевства] §f${settlementDisplayName(data, settlement)} улучшено за ${nextType.upgradeCost} изумрудов. Мораль выросла.`);
 }
 
 async function openResidentsMenu(player, settlementId) {
@@ -656,25 +693,32 @@ function updateFlagLabelFor(settlement, knownData) {
   const location = { x: settlement.flag.x + 0.5, y: settlement.flag.y + 2.35, z: settlement.flag.z + 0.5 };
   let labels = [];
   try {
-    labels = dimension.getEntities({ type: "minecraft:armor_stand", tags: [LABEL_TAG, tag] });
+    labels = dimension.getEntities({ type: FLAG_LABEL_ENTITY, tags: [LABEL_TAG, tag] });
   } catch (_error) {
     labels = [];
   }
 
-  const label = labels[0] ?? dimension.spawnEntity("minecraft:armor_stand", location);
+  const label = labels[0] ?? dimension.spawnEntity(FLAG_LABEL_ENTITY, location);
   if (!label.hasTag(LABEL_TAG)) label.addTag(LABEL_TAG);
   if (!label.hasTag(tag)) label.addTag(tag);
   label.nameTag = settlementLabel(data, settlement);
   try { label.teleport(location, { dimension }); } catch (_error) { /* Older runtimes keep the stand where it spawned. */ }
-  try { label.addEffect("invisibility", 120, { amplifier: 0, showParticles: false }); } catch (_error) { /* Name tag still works without invisibility. */ }
 
   for (const duplicate of labels.slice(1)) duplicate.remove();
+
+  // Remove old armor-stand labels from earlier builds; invisible armor stands can hide name tags.
+  try {
+    for (const oldLabel of dimension.getEntities({ type: "minecraft:armor_stand", tags: [LABEL_TAG, tag] })) oldLabel.remove();
+  } catch (_error) {
+    // Cleanup is best-effort only.
+  }
 }
 
 function removeFlagLabel(settlement) {
   const dimension = safeDimension(settlement.dimensionId);
   if (!dimension) return;
   try {
+    for (const entity of dimension.getEntities({ type: FLAG_LABEL_ENTITY, tags: [LABEL_TAG, settlementTag(settlement.id)] })) entity.remove();
     for (const entity of dimension.getEntities({ type: "minecraft:armor_stand", tags: [LABEL_TAG, settlementTag(settlement.id)] })) entity.remove();
   } catch (_error) {
     // Ignore cleanup failures; they do not affect settlement data.
@@ -696,6 +740,8 @@ function settlementInfo(data, settlement) {
     `Жители: ${getPopulation(settlement)}`,
     `Территория: ${getTerritoryRadius(settlement)} блок(ов)`,
     `Налог: ${type.tax} изумруд(ов) раз в 25 минут`,
+    `Создание поселения: ${CREATION_COST} изумрудов`,
+    `Следующее улучшение: ${SETTLEMENT_TYPES[settlement.typeIndex + 1]?.upgradeCost ?? "нет"} изумрудов`,
     `Альянс: ${alliance ? alliance.name : "нет"}`,
     `Войны: ${wars.length ? wars.join(", ") : "нет"}`
   ].join("\n");
@@ -872,19 +918,73 @@ async function showForm(player, form) {
 }
 
 function giveEmeralds(player, amount) {
+  giveItems(player, "minecraft:emerald", amount);
+}
+
+function countItem(player, typeId) {
+  const inventory = getInventory(player);
+  if (!inventory) return 0;
+
+  let total = 0;
+  for (let slot = 0; slot < inventory.size; slot += 1) {
+    const item = inventory.getItem(slot);
+    if (item?.typeId === typeId) total += item.amount;
+  }
+  return total;
+}
+
+function takeItem(player, typeId, amount) {
+  const inventory = getInventory(player);
+  if (!inventory || countItem(player, typeId) < amount) return false;
+
+  let remaining = amount;
+  for (let slot = 0; slot < inventory.size && remaining > 0; slot += 1) {
+    const item = inventory.getItem(slot);
+    if (item?.typeId !== typeId) continue;
+
+    const removed = Math.min(item.amount, remaining);
+    const newAmount = item.amount - removed;
+    remaining -= removed;
+    if (newAmount <= 0) inventory.setItem(slot, undefined);
+    else {
+      item.amount = newAmount;
+      inventory.setItem(slot, item);
+    }
+  }
+
+  return remaining === 0;
+}
+
+function getInventory(player) {
+  return player.getComponent("minecraft:inventory")?.container ?? player.getComponent("inventory")?.container;
+}
+
+function giveItems(player, typeId, amount) {
   let remaining = amount;
   while (remaining > 0) {
     const stackAmount = Math.min(64, remaining);
-    const stack = new ItemStack("minecraft:emerald", stackAmount);
-    const inventory = player.getComponent("minecraft:inventory")?.container ?? player.getComponent("inventory")?.container;
-    try {
-      if (inventory) inventory.addItem(stack);
-      else player.dimension.spawnItem(stack, player.location);
-    } catch (_error) {
-      player.dimension.spawnItem(stack, player.location);
-    }
+    giveSingleStack(player, new ItemStack(typeId, stackAmount));
     remaining -= stackAmount;
   }
+}
+
+function giveItemStack(player, stack) {
+  giveSingleStack(player, stack);
+}
+
+function giveSingleStack(player, stack) {
+  const inventory = getInventory(player);
+  try {
+    if (inventory) inventory.addItem(stack);
+    else player.dimension.spawnItem(stack, player.location);
+  } catch (_error) {
+    player.dimension.spawnItem(stack, player.location);
+  }
+}
+
+function removePlacedFlag(block, player) {
+  setBlockToAir(block);
+  giveItemStack(player, new ItemStack(FLAG_BLOCK, 1));
 }
 
 function removeFlagBlock(settlement) {

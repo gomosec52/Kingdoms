@@ -17,6 +17,9 @@
           "render_method": "alpha_test"
         }
       },
+      "minecraft:custom_components": [
+        "kingdoms:flag_interaction"
+      ],
       "minecraft:collision_box": true,
       "minecraft:selection_box": true,
       "minecraft:destructible_by_mining": {
