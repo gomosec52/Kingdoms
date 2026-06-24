@@ -6,6 +6,7 @@ const STORE_KEY = "kingdoms:data:v1";
 const STORE_LIMIT = 32767;
 const DAY_TICKS = 24000;
 const TAX_COOLDOWN_TICKS = 25 * 60 * 20;
+const LOOT_WINDOW_TICKS = 5 * 60 * 20;
 const LABEL_TAG = "kingdoms_flag_label";
 const PROTECTED_INTERACTIONS = [
   "minecraft:chest",
@@ -113,12 +114,26 @@ world.beforeEvents.playerBreakBlock?.subscribe((event) => {
   if (settlement && !hasTerritoryAccess(data, settlement, playerName)) {
     event.cancel = true;
     event.player.sendMessage(`§cЧужая территория: ${settlementDisplayName(data, settlement)}. Ломать блоки нельзя.`);
+    return;
+  }
+
+  const lootZone = findLootZoneAt(data, block.location, getDimensionId(block.dimension));
+  if (lootZone && !hasLootAccess(data, lootZone, playerName)) {
+    event.cancel = true;
+    event.player.sendMessage(`§cЗона мародёрства "${lootZone.name}" временно доступна только победителям.`);
   }
 });
 
 world.beforeEvents.playerPlaceBlock?.subscribe((event) => {
   const data = loadData();
   const playerName = getPlayerName(event.player);
+  const lootZone = findLootZoneAt(data, event.block.location, getDimensionId(event.block.dimension));
+  if (lootZone && !hasLootAccess(data, lootZone, playerName)) {
+    event.cancel = true;
+    event.player.sendMessage(`§cЗона мародёрства "${lootZone.name}" временно доступна только победителям.`);
+    return;
+  }
+
   const settlement = findSettlementAt(data, event.block.location, getDimensionId(event.block.dimension));
   if (settlement && !hasTerritoryAccess(data, settlement, playerName)) {
     event.cancel = true;
@@ -132,6 +147,13 @@ world.beforeEvents.playerInteractWithBlock?.subscribe((event) => {
 
   const data = loadData();
   const playerName = getPlayerName(event.player);
+  const lootZone = findLootZoneAt(data, event.block.location, getDimensionId(event.block.dimension));
+  if (lootZone && !hasLootAccess(data, lootZone, playerName)) {
+    event.cancel = true;
+    event.player.sendMessage(`§cЗона мародёрства "${lootZone.name}" временно доступна только победителям.`);
+    return;
+  }
+
   const settlement = findSettlementAt(data, event.block.location, getDimensionId(event.block.dimension));
   if (settlement && !hasTerritoryAccess(data, settlement, playerName)) {
     event.cancel = true;
@@ -157,6 +179,7 @@ world.beforeEvents.entityHurt?.subscribe((event) => {
 
 system.runInterval(() => updateFlagLabels(), 60);
 system.runInterval(() => updateMoraleForNewDay(), 1200);
+system.runInterval(() => cleanupExpiredLootZones(), 100);
 
 async function beginSettlementCreation(player, block) {
   const data = loadData();
@@ -542,6 +565,15 @@ function handleWarVictory(data, winnerId, loserId) {
   }
 
   winner.morale = Math.min(100, winner.morale + 12);
+  data.lootZones.push({
+    name: loser.name,
+    dimensionId: loser.dimensionId,
+    center: { ...loser.flag },
+    radius: getTerritoryRadius(loser),
+    winnerSettlementId: winner.id,
+    winnerAllianceId: winner.allianceId,
+    expiresTick: system.currentTick + LOOT_WINDOW_TICKS
+  });
   disbandSettlement(data, loser.id, `проиграло войну против ${winner.name}`, false);
   world.sendMessage(`§4[Война] §f${settlementDisplayName(data, winner)} победило. Поселение ${loser.name} распалось. Победители могут мародёрить бывшую территорию 5 минут.`);
 }
@@ -600,6 +632,13 @@ function updateMoraleForNewDay() {
 
   for (const id of disbandIds) disbandSettlement(data, id, "мораль упала до 0");
   if (changed || disbandIds.length) saveData(data);
+}
+
+function cleanupExpiredLootZones() {
+  const data = loadData();
+  const before = data.lootZones.length;
+  data.lootZones = data.lootZones.filter((zone) => zone.expiresTick > system.currentTick);
+  if (data.lootZones.length !== before) saveData(data);
 }
 
 function updateFlagLabels() {
@@ -677,6 +716,7 @@ function loadData() {
     const data = JSON.parse(raw);
     if (!Array.isArray(data.settlements)) data.settlements = [];
     if (!Array.isArray(data.alliances)) data.alliances = [];
+    if (!Array.isArray(data.lootZones)) data.lootZones = [];
     if (typeof data.nextSettlementIdValue !== "number") data.nextSettlementIdValue = data.settlements.reduce((max, settlement) => Math.max(max, settlement.id || 0), 0) + 1;
     if (typeof data.nextAllianceIdValue !== "number") data.nextAllianceIdValue = data.alliances.reduce((max, alliance) => Math.max(max, alliance.id || 0), 0) + 1;
     for (const settlement of data.settlements) {
@@ -703,7 +743,7 @@ function saveData(data) {
 }
 
 function emptyData() {
-  return { version: 1, settlements: [], alliances: [], nextSettlementIdValue: 1, nextAllianceIdValue: 1 };
+  return { version: 1, settlements: [], alliances: [], lootZones: [], nextSettlementIdValue: 1, nextAllianceIdValue: 1 };
 }
 
 function nextSettlementId(data) {
@@ -738,6 +778,10 @@ function findSettlementAt(data, location, dimensionId) {
   return closest;
 }
 
+function findLootZoneAt(data, location, dimensionId) {
+  return data.lootZones.find((zone) => zone.dimensionId === dimensionId && zone.expiresTick > system.currentTick && distance2D(zone.center, location) <= zone.radius);
+}
+
 function findTerritoryOverlap(data, center, dimensionId, radius, ignoreSettlementId, alliedAllianceId, ignoredLoserId) {
   for (const settlement of data.settlements) {
     if (settlement.id === ignoreSettlementId || settlement.id === ignoredLoserId) continue;
@@ -752,6 +796,13 @@ function hasTerritoryAccess(data, settlement, playerName) {
   if (isMember(settlement, playerName)) return true;
   if (!settlement.allianceId) return false;
   return data.settlements.some((candidate) => candidate.allianceId === settlement.allianceId && isMember(candidate, playerName));
+}
+
+function hasLootAccess(data, zone, playerName) {
+  const winner = getSettlement(data, zone.winnerSettlementId);
+  if (winner && isMember(winner, playerName)) return true;
+  if (!zone.winnerAllianceId) return false;
+  return data.settlements.some((settlement) => settlement.allianceId === zone.winnerAllianceId && isMember(settlement, playerName));
 }
 
 function getPlayerSettlement(data, playerName) {
