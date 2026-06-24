@@ -1,0 +1,32 @@
+{
+  "format_version": "1.21.20",
+  "minecraft:block": {
+    "description": {
+      "identifier": "kingdoms:flag",
+      "menu_category": {
+        "category": "items",
+        "group": "itemGroup.name.construction"
+      }
+    },
+    "components": {
+      "minecraft:display_name": "block.kingdoms.flag.name",
+      "minecraft:geometry": "geometry.kingdoms_flag",
+      "minecraft:material_instances": {
+        "*": {
+          "texture": "kingdoms_flag",
+          "render_method": "alpha_test"
+        }
+      },
+      "minecraft:custom_components": [
+        "kingdoms:flag_interaction"
+      ],
+      "minecraft:collision_box": true,
+      "minecraft:selection_box": true,
+      "minecraft:destructible_by_mining": {
+        "seconds_to_destroy": 2.0
+      },
+      "minecraft:destructible_by_explosion": false,
+      "minecraft:map_color": "#8f2d2d"
+    }
+  }
+}
