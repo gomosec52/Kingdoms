@@ -4,6 +4,7 @@ import { ActionFormData, MessageFormData, ModalFormData } from "@minecraft/serve
 const FLAG_BLOCK = "kingdoms:flag";
 const STORE_KEY = "kingdoms:data:v1";
 const STORE_LIMIT = 32767;
+const SETTLEMENT_MENU_TITLE = "kingdoms:settlement";
 const DAY_TICKS = 24000;
 const TAX_COOLDOWN_TICKS = 25 * 60 * 20;
 const LOOT_WINDOW_TICKS = 5 * 60 * 20;
@@ -252,16 +253,16 @@ async function openSettlementMenu(player, settlementId) {
 
   const nextType = SETTLEMENT_TYPES[settlement.typeIndex + 1];
   const form = new ActionFormData()
-    .title(`§6${settlementDisplayName(data, settlement)}`)
+    .title(SETTLEMENT_MENU_TITLE)
     .body(settlementInfo(data, settlement))
-    .button(nextType ? `Улучшить до: ${nextType.name}` : "Максимальный тип достигнут")
-    .button("Жители")
-    .button("Префиксы")
-    .button("О префиксах")
-    .button("Создать альянс")
-    .button("Объявить войну")
-    .button("Налог")
-    .button("Расформировать");
+    .button(nextType ? `Улучшить до: ${nextType.name}` : "Максимум развития", "textures/ui/kingdoms/icon_upgrade")
+    .button("Жители", "textures/ui/kingdoms/icon_residents")
+    .button("Префиксы", "textures/ui/kingdoms/icon_prefixes")
+    .button("О префиксах", "textures/ui/kingdoms/icon_info")
+    .button("Создать альянс", "textures/ui/kingdoms/icon_alliance")
+    .button("Объявить войну", "textures/ui/kingdoms/icon_war")
+    .button("Налог", "textures/ui/kingdoms/icon_tax")
+    .button("Расформировать", "textures/ui/kingdoms/icon_disband");
 
   const response = await showForm(player, form);
   if (response.canceled) return;
@@ -685,6 +686,8 @@ function settlementInfo(data, settlement) {
   const alliance = getAlliance(data, settlement.allianceId);
   const wars = (settlement.wars || []).map((id) => getSettlement(data, id)?.name).filter(Boolean);
   return [
+    settlementDisplayName(data, settlement),
+    "",
     `Тип: ${type.name}`,
     `Название: ${settlement.name}`,
     `Создатель: ${settlement.creatorPrefix || "Основатель"} ${settlement.creatorName}`,
