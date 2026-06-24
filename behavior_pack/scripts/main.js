@@ -1,7 +1,9 @@
 import { BlockPermutation, DynamicPropertiesDefinition, ItemStack, system, world } from "@minecraft/server";
 import { ActionFormData, MessageFormData, ModalFormData } from "@minecraft/server-ui";
 
-const FLAG_BLOCK = "kingdoms:flag";
+const FLAG_ITEM = "kingdoms:flag";
+const FLAG_ENTITY = "kingdoms:flag";
+const LEGACY_FLAG_BLOCK = "kingdoms:flag";
 const FLAG_LABEL_ENTITY = "kingdoms:flag_label";
 const STORE_KEY = "kingdoms:data:v1";
 const STORE_LIMIT = 32767;
@@ -70,37 +72,51 @@ const PREFIXES = [
 ];
 
 const flagInteractionCooldown = new Map();
+const flagPlacementCooldown = new Map();
 
 world.beforeEvents.worldInitialize?.subscribe((event) => {
   const definition = new DynamicPropertiesDefinition();
   definition.defineString(STORE_KEY, STORE_LIMIT);
   event.propertyRegistry.registerWorldDynamicProperties(definition);
-  event.blockComponentRegistry?.registerCustomComponent("kingdoms:flag_interaction", {
-    onPlayerInteract: (componentEvent) => {
-      if (!componentEvent.player || !componentEvent.block) return;
-      system.run(() => handleFlagInteraction(componentEvent.player, componentEvent.block));
-    }
-  });
+});
+
+world.beforeEvents.itemUseOn?.subscribe((event) => {
+  if (event.itemStack?.typeId !== FLAG_ITEM) return;
+  event.cancel = true;
+  system.run(() => beginSettlementCreationFromItem(event.source, event.block, event.blockFace));
+});
+
+world.afterEvents.itemUseOn?.subscribe((event) => {
+  if (event.itemStack?.typeId !== FLAG_ITEM) return;
+  system.run(() => beginSettlementCreationFromItem(event.source, event.block, event.blockFace));
+});
+
+world.afterEvents.playerInteractWithEntity?.subscribe((event) => {
+  const target = event.target ?? event.entity;
+  if (!target || target.typeId !== FLAG_ENTITY) return;
+  handleFlagInteraction(event.player, target);
 });
 
 world.afterEvents.playerPlaceBlock?.subscribe((event) => {
-  if (event.block.typeId !== FLAG_BLOCK) return;
+  if (event.block.typeId !== LEGACY_FLAG_BLOCK) return;
   system.run(() => beginSettlementCreation(event.player, event.block));
 });
 
 world.afterEvents.playerInteractWithBlock?.subscribe((event) => {
-  if (event.block.typeId !== FLAG_BLOCK) return;
+  if (event.block.typeId !== LEGACY_FLAG_BLOCK) return;
   handleFlagInteraction(event.player, event.block);
 });
 
-function handleFlagInteraction(player, block) {
-  const cooldownKey = `${getPlayerName(player)}:${getDimensionId(block.dimension)}:${block.location.x}:${block.location.y}:${block.location.z}`;
+function handleFlagInteraction(player, flagSource) {
+  const cooldownKey = `${getPlayerName(player)}:${getDimensionId(flagSource.dimension)}:${Math.floor(flagSource.location.x)}:${Math.floor(flagSource.location.y)}:${Math.floor(flagSource.location.z)}`;
   const lastInteractionTick = flagInteractionCooldown.get(cooldownKey) ?? -20;
   if (system.currentTick - lastInteractionTick < 10) return;
   flagInteractionCooldown.set(cooldownKey, system.currentTick);
 
   const data = loadData();
-  const settlement = findSettlementByFlag(data, block);
+  const settlement = flagSource.typeId === FLAG_ENTITY
+    ? findSettlementByFlagEntity(data, flagSource)
+    : findSettlementByFlag(data, flagSource);
   if (!settlement) {
     player.sendMessage("§cЭтот флаг не привязан к поселению. Сломайте его и поставьте заново.");
     return;
@@ -113,7 +129,7 @@ world.beforeEvents.playerBreakBlock?.subscribe((event) => {
   const block = event.block;
   const playerName = getPlayerName(event.player);
 
-  if (block.typeId === FLAG_BLOCK) {
+  if (block.typeId === LEGACY_FLAG_BLOCK) {
     const settlement = findSettlementByFlag(data, block);
     if (!settlement) return;
 
@@ -184,6 +200,28 @@ world.beforeEvents.playerInteractWithBlock?.subscribe((event) => {
 world.beforeEvents.entityHurt?.subscribe((event) => {
   const victim = event.hurtEntity;
   const attacker = event.damageSource?.damagingEntity;
+  if (victim?.typeId === FLAG_ENTITY) {
+    event.cancel = true;
+    if (!attacker || attacker.typeId !== "minecraft:player") return;
+
+    const data = loadData();
+    const settlement = findSettlementByFlagEntity(data, victim);
+    if (!settlement) {
+      attacker.sendMessage("§cЭтот флаг не привязан к поселению.");
+      return;
+    }
+
+    const attackerSettlement = getPlayerSettlement(data, getPlayerName(attacker));
+    const isEnemyAtWar = attackerSettlement && isAtWar(settlement, attackerSettlement.id);
+    if (!isEnemyAtWar) {
+      attacker.sendMessage("§cФлаг можно бить только врагу во время объявленной войны.");
+      return;
+    }
+
+    damageFlag(data, settlement, attackerSettlement, attacker);
+    return;
+  }
+
   if (!victim || !attacker || victim.typeId !== "minecraft:player" || attacker.typeId !== "minecraft:player") return;
 
   const data = loadData();
@@ -200,6 +238,96 @@ world.beforeEvents.entityHurt?.subscribe((event) => {
 system.runInterval(() => updateFlagLabels(), 60);
 system.runInterval(() => updateMoraleForNewDay(), 1200);
 system.runInterval(() => cleanupExpiredLootZones(), 100);
+
+async function beginSettlementCreationFromItem(player, clickedBlock, blockFace) {
+  if (!player || !clickedBlock) return;
+
+  const data = loadData();
+  const playerName = getPlayerName(player);
+  const dimensionId = getDimensionId(clickedBlock.dimension);
+  const spawnLocation = getFlagPlacementLocation(clickedBlock, blockFace);
+  const territoryCenter = blockPosition(spawnLocation);
+  const cooldownKey = `${playerName}:${dimensionId}:${territoryCenter.x}:${territoryCenter.y}:${territoryCenter.z}`;
+  const lastPlacementTick = flagPlacementCooldown.get(cooldownKey) ?? -20;
+  if (system.currentTick - lastPlacementTick < 10) return;
+  flagPlacementCooldown.set(cooldownKey, system.currentTick);
+
+  if (data.settlements.some((settlement) => settlement.creatorName === playerName)) {
+    player.sendMessage("§cУ вас уже есть поселение. Один создатель может владеть только одним флагом.");
+    return;
+  }
+
+  if (countItem(player, "minecraft:emerald") < CREATION_COST) {
+    player.sendMessage(`§cДля создания поселения нужно ${CREATION_COST} изумрудов.`);
+    return;
+  }
+
+  const overlap = findTerritoryOverlap(data, territoryCenter, dimensionId, SETTLEMENT_TYPES[0].radius, undefined, undefined);
+  if (overlap) {
+    player.sendMessage(`§cСлишком близко к территории: ${settlementDisplayName(data, overlap)}.`);
+    return;
+  }
+
+  const form = new ModalFormData()
+    .title("Создание поселения")
+    .textField(`Название поселения (${CREATION_COST} изумрудов)`, "Например: Новгород", `Поселение ${playerName}`);
+  const response = await showForm(player, form);
+  if (response.canceled) {
+    player.sendMessage("§7Создание поселения отменено.");
+    return;
+  }
+
+  const name = cleanName(response.formValues?.[0]);
+  if (!name) {
+    player.sendMessage("§cНазвание не может быть пустым.");
+    return;
+  }
+
+  if (!takeItem(player, "minecraft:emerald", CREATION_COST)) {
+    player.sendMessage(`§cНе хватает изумрудов. Нужно ${CREATION_COST}.`);
+    return;
+  }
+
+  if (!takeItem(player, FLAG_ITEM, 1)) {
+    giveEmeralds(player, CREATION_COST);
+    player.sendMessage("§cПредмет флага не найден в инвентаре.");
+    return;
+  }
+
+  const nowDay = getCurrentDay();
+  const settlement = {
+    id: nextSettlementId(data),
+    name,
+    typeIndex: 0,
+    creatorName: playerName,
+    creatorPrefix: "Основатель",
+    members: {},
+    hp: SETTLEMENT_TYPES[0].hp,
+    morale: 75,
+    territoryBonus: 0,
+    dimensionId,
+    flag: territoryCenter,
+    wars: [],
+    allianceId: undefined,
+    createdTick: system.currentTick,
+    lastTaxTick: -TAX_COOLDOWN_TICKS,
+    lastMoraleDay: nowDay
+  };
+
+  try {
+    spawnOrUpdateFlagEntity(settlement, data);
+  } catch (error) {
+    giveEmeralds(player, CREATION_COST);
+    giveItemStack(player, new ItemStack(FLAG_ITEM, 1));
+    player.sendMessage(`§cНе удалось поставить флаг-сущность: ${error}`);
+    return;
+  }
+
+  data.settlements.push(settlement);
+  saveData(data);
+  updateFlagLabelFor(settlement, data);
+  world.sendMessage(`§6[Королевства] §f${playerName} основал(а) ${settlementDisplayName(data, settlement)} за ${CREATION_COST} изумрудов.`);
+}
 
 async function beginSettlementCreation(player, block) {
   const data = loadData();
@@ -686,29 +814,15 @@ function updateFlagLabels() {
 
 function updateFlagLabelFor(settlement, knownData) {
   const data = knownData ?? loadData();
+  const flag = spawnOrUpdateFlagEntity(settlement, data);
+  if (flag) flag.nameTag = settlementLabel(data, settlement);
+
+  // Cleanup label entities from older builds; the flag entity now owns the visible name tag.
   const dimension = safeDimension(settlement.dimensionId);
   if (!dimension) return;
-
-  const tag = settlementTag(settlement.id);
-  const location = { x: settlement.flag.x + 0.5, y: settlement.flag.y + 2.35, z: settlement.flag.z + 0.5 };
-  let labels = [];
   try {
-    labels = dimension.getEntities({ type: FLAG_LABEL_ENTITY, tags: [LABEL_TAG, tag] });
-  } catch (_error) {
-    labels = [];
-  }
-
-  const label = labels[0] ?? dimension.spawnEntity(FLAG_LABEL_ENTITY, location);
-  if (!label.hasTag(LABEL_TAG)) label.addTag(LABEL_TAG);
-  if (!label.hasTag(tag)) label.addTag(tag);
-  label.nameTag = settlementLabel(data, settlement);
-  try { label.teleport(location, { dimension }); } catch (_error) { /* Older runtimes keep the stand where it spawned. */ }
-
-  for (const duplicate of labels.slice(1)) duplicate.remove();
-
-  // Remove old armor-stand labels from earlier builds; invisible armor stands can hide name tags.
-  try {
-    for (const oldLabel of dimension.getEntities({ type: "minecraft:armor_stand", tags: [LABEL_TAG, tag] })) oldLabel.remove();
+    for (const label of dimension.getEntities({ type: FLAG_LABEL_ENTITY, tags: [LABEL_TAG, settlementTag(settlement.id)] })) label.remove();
+    for (const oldLabel of dimension.getEntities({ type: "minecraft:armor_stand", tags: [LABEL_TAG, settlementTag(settlement.id)] })) oldLabel.remove();
   } catch (_error) {
     // Cleanup is best-effort only.
   }
@@ -811,6 +925,42 @@ function findSettlementByFlag(data, block) {
   const position = blockPosition(block.location);
   const dimensionId = getDimensionId(block.dimension);
   return data.settlements.find((settlement) => settlement.dimensionId === dimensionId && sameBlock(settlement.flag, position));
+}
+
+function findSettlementByFlagEntity(data, entity) {
+  const tag = entity.getTags?.().find((entry) => entry.startsWith("kingdoms_id_"));
+  if (tag) {
+    const id = Number(tag.replace("kingdoms_id_", ""));
+    const settlement = getSettlement(data, id);
+    if (settlement) return settlement;
+  }
+
+  const position = blockPosition(entity.location);
+  const dimensionId = getDimensionId(entity.dimension);
+  return data.settlements.find((settlement) => settlement.dimensionId === dimensionId && distance2D(settlement.flag, position) <= 1.5);
+}
+
+function spawnOrUpdateFlagEntity(settlement, data) {
+  const dimension = safeDimension(settlement.dimensionId);
+  if (!dimension) return undefined;
+
+  const tag = settlementTag(settlement.id);
+  const location = getFlagEntityLocation(settlement.flag);
+  let flags = [];
+  try {
+    flags = dimension.getEntities({ type: FLAG_ENTITY, tags: [tag] });
+  } catch (_error) {
+    flags = [];
+  }
+
+  const flag = flags[0] ?? dimension.spawnEntity(FLAG_ENTITY, location);
+  if (!flag.hasTag("kingdoms_flag")) flag.addTag("kingdoms_flag");
+  if (!flag.hasTag(tag)) flag.addTag(tag);
+  flag.nameTag = settlementLabel(data, settlement);
+  try { flag.teleport(location, { dimension }); } catch (_error) { /* Keep the entity if teleport is unavailable. */ }
+
+  for (const duplicate of flags.slice(1)) duplicate.remove();
+  return flag;
 }
 
 function findSettlementAt(data, location, dimensionId) {
@@ -984,14 +1134,19 @@ function giveSingleStack(player, stack) {
 
 function removePlacedFlag(block, player) {
   setBlockToAir(block);
-  giveItemStack(player, new ItemStack(FLAG_BLOCK, 1));
+  giveItemStack(player, new ItemStack(FLAG_ITEM, 1));
 }
 
 function removeFlagBlock(settlement) {
   const dimension = safeDimension(settlement.dimensionId);
   if (!dimension) return;
   const block = dimension.getBlock(settlement.flag);
-  if (block?.typeId === FLAG_BLOCK) setBlockToAir(block);
+  if (block?.typeId === LEGACY_FLAG_BLOCK) setBlockToAir(block);
+  try {
+    for (const flag of dimension.getEntities({ type: FLAG_ENTITY, tags: [settlementTag(settlement.id)] })) flag.remove();
+  } catch (_error) {
+    // Entity cleanup is best-effort; settlement data is still removed.
+  }
 }
 
 function setBlockToAir(block) {
@@ -1012,6 +1167,33 @@ function safeDimension(dimensionId) {
 
 function getDimensionId(dimension) {
   return dimension.id.replace("minecraft:", "");
+}
+
+function getFlagPlacementLocation(clickedBlock, blockFace) {
+  const offset = blockFaceOffset(blockFace);
+  return {
+    x: Math.floor(clickedBlock.location.x) + offset.x + 0.5,
+    y: Math.floor(clickedBlock.location.y) + offset.y,
+    z: Math.floor(clickedBlock.location.z) + offset.z + 0.5
+  };
+}
+
+function getFlagEntityLocation(flagPosition) {
+  return {
+    x: Math.floor(flagPosition.x) + 0.5,
+    y: Math.floor(flagPosition.y),
+    z: Math.floor(flagPosition.z) + 0.5
+  };
+}
+
+function blockFaceOffset(blockFace) {
+  const face = String(blockFace ?? "up").toLowerCase();
+  if (face.includes("down")) return { x: 0, y: -1, z: 0 };
+  if (face.includes("north")) return { x: 0, y: 0, z: -1 };
+  if (face.includes("south")) return { x: 0, y: 0, z: 1 };
+  if (face.includes("west")) return { x: -1, y: 0, z: 0 };
+  if (face.includes("east")) return { x: 1, y: 0, z: 0 };
+  return { x: 0, y: 1, z: 0 };
 }
 
 function blockPosition(location) {
