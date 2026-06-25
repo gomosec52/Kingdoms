@@ -976,10 +976,30 @@ function creatorPrefixFor(typeIndex) {
 function subscribeChatPrefixEvents() {
   const beforeHandler = (event) => handlePrefixedChat(event, true);
   const afterHandler = (event) => handlePrefixedChat(event, false);
-  world.beforeEvents.chatSend?.subscribe(beforeHandler);
-  world.beforeEvents.chat?.subscribe(beforeHandler);
-  world.afterEvents.chatSend?.subscribe(afterHandler);
-  world.afterEvents.chat?.subscribe(afterHandler);
+  let subscribed = false;
+
+  if (world.beforeEvents.chatSend?.subscribe) {
+    world.beforeEvents.chatSend.subscribe(beforeHandler);
+    subscribed = true;
+  }
+  if (world.beforeEvents.chat?.subscribe) {
+    world.beforeEvents.chat.subscribe(beforeHandler);
+    subscribed = true;
+  }
+  if (world.afterEvents.chatSend?.subscribe) {
+    world.afterEvents.chatSend.subscribe(afterHandler);
+    subscribed = true;
+  }
+  if (world.afterEvents.chat?.subscribe) {
+    world.afterEvents.chat.subscribe(afterHandler);
+    subscribed = true;
+  }
+
+  if (!subscribed) {
+    system.runTimeout(() => {
+      world.sendMessage("§c[Королевства] Чат-префиксы недоступны: включите Beta APIs / Script API и переимпортируйте пакет.");
+    }, 80);
+  }
 }
 
 function handlePrefixedChat(event, canCancel) {
