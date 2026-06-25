@@ -12,9 +12,7 @@
       "minecraft:display_name": {
         "value": "Флаг поселения"
       },
-      "minecraft:custom_components": [
-        "kingdoms:flag_placer"
-      ],
+      "kingdoms:flag_placer": {},
       "minecraft:icon": "kingdoms_flag_item",
       "minecraft:interact_button": "Поставить флаг",
       "minecraft:max_stack_size": 16

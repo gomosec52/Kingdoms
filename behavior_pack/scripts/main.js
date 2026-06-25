@@ -336,8 +336,8 @@ async function beginSettlementCreationFromItem(player, clickedBlock, blockFace) 
   }
 
   const form = new ModalFormData()
-    .title("Создание поселения")
-    .textField(`Название поселения (${CREATION_COST} изумрудов)`, "Например: Новгород", `Поселение ${playerName}`);
+    .title("Создание поселения");
+  modalTextField(form, `Название поселения (${CREATION_COST} изумрудов)`, "Например: Новгород", `Поселение ${playerName}`);
   const response = await showForm(player, form);
   if (response.canceled) {
     player.sendMessage("§7Создание поселения отменено.");
@@ -422,8 +422,8 @@ async function beginSettlementCreation(player, block) {
   }
 
   const form = new ModalFormData()
-    .title("Создание поселения")
-    .textField(`Название поселения (${CREATION_COST} изумрудов)`, "Например: Новгород", `Поселение ${playerName}`);
+    .title("Создание поселения");
+  modalTextField(form, `Название поселения (${CREATION_COST} изумрудов)`, "Например: Новгород", `Поселение ${playerName}`);
   const response = await showForm(player, form);
   if (response.canceled) {
     removePlacedFlag(block, player);
@@ -580,7 +580,8 @@ async function addResident(player, settlementId) {
     return;
   }
 
-  const form = new ModalFormData().title("Добавить жителя").dropdown("Игрок", candidates, 0);
+  const form = new ModalFormData().title("Добавить жителя");
+  modalDropdown(form, "Игрок", candidates, 0);
   const response = await showForm(player, form);
   if (response.canceled) return;
 
@@ -602,7 +603,8 @@ async function removeResident(player, settlementId) {
     return;
   }
 
-  const form = new ModalFormData().title("Исключить жителя").dropdown("Житель", members, 0);
+  const form = new ModalFormData().title("Исключить жителя");
+  modalDropdown(form, "Житель", members, 0);
   const response = await showForm(player, form);
   if (response.canceled) return;
 
@@ -624,13 +626,15 @@ async function openPrefixesMenu(player, settlementId) {
     return;
   }
 
-  const memberResponse = await showForm(player, new ModalFormData().title("Префиксы").dropdown("Житель", members, 0));
+  const memberForm = new ModalFormData().title("Префиксы");
+  modalDropdown(memberForm, "Житель", members, 0);
+  const memberResponse = await showForm(player, memberForm);
   if (memberResponse.canceled) return;
   const memberName = members[memberResponse.formValues?.[0] ?? 0];
 
-  const prefixResponse = await showForm(player, new ModalFormData()
-    .title(`Префикс для ${memberName}`)
-    .dropdown("Статус", PREFIXES.map((prefix) => prefix.name), 0));
+  const prefixForm = new ModalFormData().title(`Префикс для ${memberName}`);
+  modalDropdown(prefixForm, "Статус", PREFIXES.map((prefix) => prefix.name), 0);
+  const prefixResponse = await showForm(player, prefixForm);
   if (prefixResponse.canceled) return;
 
   settlement.members[memberName].prefix = PREFIXES[prefixResponse.formValues?.[0] ?? 0].name;
@@ -657,7 +661,9 @@ async function openAllianceMenu(player, settlementId) {
   }
 
   const labels = targets.map((candidate) => `${settlementDisplayName(data, candidate)} | Создатель: ${candidate.creatorName}`);
-  const response = await showForm(player, new ModalFormData().title("Создать альянс").dropdown("Поселение", labels, 0));
+  const form = new ModalFormData().title("Создать альянс");
+  modalDropdown(form, "Поселение", labels, 0);
+  const response = await showForm(player, form);
   if (response.canceled) return;
 
   const target = targets[response.formValues?.[0] ?? 0];
@@ -678,9 +684,9 @@ async function openAllianceMenu(player, settlementId) {
     return;
   }
 
-  const nameResponse = await showForm(player, new ModalFormData()
-    .title("Название альянса")
-    .textField("Название альянса", "Например: Северная корона", `${settlement.name} и ${target.name}`));
+  const nameForm = new ModalFormData().title("Название альянса");
+  modalTextField(nameForm, "Название альянса", "Например: Северная корона", `${settlement.name} и ${target.name}`);
+  const nameResponse = await showForm(player, nameForm);
   if (nameResponse.canceled) return;
 
   const name = cleanName(nameResponse.formValues?.[0]);
@@ -722,7 +728,9 @@ async function openWarMenu(player, settlementId) {
   }
 
   const labels = targets.map((candidate) => `${settlementType(candidate).name} "${candidate.name}" | ${candidate.creatorName}`);
-  const response = await showForm(player, new ModalFormData().title("Объявить войну").dropdown("Цель", labels, 0));
+  const form = new ModalFormData().title("Объявить войну");
+  modalDropdown(form, "Цель", labels, 0);
+  const response = await showForm(player, form);
   if (response.canceled) return;
 
   const target = targets[response.formValues?.[0] ?? 0];
@@ -1326,6 +1334,14 @@ async function showForm(player, form) {
     player.sendMessage(`§cНе удалось открыть меню: ${error}`);
     return { canceled: true };
   }
+}
+
+function modalTextField(form, label, placeholder, defaultValue = "") {
+  return form.textField(label, placeholder, { defaultValue });
+}
+
+function modalDropdown(form, label, items, defaultValueIndex = 0) {
+  return form.dropdown(label, items, { defaultValueIndex });
 }
 
 function giveEmeralds(player, amount) {
