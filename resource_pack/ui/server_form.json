@@ -54,8 +54,8 @@
         "main_frame": {
           "type": "panel",
           "size": [
-            330,
-            230
+            380,
+            240
           ],
           "anchor_from": "center",
           "anchor_to": "center",
@@ -67,8 +67,8 @@
                 "texture": "textures/ui/kingdoms/panel_shadow",
                 "alpha": 0.65,
                 "size": [
-                  338,
-                  238
+                  388,
+                  248
                 ],
                 "offset": [
                   3,
@@ -168,11 +168,11 @@
                 "orientation": "horizontal",
                 "size": [
                   "100% - 24px",
-                  "100% - 46px"
+                  "100% - 48px"
                 ],
                 "offset": [
                   0,
-                  40
+                  42
                 ],
                 "anchor_from": "top_middle",
                 "anchor_to": "top_middle",
@@ -182,7 +182,7 @@
                     "info_column": {
                       "type": "panel",
                       "size": [
-                        170,
+                        235,
                         "100%"
                       ],
                       "controls": [
@@ -334,8 +334,8 @@
         "heading": {
           "type": "label",
           "text": "Сведения о поселении",
-          "font_size": "small",
-          "font_scale_factor": 1.05,
+          "font_size": "normal",
+          "font_scale_factor": 1.18,
           "shadow": true,
           "color": [
             0.29,
@@ -352,8 +352,8 @@
         "info_text": {
           "type": "label",
           "text": "#form_text",
-          "font_size": "small",
-          "font_scale_factor": 0.86,
+          "font_size": "normal",
+          "font_scale_factor": 1.05,
           "line_padding": 2,
           "color": [
             0.16,

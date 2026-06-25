@@ -85,6 +85,7 @@ const CREATOR_PREFIXES = [
 
 const flagInteractionCooldown = new Map();
 const flagPlacementCooldown = new Map();
+const prefixedChatCooldown = new Map();
 let flagItemComponentRegistered = false;
 let dynamicPropertiesRegistered = false;
 
@@ -142,6 +143,10 @@ world.afterEvents.playerInteractWithEntity?.subscribe((event) => {
   const target = event.target ?? event.entity;
   if (!target || target.typeId !== FLAG_ENTITY) return;
   handleFlagInteraction(event.player, target);
+});
+
+world.afterEvents.playerSpawn?.subscribe(() => {
+  system.run(() => updatePlayerPrefixDisplays());
 });
 
 world.afterEvents.playerPlaceBlock?.subscribe((event) => {
@@ -282,18 +287,7 @@ world.beforeEvents.entityHurt?.subscribe((event) => {
   }
 });
 
-world.beforeEvents.chatSend?.subscribe((event) => {
-  const player = event.sender;
-  if (!player || player.typeId !== "minecraft:player") return;
-
-  const data = loadData();
-  const prefix = playerDisplayPrefix(data, getPlayerName(player));
-  if (!prefix) return;
-
-  event.cancel = true;
-  const message = cleanChatMessage(event.message);
-  system.run(() => world.sendMessage(`§7[§6${prefix}§7] §f${getPlayerName(player)}§7: §f${message}`));
-});
+subscribeChatPrefixEvents();
 
 system.runInterval(() => updateFlagLabels(), 60);
 system.runInterval(() => updateMoraleForNewDay(), 1200);
@@ -912,21 +906,21 @@ function settlementInfo(data, settlement) {
   const type = settlementType(settlement);
   const alliance = getAlliance(data, settlement.allianceId);
   const wars = (settlement.wars || []).map((id) => getSettlement(data, id)?.name).filter(Boolean);
+  const nextType = SETTLEMENT_TYPES[settlement.typeIndex + 1];
   return [
-    settlementDisplayName(data, settlement),
-    "",
     `Тип: ${type.name}`,
-    `Название: ${settlement.name}`,
-    `Создатель: ${creatorPrefixFor(settlement.typeIndex)} ${settlement.creatorName}`,
-    `Прочность: ${settlement.hp}/${getMaxHp(settlement)}`,
+    `Имя: ${shortText(settlement.name, 18)}`,
+    `Созд.: ${creatorPrefixFor(settlement.typeIndex)}`,
+    shortText(settlement.creatorName, 20),
+    `HP: ${settlement.hp}/${getMaxHp(settlement)}`,
     `Мораль: ${settlement.morale}/100`,
     `Жители: ${getPopulation(settlement)}`,
-    `Территория: ${getTerritoryRadius(settlement)} блок(ов)`,
-    `Налог: ${type.tax} изумруд(ов) раз в 25 минут`,
-    `Создание поселения: ${CREATION_COST} изумрудов`,
-    `Следующее улучшение: ${SETTLEMENT_TYPES[settlement.typeIndex + 1]?.upgradeCost ?? "нет"} изумрудов`,
-    `Альянс: ${alliance ? alliance.name : "нет"}`,
-    `Войны: ${wars.length ? wars.join(", ") : "нет"}`
+    `Радиус: ${getTerritoryRadius(settlement)}`,
+    `Налог: ${type.tax} эм./25м`,
+    `Создание: ${CREATION_COST} эм.`,
+    `Улучш.: ${nextType ? `${nextType.upgradeCost} эм.` : "нет"}`,
+    `Альянс: ${alliance ? shortText(alliance.name, 15) : "нет"}`,
+    `Войны: ${wars.length ? shortText(wars.join(", "), 15) : "нет"}`
   ].join("\n");
 }
 
@@ -940,7 +934,11 @@ function updatePlayerPrefixDisplays(knownData) {
     const playerName = getPlayerName(player);
     const prefix = playerDisplayPrefix(data, playerName);
     const nextNameTag = prefix ? `§6[${prefix}]§r ${playerName}` : playerName;
-    if (player.nameTag !== nextNameTag) player.nameTag = nextNameTag;
+    try {
+      if (player.nameTag !== nextNameTag) player.nameTag = nextNameTag;
+    } catch (_error) {
+      // Some runtimes can reject nameTag writes during player state transitions.
+    }
   }
 }
 
@@ -957,6 +955,35 @@ function playerDisplayPrefix(data, playerName) {
 
 function creatorPrefixFor(typeIndex) {
   return CREATOR_PREFIXES[typeIndex] ?? CREATOR_PREFIXES[0];
+}
+
+function subscribeChatPrefixEvents() {
+  const handler = (event) => handlePrefixedChat(event);
+  world.beforeEvents.chatSend?.subscribe(handler);
+  world.beforeEvents.chat?.subscribe(handler);
+}
+
+function handlePrefixedChat(event) {
+  const player = event.sender ?? event.player;
+  if (!player?.name) return;
+
+  const message = event.message;
+  if (typeof message !== "string" || !message.length) return;
+
+  const data = loadData();
+  const playerName = getPlayerName(player);
+  const prefix = playerDisplayPrefix(data, playerName);
+  if (!prefix) return;
+
+  event.cancel = true;
+  const duplicateKey = `${playerName}:${system.currentTick}:${message}`;
+  if (prefixedChatCooldown.get(duplicateKey) === system.currentTick) return;
+  prefixedChatCooldown.set(duplicateKey, system.currentTick);
+
+  system.run(() => {
+    world.sendMessage(`§7[§6${prefix}§7] §f${playerName}§7: §f${cleanChatMessage(message)}`);
+    updatePlayerPrefixDisplays(data);
+  });
 }
 
 function settlementDisplayName(data, settlement) {
@@ -1155,6 +1182,12 @@ function cleanName(value) {
 
 function cleanChatMessage(value) {
   return String(value ?? "").replace(/§/g, "");
+}
+
+function shortText(value, maxLength) {
+  const text = String(value ?? "").replace(/[\n\r§]/g, "").trim();
+  if (text.length <= maxLength) return text;
+  return `${text.slice(0, Math.max(0, maxLength - 3))}...`;
 }
 
 async function showForm(player, form) {
