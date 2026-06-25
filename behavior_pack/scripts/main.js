@@ -1,147 +1,45 @@
-import * as server from "@minecraft/server";
+import { BlockPermutation, ItemStack, system, world } from "@minecraft/server";
 import { ActionFormData, MessageFormData, ModalFormData } from "@minecraft/server-ui";
-
-const { BlockPermutation, ItemStack, system, world } = server;
-const FLAG_ITEM = "kingdoms:flag";
-const FLAG_ENTITY = "kingdoms:flag";
-const LEGACY_FLAG_BLOCK = "kingdoms:flag";
-const FLAG_LABEL_ENTITY = "kingdoms:flag_label";
-const FLAG_ITEM_USE_COMPONENT = "kingdoms:flag_placer";
-const STORE_KEY = "kingdoms:data:v1";
-const STORE_LIMIT = 32767;
-const SETTLEMENT_MENU_TITLE = "kingdoms:settlement";
-const CREATION_COST = 15;
-const DAY_TICKS = 24000;
-const TAX_COOLDOWN_TICKS = 25 * 60 * 20;
-const LOOT_WINDOW_TICKS = 5 * 60 * 20;
-const LABEL_TAG = "kingdoms_flag_label";
-const PROTECTED_INTERACTIONS = [
-  "minecraft:chest",
-  "minecraft:trapped_chest",
-  "minecraft:barrel",
-  "minecraft:shulker_box",
-  "minecraft:white_shulker_box",
-  "minecraft:orange_shulker_box",
-  "minecraft:magenta_shulker_box",
-  "minecraft:light_blue_shulker_box",
-  "minecraft:yellow_shulker_box",
-  "minecraft:lime_shulker_box",
-  "minecraft:pink_shulker_box",
-  "minecraft:gray_shulker_box",
-  "minecraft:light_gray_shulker_box",
-  "minecraft:cyan_shulker_box",
-  "minecraft:purple_shulker_box",
-  "minecraft:blue_shulker_box",
-  "minecraft:brown_shulker_box",
-  "minecraft:green_shulker_box",
-  "minecraft:red_shulker_box",
-  "minecraft:black_shulker_box",
-  "minecraft:lever",
-  "minecraft:stone_button",
-  "minecraft:oak_button",
-  "minecraft:spruce_button",
-  "minecraft:birch_button",
-  "minecraft:jungle_button",
-  "minecraft:acacia_button",
-  "minecraft:dark_oak_button",
-  "minecraft:mangrove_button",
-  "minecraft:cherry_button",
-  "minecraft:bamboo_button",
-  "minecraft:crimson_button",
-  "minecraft:warped_button",
-  "minecraft:polished_blackstone_button"
-];
-
-const SETTLEMENT_TYPES = [
-  { name: "Деревня", hp: 120, radius: 35, tax: 4, minPlayers: 1, defeatReward: 8, upgradeCost: 0 },
-  { name: "Большая деревня", hp: 180, radius: 55, tax: 8, minPlayers: 2, defeatReward: 14, upgradeCost: 80 },
-  { name: "Городок", hp: 260, radius: 80, tax: 14, minPlayers: 3, defeatReward: 22, upgradeCost: 180 },
-  { name: "Большой город", hp: 380, radius: 115, tax: 22, minPlayers: 4, defeatReward: 34, upgradeCost: 400 },
-  { name: "Замок", hp: 560, radius: 150, tax: 32, minPlayers: 5, defeatReward: 52, upgradeCost: 800 },
-  { name: "Королевство", hp: 780, radius: 220, tax: 44, minPlayers: 7, defeatReward: 80, upgradeCost: 1500 },
-  { name: "Империя", hp: 1100, radius: 300, tax: 64, minPlayers: 10, defeatReward: 128, upgradeCost: 2500 }
-];
-
-const PREFIXES = [
-  { name: "Крестьянин", description: "Добывает еду, дерево и базовые ресурсы для поселения." },
-  { name: "Ремесленник", description: "Создаёт инструменты, блоки, оружие и помогает развивать инфраструктуру." },
-  { name: "Стражник", description: "Охраняет ворота, флаг, склады и жителей на территории поселения." },
-  { name: "Купец", description: "Ведёт торговлю, доставляет ресурсы и помогает поселению богатеть." },
-  { name: "Дружинник", description: "Сражается в походах и защищает союзников во время войны." },
-  { name: "Рыцарь", description: "Элитный воин поселения, отвечает за атаки, оборону и честь государства." },
-  { name: "Дворянин", description: "Помогает управлять жителями, дипломатией и внутренним порядком." },
-  { name: "Советник", description: "Даёт стратегические решения владельцу и координирует развитие." }
-];
-
-const CREATOR_PREFIXES = [
-  "Староста",
-  "Войт",
-  "Посадник",
-  "Бургомистр",
-  "Кастелян",
-  "Король",
-  "Император"
-];
+import {
+  CREATION_COST,
+  creatorPrefixFor,
+  DAY_TICKS,
+  FLAG_ENTITY,
+  FLAG_ITEM,
+  FLAG_LABEL_ENTITY,
+  LABEL_TAG,
+  LEGACY_FLAG_BLOCK,
+  LOOT_WINDOW_TICKS,
+  PREFIXES,
+  PROTECTED_INTERACTIONS,
+  SETTLEMENT_MENU_TITLE,
+  SETTLEMENT_TYPES,
+  STORE_KEY,
+  STORE_LIMIT,
+  TAX_COOLDOWN_TICKS
+} from "./config.js";
+import { bindFlagUseOnFallback, registerFlagComponent, setFlagPlacementHandler } from "./flag.js";
+import {
+  announceChatPrefixStatus,
+  bindPrefixSystem,
+  configurePrefixResolver,
+  getPrefixFor,
+  resetChatPrefixNotice,
+  updatePlayerPrefixDisplays as refreshPlayerPrefixes
+} from "./prefixes.js";
 
 const flagInteractionCooldown = new Map();
 const flagPlacementCooldown = new Map();
-const prefixedChatCooldown = new Map();
-const playerPrefixCache = new Map();
-const chatPrefixNoticeShown = new Set();
-let flagItemComponentRegistered = false;
-let dynamicPropertiesRegistered = false;
-let directChatPrefixAvailable = false;
-let chatPrefixMode = "none";
 
-system.beforeEvents?.startup?.subscribe((event) => {
-  registerFlagItemComponent(event.itemComponentRegistry);
+system.beforeEvents.startup.subscribe((event) => {
+  registerFlagComponent(event.itemComponentRegistry);
 });
 
-world.beforeEvents?.worldInitialize?.subscribe((event) => {
-  registerDynamicProperties(event.propertyRegistry);
-  registerFlagItemComponent(event.itemComponentRegistry);
-});
+setFlagPlacementHandler(beginSettlementCreationFromItem);
 
-function registerDynamicProperties(registry) {
-  const DynamicPropertiesDefinition = server.DynamicPropertiesDefinition;
-  if (dynamicPropertiesRegistered || !registry?.registerWorldDynamicProperties || typeof DynamicPropertiesDefinition !== "function") return;
-
-  try {
-    const definition = new DynamicPropertiesDefinition();
-    definition.defineString(STORE_KEY, STORE_LIMIT);
-    registry.registerWorldDynamicProperties(definition);
-    dynamicPropertiesRegistered = true;
-  } catch (error) {
-    console.warn(`[Kingdoms] Не удалось зарегистрировать хранилище поселений: ${error}`);
-  }
+if (world.afterEvents.itemUseOn) {
+  bindFlagUseOnFallback((handler) => world.afterEvents.itemUseOn.subscribe(handler));
 }
-
-function registerFlagItemComponent(registry) {
-  if (flagItemComponentRegistered || !registry?.registerCustomComponent) return;
-
-  try {
-    registry.registerCustomComponent(FLAG_ITEM_USE_COMPONENT, {
-      onUseOn(event) {
-        if (event.itemStack?.typeId !== FLAG_ITEM) return;
-        system.run(() => beginSettlementCreationFromItem(event.source, event.block, event.blockFace));
-      }
-    });
-    flagItemComponentRegistered = true;
-  } catch (error) {
-    console.warn(`[Kingdoms] Не удалось зарегистрировать компонент флага: ${error}`);
-  }
-}
-
-world.beforeEvents.itemUseOn?.subscribe((event) => {
-  if (event.itemStack?.typeId !== FLAG_ITEM) return;
-  event.cancel = true;
-  system.run(() => beginSettlementCreationFromItem(event.source, event.block, event.blockFace));
-});
-
-world.afterEvents.itemUseOn?.subscribe((event) => {
-  if (event.itemStack?.typeId !== FLAG_ITEM) return;
-  system.run(() => beginSettlementCreationFromItem(event.source, event.block, event.blockFace));
-});
 
 world.afterEvents.playerInteractWithEntity?.subscribe((event) => {
   const target = event.target ?? event.entity;
@@ -149,10 +47,10 @@ world.afterEvents.playerInteractWithEntity?.subscribe((event) => {
   handleFlagInteraction(event.player, target);
 });
 
-world.afterEvents.playerSpawn?.subscribe((event) => {
+world.afterEvents.playerSpawn.subscribe((event) => {
   system.run(() => {
-    if (event.player?.name) chatPrefixNoticeShown.delete(event.player.name);
-    updatePlayerPrefixDisplays();
+    if (event.player?.name) resetChatPrefixNotice(event.player.name);
+    syncPlayerPrefixes();
     announceChatPrefixStatus();
   });
 });
@@ -295,16 +193,20 @@ world.beforeEvents.entityHurt?.subscribe((event) => {
   }
 });
 
-subscribeChatPrefixEvents();
-system.run(() => {
-  updatePlayerPrefixDisplays();
-  announceChatPrefixStatus();
+configurePrefixResolver((playerName) => getPrefixFor(loadData(), playerName, getPlayerSettlement, getMemberRecord));
+bindPrefixSystem();
+
+world.afterEvents.worldLoad.subscribe(() => {
+  system.run(() => {
+    syncPlayerPrefixes();
+    announceChatPrefixStatus();
+  });
 });
 
 system.runInterval(() => updateFlagLabels(), 60);
 system.runInterval(() => updateMoraleForNewDay(), 1200);
 system.runInterval(() => cleanupExpiredLootZones(), 100);
-system.runInterval(() => updatePlayerPrefixDisplays(), 40);
+system.runInterval(() => syncPlayerPrefixes(), 40);
 
 async function beginSettlementCreationFromItem(player, clickedBlock, blockFace) {
   if (!player || !clickedBlock) return;
@@ -393,7 +295,7 @@ async function beginSettlementCreationFromItem(player, clickedBlock, blockFace) 
   data.settlements.push(settlement);
   saveData(data);
   updateFlagLabelFor(settlement, data);
-  updatePlayerPrefixDisplays(data);
+  syncPlayerPrefixes(data);
   world.sendMessage(`§6[Королевства] §f${playerName} основал(а) ${settlementDisplayName(data, settlement)} за ${CREATION_COST} изумрудов.`);
 }
 
@@ -467,7 +369,7 @@ async function beginSettlementCreation(player, block) {
   data.settlements.push(settlement);
   saveData(data);
   updateFlagLabelFor(settlement);
-  updatePlayerPrefixDisplays(data);
+  syncPlayerPrefixes(data);
   world.sendMessage(`§6[Королевства] §f${playerName} основал(а) ${settlementDisplayName(data, settlement)} за ${CREATION_COST} изумрудов.`);
 }
 
@@ -546,7 +448,7 @@ async function upgradeSettlement(player, settlementId) {
   settlement.morale = Math.min(100, settlement.morale + 10);
   saveData(data);
   updateFlagLabelFor(settlement);
-  updatePlayerPrefixDisplays(data);
+  syncPlayerPrefixes(data);
   world.sendMessage(`§6[Королевства] §f${settlementDisplayName(data, settlement)} улучшено за ${nextType.upgradeCost} изумрудов. Мораль выросла.`);
 }
 
@@ -588,7 +490,7 @@ async function addResident(player, settlementId) {
   const name = candidates[response.formValues?.[0] ?? 0];
   settlement.members[name] = { prefix: PREFIXES[0].name, joinedTick: system.currentTick };
   saveData(data);
-  updatePlayerPrefixDisplays(data);
+  syncPlayerPrefixes(data);
   world.sendMessage(`§6[Королевства] §f${name} теперь житель ${settlementDisplayName(data, settlement)}.`);
 }
 
@@ -611,7 +513,7 @@ async function removeResident(player, settlementId) {
   const name = members[response.formValues?.[0] ?? 0];
   delete settlement.members[name];
   saveData(data);
-  updatePlayerPrefixDisplays(data);
+  syncPlayerPrefixes(data);
   world.sendMessage(`§6[Королевства] §f${name} исключён(а) из ${settlementDisplayName(data, settlement)}.`);
 }
 
@@ -639,7 +541,7 @@ async function openPrefixesMenu(player, settlementId) {
 
   settlement.members[memberName].prefix = PREFIXES[prefixResponse.formValues?.[0] ?? 0].name;
   saveData(data);
-  updatePlayerPrefixDisplays(data);
+  syncPlayerPrefixes(data);
   player.sendMessage(`§a${memberName}: ${settlement.members[memberName].prefix}.`);
 }
 
@@ -851,7 +753,7 @@ function disbandSettlement(data, settlementId, reason, announce = true) {
   removeFlagBlock(settlement);
   removeFlagLabel(settlement);
   data.settlements = data.settlements.filter((entry) => entry.id !== settlement.id);
-  updatePlayerPrefixDisplays(data);
+  syncPlayerPrefixes(data);
   if (announce) world.sendMessage(`§6[Королевства] §f${settlement.name} распалось: ${reason}.`);
 }
 
@@ -948,178 +850,14 @@ function settlementLabel(data, settlement) {
   return `${settlementDisplayName(data, settlement)}\n${creatorPrefixFor(settlement.typeIndex)} ${settlement.creatorName}\nHP ${settlement.hp}/${getMaxHp(settlement)} | Мораль ${settlement.morale}`;
 }
 
-function updatePlayerPrefixDisplays(knownData) {
+function syncPlayerPrefixes(knownData) {
   const data = knownData ?? loadData();
-  const onlineNames = new Set();
-  for (const player of world.getPlayers()) {
-    const playerName = getPlayerName(player);
-    onlineNames.add(playerName);
-    const prefix = playerDisplayPrefix(data, playerName);
-    if (prefix) playerPrefixCache.set(playerName, prefix);
-    else playerPrefixCache.delete(playerName);
-
-    applyPlayerPrefix(player, prefix);
-  }
-
-  for (const cachedName of playerPrefixCache.keys()) {
-    if (!onlineNames.has(cachedName)) playerPrefixCache.delete(cachedName);
-  }
-}
-
-function applyPlayerPrefix(player, prefix) {
-  const playerName = getPlayerName(player);
-  const formattedPrefix = prefix ? `§7[§6${prefix}§7] §f` : "";
-  const nextNameTag = prefix ? `${formattedPrefix}${playerName}` : playerName;
-
-  try {
-    if (player.nameTag !== nextNameTag) player.nameTag = nextNameTag;
-  } catch (_error) {
-    // Some runtimes can reject nameTag writes during player state transitions.
-  }
-
-  if (!prefix) {
-    clearDirectChatPrefix(player);
-    return;
-  }
-
-  if (tryApplyDirectChatPrefix(player, formattedPrefix)) {
-    directChatPrefixAvailable = true;
-    chatPrefixMode = "chatNamePrefix";
-  }
-}
-
-function tryApplyDirectChatPrefix(player, formattedPrefix) {
-  try {
-    player.chatNamePrefix = formattedPrefix;
-    player.chatNameSuffix = "";
-    player.chatMessagePrefix = "";
-    return true;
-  } catch (_error) {
-    return false;
-  }
-}
-
-function clearDirectChatPrefix(player) {
-  try {
-    player.chatNamePrefix = "";
-    player.chatNameSuffix = "";
-    player.chatMessagePrefix = "";
-  } catch (_error) {
-    // Direct chat prefix API is optional.
-  }
-}
-
-function playerDisplayPrefix(data, playerName) {
-  const settlement = getPlayerSettlement(data, playerName);
-  if (!settlement) return undefined;
-
-  const role = samePlayerName(settlement.creatorName, playerName)
-    ? creatorPrefixFor(settlement.typeIndex)
-    : getMemberRecord(settlement, playerName)?.prefix;
-  if (!role) return undefined;
-  return role;
+  refreshPlayerPrefixes((playerName) => getPrefixFor(data, playerName, getPlayerSettlement, getMemberRecord));
 }
 
 function getMemberRecord(settlement, playerName) {
   const memberName = Object.keys(settlement.members || {}).find((name) => samePlayerName(name, playerName));
   return memberName ? settlement.members[memberName] : undefined;
-}
-
-function creatorPrefixFor(typeIndex) {
-  return CREATOR_PREFIXES[typeIndex] ?? CREATOR_PREFIXES[0];
-}
-
-function subscribeChatPrefixEvents() {
-  const beforeHandler = (event) => handlePrefixedChat(event, true);
-  const afterHandler = (event) => handlePrefixedChat(event, false);
-  let subscribed = false;
-
-  if (world.beforeEvents.chatSend?.subscribe) {
-    world.beforeEvents.chatSend.subscribe(beforeHandler);
-    subscribed = true;
-    if (chatPrefixMode === "none") chatPrefixMode = "before";
-  }
-  if (world.beforeEvents.chat?.subscribe) {
-    world.beforeEvents.chat.subscribe(beforeHandler);
-    subscribed = true;
-    if (chatPrefixMode === "none") chatPrefixMode = "before";
-  }
-  if (world.afterEvents.chatSend?.subscribe) {
-    world.afterEvents.chatSend.subscribe(afterHandler);
-    subscribed = true;
-    if (chatPrefixMode === "none") chatPrefixMode = "after";
-  }
-  if (world.afterEvents.chat?.subscribe) {
-    world.afterEvents.chat.subscribe(afterHandler);
-    subscribed = true;
-    if (chatPrefixMode === "none") chatPrefixMode = "after";
-  }
-
-  if (!subscribed) {
-    chatPrefixMode = "none";
-    system.runTimeout(() => {
-      world.sendMessage("§c[Королевства] Чат-префиксы недоступны: включите Beta APIs / Script API для этого мира.");
-    }, 80);
-  }
-}
-
-function handlePrefixedChat(event, canCancel) {
-  const message = event.message;
-  if (typeof message !== "string" || !message.length) return;
-
-  const player = event.sender ?? event.player;
-  const playerName = getChatPlayerName(event, player);
-  if (!playerName) return;
-
-  const prefix = getCachedOrLoadedPrefix(playerName);
-  if (!prefix) return;
-  if (directChatPrefixAvailable) return;
-
-  if (canCancel) event.cancel = true;
-  const duplicateKey = `${playerName}:${system.currentTick}:${message}`;
-  if (prefixedChatCooldown.get(duplicateKey) === system.currentTick) return;
-  prefixedChatCooldown.set(duplicateKey, system.currentTick);
-
-  system.run(() => {
-    world.sendMessage(`§7[§6${prefix}§7] §f${playerName}§7: §f${cleanChatMessage(message)}`);
-    updatePlayerPrefixDisplays();
-  });
-}
-
-function announceChatPrefixStatus() {
-  for (const player of world.getPlayers()) {
-    const playerName = getPlayerName(player);
-    if (chatPrefixNoticeShown.has(playerName)) continue;
-
-    const prefix = playerPrefixCache.get(playerName) ?? getCachedOrLoadedPrefix(playerName);
-    if (!prefix) continue;
-
-    chatPrefixNoticeShown.add(playerName);
-    const active = chatPrefixMode === "chatNamePrefix" || chatPrefixMode === "before" || chatPrefixMode === "after";
-    if (active) player.sendMessage(`§aПрефикс в чате активен. Режим: ${chatPrefixMode}.`);
-    else player.sendMessage("§cПрефикс в чате не подключился. Префикс над ником работает.");
-  }
-}
-
-function getChatPlayerName(event, player) {
-  if (player?.name) return player.name;
-  if (typeof event.sender === "string") return event.sender;
-  if (typeof event.player === "string") return event.player;
-  if (typeof event.senderName === "string") return event.senderName;
-  return "";
-}
-
-function getCachedOrLoadedPrefix(playerName) {
-  const cached = playerPrefixCache.get(playerName);
-  if (cached) return cached;
-
-  try {
-    const prefix = playerDisplayPrefix(loadData(), playerName);
-    if (prefix) playerPrefixCache.set(playerName, prefix);
-    return prefix;
-  } catch (_error) {
-    return undefined;
-  }
 }
 
 function settlementDisplayName(data, settlement) {
@@ -1315,10 +1053,6 @@ function getPopulation(settlement) {
 
 function cleanName(value) {
   return String(value ?? "").replace(/[\n\r§]/g, "").trim().slice(0, 32);
-}
-
-function cleanChatMessage(value) {
-  return String(value ?? "").replace(/§/g, "");
 }
 
 function shortText(value, maxLength) {
