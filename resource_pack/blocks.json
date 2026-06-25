@@ -1,8 +1,0 @@
-{
-  "format_version": [1, 1, 0],
-  "kingdoms:flag": {
-    "sound": "wood",
-    "textures": "kingdoms_flag",
-    "geometry": "geometry.kingdoms_flag"
-  }
-}
