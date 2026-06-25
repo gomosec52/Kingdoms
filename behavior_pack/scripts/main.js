@@ -2,6 +2,7 @@ import { BlockPermutation, DynamicPropertiesDefinition, ItemStack, system, world
 import { ActionFormData, MessageFormData, ModalFormData } from "@minecraft/server-ui";
 
 const FLAG_ITEM = "kingdoms:flag";
+const FLAG_PLACER_COMPONENT = "kingdoms:flag_placer";
 const FLAG_ENTITY = "kingdoms:flag";
 const LEGACY_FLAG_BLOCK = "kingdoms:flag";
 const FLAG_LABEL_ENTITY = "kingdoms:flag_label";
@@ -73,12 +74,39 @@ const PREFIXES = [
 
 const flagInteractionCooldown = new Map();
 const flagPlacementCooldown = new Map();
+let flagPlacerComponentRegistered = false;
+
+system.beforeEvents?.startup?.subscribe((event) => {
+  registerFlagPlacerComponent(event.itemComponentRegistry);
+});
 
 world.beforeEvents.worldInitialize?.subscribe((event) => {
   const definition = new DynamicPropertiesDefinition();
   definition.defineString(STORE_KEY, STORE_LIMIT);
   event.propertyRegistry.registerWorldDynamicProperties(definition);
+  registerFlagPlacerComponent(event.itemComponentRegistry);
 });
+
+function registerFlagPlacerComponent(itemComponentRegistry) {
+  if (!itemComponentRegistry || flagPlacerComponentRegistered) return;
+
+  try {
+    itemComponentRegistry.registerCustomComponent(FLAG_PLACER_COMPONENT, {
+      onUseOn(event) {
+        if (event.itemStack?.typeId !== FLAG_ITEM) return;
+        system.run(() => beginSettlementCreationFromItem(event.source, event.block, event.blockFace));
+      }
+    });
+    flagPlacerComponentRegistered = true;
+  } catch (error) {
+    const message = String(error);
+    if (message.toLowerCase().includes("already")) {
+      flagPlacerComponentRegistered = true;
+      return;
+    }
+    console.warn(`[Kingdoms] Failed to register flag placer item component: ${message}`);
+  }
+}
 
 world.beforeEvents.itemUseOn?.subscribe((event) => {
   if (event.itemStack?.typeId !== FLAG_ITEM) return;
