@@ -87,8 +87,11 @@ const flagInteractionCooldown = new Map();
 const flagPlacementCooldown = new Map();
 const prefixedChatCooldown = new Map();
 const playerPrefixCache = new Map();
+const chatPrefixNoticeShown = new Set();
 let flagItemComponentRegistered = false;
 let dynamicPropertiesRegistered = false;
+let directChatPrefixAvailable = false;
+let chatPrefixMode = "none";
 
 system.beforeEvents?.startup?.subscribe((event) => {
   registerFlagItemComponent(event.itemComponentRegistry);
@@ -146,8 +149,12 @@ world.afterEvents.playerInteractWithEntity?.subscribe((event) => {
   handleFlagInteraction(event.player, target);
 });
 
-world.afterEvents.playerSpawn?.subscribe(() => {
-  system.run(() => updatePlayerPrefixDisplays());
+world.afterEvents.playerSpawn?.subscribe((event) => {
+  system.run(() => {
+    if (event.player?.name) chatPrefixNoticeShown.delete(event.player.name);
+    updatePlayerPrefixDisplays();
+    announceChatPrefixStatus();
+  });
 });
 
 world.afterEvents.playerPlaceBlock?.subscribe((event) => {
@@ -289,7 +296,10 @@ world.beforeEvents.entityHurt?.subscribe((event) => {
 });
 
 subscribeChatPrefixEvents();
-system.run(() => updatePlayerPrefixDisplays());
+system.run(() => {
+  updatePlayerPrefixDisplays();
+  announceChatPrefixStatus();
+});
 
 system.runInterval(() => updateFlagLabels(), 60);
 system.runInterval(() => updateMoraleForNewDay(), 1200);
@@ -940,16 +950,56 @@ function updatePlayerPrefixDisplays(knownData) {
     if (prefix) playerPrefixCache.set(playerName, prefix);
     else playerPrefixCache.delete(playerName);
 
-    const nextNameTag = prefix ? `§6[${prefix}]§r ${playerName}` : playerName;
-    try {
-      if (player.nameTag !== nextNameTag) player.nameTag = nextNameTag;
-    } catch (_error) {
-      // Some runtimes can reject nameTag writes during player state transitions.
-    }
+    applyPlayerPrefix(player, prefix);
   }
 
   for (const cachedName of playerPrefixCache.keys()) {
     if (!onlineNames.has(cachedName)) playerPrefixCache.delete(cachedName);
+  }
+}
+
+function applyPlayerPrefix(player, prefix) {
+  const playerName = getPlayerName(player);
+  const formattedPrefix = prefix ? `§7[§6${prefix}§7] §f` : "";
+  const nextNameTag = prefix ? `${formattedPrefix}${playerName}` : playerName;
+
+  try {
+    if (player.nameTag !== nextNameTag) player.nameTag = nextNameTag;
+  } catch (_error) {
+    // Some runtimes can reject nameTag writes during player state transitions.
+  }
+
+  if (!prefix) {
+    clearDirectChatPrefix(player);
+    return;
+  }
+
+  if (tryApplyDirectChatPrefix(player, formattedPrefix)) {
+    directChatPrefixAvailable = true;
+    chatPrefixMode = "chatNamePrefix";
+  }
+}
+
+function tryApplyDirectChatPrefix(player, formattedPrefix) {
+  if (!("chatNamePrefix" in player)) return false;
+
+  try {
+    player.chatNamePrefix = formattedPrefix;
+    player.chatNameSuffix = "";
+    player.chatMessagePrefix = "";
+    return true;
+  } catch (_error) {
+    return false;
+  }
+}
+
+function clearDirectChatPrefix(player) {
+  try {
+    player.chatNamePrefix = "";
+    player.chatNameSuffix = "";
+    player.chatMessagePrefix = "";
+  } catch (_error) {
+    // Direct chat prefix API is optional.
   }
 }
 
@@ -961,7 +1011,7 @@ function playerDisplayPrefix(data, playerName) {
     ? creatorPrefixFor(settlement.typeIndex)
     : getMemberRecord(settlement, playerName)?.prefix;
   if (!role) return undefined;
-  return `${settlementType(settlement).name}-${role}`;
+  return role;
 }
 
 function getMemberRecord(settlement, playerName) {
@@ -981,21 +1031,26 @@ function subscribeChatPrefixEvents() {
   if (world.beforeEvents.chatSend?.subscribe) {
     world.beforeEvents.chatSend.subscribe(beforeHandler);
     subscribed = true;
+    if (chatPrefixMode === "none") chatPrefixMode = "before";
   }
   if (world.beforeEvents.chat?.subscribe) {
     world.beforeEvents.chat.subscribe(beforeHandler);
     subscribed = true;
+    if (chatPrefixMode === "none") chatPrefixMode = "before";
   }
   if (world.afterEvents.chatSend?.subscribe) {
     world.afterEvents.chatSend.subscribe(afterHandler);
     subscribed = true;
+    if (chatPrefixMode === "none") chatPrefixMode = "after";
   }
   if (world.afterEvents.chat?.subscribe) {
     world.afterEvents.chat.subscribe(afterHandler);
     subscribed = true;
+    if (chatPrefixMode === "none") chatPrefixMode = "after";
   }
 
   if (!subscribed) {
+    chatPrefixMode = "none";
     system.runTimeout(() => {
       world.sendMessage("§7[Королевства] Чат-префиксы недоступны в этой версии Script API. Префиксы над ником продолжают работать.");
     }, 80);
@@ -1012,6 +1067,7 @@ function handlePrefixedChat(event, canCancel) {
 
   const prefix = getCachedOrLoadedPrefix(playerName);
   if (!prefix) return;
+  if (directChatPrefixAvailable) return;
 
   if (canCancel) event.cancel = true;
   const duplicateKey = `${playerName}:${system.currentTick}:${message}`;
@@ -1022,6 +1078,21 @@ function handlePrefixedChat(event, canCancel) {
     world.sendMessage(`§7[§6${prefix}§7] §f${playerName}§7: §f${cleanChatMessage(message)}`);
     updatePlayerPrefixDisplays();
   });
+}
+
+function announceChatPrefixStatus() {
+  for (const player of world.getPlayers()) {
+    const playerName = getPlayerName(player);
+    if (chatPrefixNoticeShown.has(playerName)) continue;
+
+    const prefix = playerPrefixCache.get(playerName) ?? getCachedOrLoadedPrefix(playerName);
+    if (!prefix) continue;
+
+    chatPrefixNoticeShown.add(playerName);
+    const active = chatPrefixMode === "chatNamePrefix" || chatPrefixMode === "before" || chatPrefixMode === "after";
+    if (active) player.sendMessage(`§aПрефикс в чате активен. Режим: ${chatPrefixMode}.`);
+    else player.sendMessage("§cПрефикс в чате не подключился. Префикс над ником работает.");
+  }
 }
 
 function getChatPlayerName(event, player) {
