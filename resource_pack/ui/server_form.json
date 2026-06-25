@@ -54,8 +54,8 @@
         "main_frame": {
           "type": "panel",
           "size": [
-            270,
-            210
+            300,
+            220
           ],
           "anchor_from": "center",
           "anchor_to": "center",
@@ -67,8 +67,8 @@
                 "texture": "textures/ui/kingdoms/panel_shadow",
                 "alpha": 0.65,
                 "size": [
-                  278,
-                  218
+                  308,
+                  228
                 ],
                 "offset": [
                   3,
@@ -113,7 +113,7 @@
                 ],
                 "offset": [
                   0,
-                  9
+                  8
                 ],
                 "anchor_from": "top_middle",
                 "anchor_to": "top_middle",
@@ -138,7 +138,7 @@
                 ],
                 "offset": [
                   -11,
-                  8
+                  7
                 ],
                 "anchor_from": "top_right",
                 "anchor_to": "top_right",
@@ -155,7 +155,7 @@
                 ],
                 "offset": [
                   0,
-                  29
+                  30
                 ],
                 "anchor_from": "top_middle",
                 "anchor_to": "top_middle",
@@ -168,11 +168,11 @@
                 "orientation": "horizontal",
                 "size": [
                   "100% - 24px",
-                  "100% - 44px"
+                  "100% - 46px"
                 ],
                 "offset": [
                   0,
-                  39
+                  40
                 ],
                 "anchor_from": "top_middle",
                 "anchor_to": "top_middle",
@@ -182,7 +182,7 @@
                     "info_column": {
                       "type": "panel",
                       "size": [
-                        112,
+                        138,
                         "100%"
                       ],
                       "controls": [
@@ -256,8 +256,8 @@
                           "actions_heading": {
                             "type": "label",
                             "text": "ДЕЙСТВИЯ",
-                            "font_size": "small",
-                            "font_scale_factor": 0.78,
+                            "font_size": "large",
+                            "font_scale_factor": 0.86,
                             "shadow": true,
                             "color": [
                               0.33,
@@ -267,7 +267,7 @@
                             "text_alignment": "center",
                             "size": [
                               "100%",
-                              "default"
+                              20
                             ],
                             "offset": [
                               0,
@@ -283,11 +283,11 @@
                             "$show_background": false,
                             "size": [
                               "100%",
-                              "100% - 14px"
+                              "100% - 25px"
                             ],
                             "offset": [
                               0,
-                              14
+                              25
                             ],
                             "anchor_from": "top_left",
                             "anchor_to": "top_left",
@@ -335,7 +335,7 @@
           "type": "label",
           "text": "Сведения о поселении",
           "font_size": "small",
-          "font_scale_factor": 0.66,
+          "font_scale_factor": 0.9,
           "shadow": true,
           "color": [
             0.29,
@@ -353,8 +353,8 @@
           "type": "label",
           "text": "#form_text",
           "font_size": "small",
-          "font_scale_factor": 0.56,
-          "line_padding": 1,
+          "font_scale_factor": 0.78,
+          "line_padding": 2,
           "color": [
             0.16,
             0.08,
