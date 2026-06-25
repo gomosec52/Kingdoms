@@ -83,12 +83,26 @@ const CREATOR_PREFIXES = [
   "Император"
 ];
 
+const PREFIX_TEAM_IDS = new Map();
+for (let index = 0; index < CREATOR_PREFIXES.length; index++) {
+  PREFIX_TEAM_IDS.set(CREATOR_PREFIXES[index], `kw_cr${index}`);
+}
+for (let index = 0; index < PREFIXES.length; index++) {
+  PREFIX_TEAM_IDS.set(PREFIXES[index].name, `kw_mb${index}`);
+}
+
+const PLAYER_PREFIX_LABEL_TAG = "kingdoms_player_prefix_label";
+
 const flagInteractionCooldown = new Map();
 const flagPlacementCooldown = new Map();
 const prefixedChatCooldown = new Map();
 const playerPrefixCache = new Map();
+const playerTeamCache = new Map();
+const playerIdByName = new Map();
 let flagItemComponentRegistered = false;
 let dynamicPropertiesRegistered = false;
+let prefixTeamsReady = false;
+let scoreboardPrefixWorking = false;
 
 system.beforeEvents?.startup?.subscribe((event) => {
   registerFlagItemComponent(event.itemComponentRegistry);
@@ -147,10 +161,23 @@ world.afterEvents.playerInteractWithEntity?.subscribe((event) => {
 });
 
 world.afterEvents.playerSpawn?.subscribe((event) => {
+  const player = event.player;
+  if (!player) return;
+
+  playerIdByName.set(getPlayerName(player), player.id);
   system.run(() => {
     updatePlayerPrefixDisplays();
-    notifyPlayerAboutPrefixes(event.player);
+    notifyPlayerAboutPrefixes(player);
   });
+});
+
+world.afterEvents.playerLeave?.subscribe((event) => {
+  if (event.playerName) {
+    playerTeamCache.delete(event.playerName);
+    playerPrefixCache.delete(event.playerName);
+    playerIdByName.delete(event.playerName);
+  }
+  if (event.playerId) removePlayerPrefixLabelById(event.playerId);
 });
 
 world.afterEvents.playerPlaceBlock?.subscribe((event) => {
@@ -934,25 +961,36 @@ function settlementLabel(data, settlement) {
 }
 
 function updatePlayerPrefixDisplays(knownData) {
+  ensurePrefixTeams();
   const data = knownData ?? loadData();
   const onlineNames = new Set();
+
   for (const player of world.getPlayers()) {
     const playerName = getPlayerName(player);
     onlineNames.add(playerName);
+    playerIdByName.set(playerName, player.id);
+
     const prefix = playerDisplayPrefix(data, playerName);
     if (prefix) playerPrefixCache.set(playerName, prefix);
     else playerPrefixCache.delete(playerName);
 
-    const nextNameTag = prefix ? `§7[§6${prefix}§7] §f${playerName}` : playerName;
+    applyScoreboardPrefix(player, prefix);
+    updatePlayerPrefixLabel(player, prefix);
+    applyOptionalChatNamePrefix(player, prefix);
+
     try {
+      const nextNameTag = prefix ? "" : playerName;
       if (player.nameTag !== nextNameTag) player.nameTag = nextNameTag;
     } catch (_error) {
-      // Some runtimes can reject nameTag writes during player state transitions.
+      // Some runtimes reject nameTag writes during player state transitions.
     }
   }
 
   for (const cachedName of playerPrefixCache.keys()) {
     if (!onlineNames.has(cachedName)) playerPrefixCache.delete(cachedName);
+  }
+  for (const cachedName of playerTeamCache.keys()) {
+    if (!onlineNames.has(cachedName)) playerTeamCache.delete(cachedName);
   }
 }
 
@@ -961,10 +999,127 @@ function playerDisplayPrefix(data, playerName) {
   if (!settlement) return undefined;
 
   const role = samePlayerName(settlement.creatorName, playerName)
-    ? creatorPrefixFor(settlement.typeIndex)
+    ? (settlement.creatorPrefix ?? creatorPrefixFor(settlement.typeIndex))
     : getMemberRecord(settlement, playerName)?.prefix;
   if (!role) return undefined;
   return role;
+}
+
+function ensurePrefixTeams() {
+  if (prefixTeamsReady) return;
+
+  const dimension = safeDimension("overworld");
+  if (!dimension) return;
+
+  for (const [roleName, teamId] of PREFIX_TEAM_IDS) {
+    const prefixText = `§7[§6${roleName}§7] §r`;
+    try {
+      dimension.runCommand(`scoreboard teams add ${teamId}`);
+    } catch (_error) {
+      // Team may already exist.
+    }
+    try {
+      dimension.runCommand(`scoreboard teams modify ${teamId} prefix "${prefixText}"`);
+    } catch (_error) {
+      // Best-effort only.
+    }
+  }
+
+  prefixTeamsReady = true;
+}
+
+function applyScoreboardPrefix(player, prefix) {
+  const playerName = getPlayerName(player);
+  const teamId = prefix ? PREFIX_TEAM_IDS.get(prefix) : undefined;
+  if (playerTeamCache.get(playerName) === teamId) return;
+
+  playerTeamCache.set(playerName, teamId);
+  try {
+    player.runCommand("scoreboard teams leave @s");
+    if (teamId) player.runCommand(`scoreboard teams join ${teamId} @s`);
+    scoreboardPrefixWorking = true;
+  } catch (_error) {
+    // Commands require cheats; floating labels and chat fallback still apply.
+  }
+}
+
+function applyOptionalChatNamePrefix(player, prefix) {
+  if (!("chatNamePrefix" in player)) return;
+
+  try {
+    player.chatNamePrefix = prefix ? `§7[§6${prefix}§7] ` : undefined;
+  } catch (_error) {
+    // Property exists only on newer API versions.
+  }
+}
+
+function playerPrefixLabelTag(player) {
+  return `kingdoms_pid_${player.id}`;
+}
+
+function getPlayerPrefixLabelLocation(player) {
+  const sneakingOffset = player.isSneaking ? -0.25 : 0;
+  return {
+    x: player.location.x,
+    y: player.location.y + 2.05 + sneakingOffset,
+    z: player.location.z
+  };
+}
+
+function updatePlayerPrefixLabel(player, prefix) {
+  const dimension = player.dimension;
+  if (!dimension) return;
+
+  const pidTag = playerPrefixLabelTag(player);
+  if (!prefix) {
+    removePlayerPrefixLabel(player);
+    return;
+  }
+
+  const location = getPlayerPrefixLabelLocation(player);
+  const displayText = `§7[§6${prefix}§7] §f${getPlayerName(player)}`;
+  let labels = [];
+
+  try {
+    labels = dimension.getEntities({ type: FLAG_LABEL_ENTITY, tags: [PLAYER_PREFIX_LABEL_TAG, pidTag] });
+  } catch (_error) {
+    labels = [];
+  }
+
+  const label = labels[0] ?? dimension.spawnEntity(FLAG_LABEL_ENTITY, location);
+  if (!label.hasTag(PLAYER_PREFIX_LABEL_TAG)) label.addTag(PLAYER_PREFIX_LABEL_TAG);
+  if (!label.hasTag(pidTag)) label.addTag(pidTag);
+  label.nameTag = displayText;
+
+  try {
+    label.teleport(location, { dimension });
+  } catch (_error) {
+    // Keep the label at its last known position if teleport fails.
+  }
+
+  for (const duplicate of labels.slice(1)) duplicate.remove();
+}
+
+function removePlayerPrefixLabel(player) {
+  if (!player) return;
+  removePlayerPrefixLabelById(player.id, player.dimension);
+}
+
+function removePlayerPrefixLabelById(playerId, preferredDimension) {
+  const pidTag = `kingdoms_pid_${playerId}`;
+  const dimensions = preferredDimension
+    ? [preferredDimension]
+    : ["overworld", "nether", "the_end"].map((id) => safeDimension(id)).filter(Boolean);
+
+  for (const dimension of dimensions) {
+    try {
+      for (const entity of dimension.getEntities({ type: FLAG_LABEL_ENTITY, tags: [PLAYER_PREFIX_LABEL_TAG, pidTag] })) {
+        entity.remove();
+      }
+    } catch (_error) {
+      // Ignore cleanup failures.
+    }
+  }
 }
 
 function getMemberRecord(settlement, playerName) {
@@ -999,11 +1154,10 @@ function subscribeChatPrefixEvents() {
     chatPrefixEventsSubscribed = true;
   }
 
-  if (!chatPrefixEventsSubscribed) {
-    system.runTimeout(() => {
-      world.sendMessage("§7[Королевства] Чат-префиксы недоступны: включите Beta APIs в настройках мира. Префиксы над ником работают.");
-    }, 80);
-  }
+  system.runTimeout(() => {
+    if (scoreboardPrefixWorking || chatPrefixEventsSubscribed) return;
+    world.sendMessage("§7[Королевства] Для префикса в чате включите читы мира или Beta APIs. Над головой префикс показывает метка.");
+  }, 120);
 }
 
 function notifyPlayerAboutPrefixes(player) {
@@ -1012,13 +1166,17 @@ function notifyPlayerAboutPrefixes(player) {
   const prefix = playerDisplayPrefix(loadData(), getPlayerName(player));
   if (!prefix) return;
 
-  const chatHint = chatPrefixEventsSubscribed
-    ? "Префикс также отображается в чате."
-    : "Для префикса в чате включите Beta APIs в настройках мира.";
+  const chatHint = scoreboardPrefixWorking
+    ? "Префикс также виден в чате."
+    : chatPrefixEventsSubscribed
+      ? "Префикс в чате работает через Beta APIs."
+      : "Для префикса в чате включите читы мира или Beta APIs.";
   player.sendMessage(`§7[Королевства] Ваш префикс: §6${prefix}§7. ${chatHint}`);
 }
 
 function handlePrefixedChat(event, canCancel) {
+  if (scoreboardPrefixWorking) return;
+
   const message = event.message;
   if (typeof message !== "string" || !message.length) return;
 
