@@ -997,7 +997,7 @@ function subscribeChatPrefixEvents() {
 
   if (!subscribed) {
     system.runTimeout(() => {
-      world.sendMessage("§c[Королевства] Чат-префиксы недоступны: включите Beta APIs / Script API и переимпортируйте пакет.");
+      world.sendMessage("§7[Королевства] Чат-префиксы недоступны в этой версии Script API. Префиксы над ником продолжают работать.");
     }, 80);
   }
 }
