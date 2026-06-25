@@ -2,7 +2,7 @@
   "format_version": "1.20.10",
   "minecraft:recipe_shaped": {
     "description": {
-      "identifier": "kingdoms:flag"
+      "identifier": "kingdoms:flag_recipe"
     },
     "tags": ["crafting_table"],
     "pattern": [
@@ -21,6 +21,11 @@
         "item": "minecraft:emerald"
       }
     },
+    "unlock": [
+      {
+        "context": "AlwaysUnlocked"
+      }
+    ],
     "result": {
       "item": "kingdoms:flag",
       "count": 1

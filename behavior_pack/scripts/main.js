@@ -200,6 +200,7 @@ world.afterEvents.worldLoad.subscribe(() => {
   system.run(() => {
     syncPlayerPrefixes();
     announceChatPrefixStatus();
+    world.sendMessage("§6[Королевства] §fАддон загружен. Флаг: §ekingdoms:flag");
   });
 });
 
