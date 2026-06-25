@@ -1,10 +1,12 @@
-import { BlockPermutation, DynamicPropertiesDefinition, ItemStack, system, world } from "@minecraft/server";
+import * as server from "@minecraft/server";
 import { ActionFormData, MessageFormData, ModalFormData } from "@minecraft/server-ui";
 
+const { BlockPermutation, ItemStack, system, world } = server;
 const FLAG_ITEM = "kingdoms:flag";
 const FLAG_ENTITY = "kingdoms:flag";
 const LEGACY_FLAG_BLOCK = "kingdoms:flag";
 const FLAG_LABEL_ENTITY = "kingdoms:flag_label";
+const FLAG_ITEM_USE_COMPONENT = "kingdoms:flag_placer";
 const STORE_KEY = "kingdoms:data:v1";
 const STORE_LIMIT = 32767;
 const SETTLEMENT_MENU_TITLE = "kingdoms:settlement";
@@ -73,12 +75,47 @@ const PREFIXES = [
 
 const flagInteractionCooldown = new Map();
 const flagPlacementCooldown = new Map();
+let flagItemComponentRegistered = false;
+let dynamicPropertiesRegistered = false;
 
-world.beforeEvents.worldInitialize?.subscribe((event) => {
-  const definition = new DynamicPropertiesDefinition();
-  definition.defineString(STORE_KEY, STORE_LIMIT);
-  event.propertyRegistry.registerWorldDynamicProperties(definition);
+system.beforeEvents?.startup?.subscribe((event) => {
+  registerFlagItemComponent(event.itemComponentRegistry);
 });
+
+world.beforeEvents?.worldInitialize?.subscribe((event) => {
+  registerDynamicProperties(event.propertyRegistry);
+  registerFlagItemComponent(event.itemComponentRegistry);
+});
+
+function registerDynamicProperties(registry) {
+  const DynamicPropertiesDefinition = server.DynamicPropertiesDefinition;
+  if (dynamicPropertiesRegistered || !registry?.registerWorldDynamicProperties || typeof DynamicPropertiesDefinition !== "function") return;
+
+  try {
+    const definition = new DynamicPropertiesDefinition();
+    definition.defineString(STORE_KEY, STORE_LIMIT);
+    registry.registerWorldDynamicProperties(definition);
+    dynamicPropertiesRegistered = true;
+  } catch (error) {
+    console.warn(`[Kingdoms] Не удалось зарегистрировать хранилище поселений: ${error}`);
+  }
+}
+
+function registerFlagItemComponent(registry) {
+  if (flagItemComponentRegistered || !registry?.registerCustomComponent) return;
+
+  try {
+    registry.registerCustomComponent(FLAG_ITEM_USE_COMPONENT, {
+      onUseOn(event) {
+        if (event.itemStack?.typeId !== FLAG_ITEM) return;
+        system.run(() => beginSettlementCreationFromItem(event.source, event.block, event.blockFace));
+      }
+    });
+    flagItemComponentRegistered = true;
+  } catch (error) {
+    console.warn(`[Kingdoms] Не удалось зарегистрировать компонент флага: ${error}`);
+  }
+}
 
 world.beforeEvents.itemUseOn?.subscribe((event) => {
   if (event.itemStack?.typeId !== FLAG_ITEM) return;
