@@ -86,6 +86,7 @@ const CREATOR_PREFIXES = [
 const flagInteractionCooldown = new Map();
 const flagPlacementCooldown = new Map();
 const prefixedChatCooldown = new Map();
+const playerPrefixCache = new Map();
 let flagItemComponentRegistered = false;
 let dynamicPropertiesRegistered = false;
 
@@ -288,6 +289,7 @@ world.beforeEvents.entityHurt?.subscribe((event) => {
 });
 
 subscribeChatPrefixEvents();
+system.run(() => updatePlayerPrefixDisplays());
 
 system.runInterval(() => updateFlagLabels(), 60);
 system.runInterval(() => updateMoraleForNewDay(), 1200);
@@ -930,9 +932,14 @@ function settlementLabel(data, settlement) {
 
 function updatePlayerPrefixDisplays(knownData) {
   const data = knownData ?? loadData();
+  const onlineNames = new Set();
   for (const player of world.getPlayers()) {
     const playerName = getPlayerName(player);
+    onlineNames.add(playerName);
     const prefix = playerDisplayPrefix(data, playerName);
+    if (prefix) playerPrefixCache.set(playerName, prefix);
+    else playerPrefixCache.delete(playerName);
+
     const nextNameTag = prefix ? `§6[${prefix}]§r ${playerName}` : playerName;
     try {
       if (player.nameTag !== nextNameTag) player.nameTag = nextNameTag;
@@ -940,17 +947,26 @@ function updatePlayerPrefixDisplays(knownData) {
       // Some runtimes can reject nameTag writes during player state transitions.
     }
   }
+
+  for (const cachedName of playerPrefixCache.keys()) {
+    if (!onlineNames.has(cachedName)) playerPrefixCache.delete(cachedName);
+  }
 }
 
 function playerDisplayPrefix(data, playerName) {
   const settlement = getPlayerSettlement(data, playerName);
   if (!settlement) return undefined;
 
-  const role = settlement.creatorName === playerName
+  const role = samePlayerName(settlement.creatorName, playerName)
     ? creatorPrefixFor(settlement.typeIndex)
-    : settlement.members?.[playerName]?.prefix;
+    : getMemberRecord(settlement, playerName)?.prefix;
   if (!role) return undefined;
   return `${settlementType(settlement).name}-${role}`;
+}
+
+function getMemberRecord(settlement, playerName) {
+  const memberName = Object.keys(settlement.members || {}).find((name) => samePlayerName(name, playerName));
+  return memberName ? settlement.members[memberName] : undefined;
 }
 
 function creatorPrefixFor(typeIndex) {
@@ -958,32 +974,55 @@ function creatorPrefixFor(typeIndex) {
 }
 
 function subscribeChatPrefixEvents() {
-  const handler = (event) => handlePrefixedChat(event);
-  world.beforeEvents.chatSend?.subscribe(handler);
-  world.beforeEvents.chat?.subscribe(handler);
+  const beforeHandler = (event) => handlePrefixedChat(event, true);
+  const afterHandler = (event) => handlePrefixedChat(event, false);
+  world.beforeEvents.chatSend?.subscribe(beforeHandler);
+  world.beforeEvents.chat?.subscribe(beforeHandler);
+  world.afterEvents.chatSend?.subscribe(afterHandler);
+  world.afterEvents.chat?.subscribe(afterHandler);
 }
 
-function handlePrefixedChat(event) {
-  const player = event.sender ?? event.player;
-  if (!player?.name) return;
-
+function handlePrefixedChat(event, canCancel) {
   const message = event.message;
   if (typeof message !== "string" || !message.length) return;
 
-  const data = loadData();
-  const playerName = getPlayerName(player);
-  const prefix = playerDisplayPrefix(data, playerName);
+  const player = event.sender ?? event.player;
+  const playerName = getChatPlayerName(event, player);
+  if (!playerName) return;
+
+  const prefix = getCachedOrLoadedPrefix(playerName);
   if (!prefix) return;
 
-  event.cancel = true;
+  if (canCancel) event.cancel = true;
   const duplicateKey = `${playerName}:${system.currentTick}:${message}`;
   if (prefixedChatCooldown.get(duplicateKey) === system.currentTick) return;
   prefixedChatCooldown.set(duplicateKey, system.currentTick);
 
   system.run(() => {
     world.sendMessage(`§7[§6${prefix}§7] §f${playerName}§7: §f${cleanChatMessage(message)}`);
-    updatePlayerPrefixDisplays(data);
+    updatePlayerPrefixDisplays();
   });
+}
+
+function getChatPlayerName(event, player) {
+  if (player?.name) return player.name;
+  if (typeof event.sender === "string") return event.sender;
+  if (typeof event.player === "string") return event.player;
+  if (typeof event.senderName === "string") return event.senderName;
+  return "";
+}
+
+function getCachedOrLoadedPrefix(playerName) {
+  const cached = playerPrefixCache.get(playerName);
+  if (cached) return cached;
+
+  try {
+    const prefix = playerDisplayPrefix(loadData(), playerName);
+    if (prefix) playerPrefixCache.set(playerName, prefix);
+    return prefix;
+  } catch (_error) {
+    return undefined;
+  }
 }
 
 function settlementDisplayName(data, settlement) {
@@ -1126,12 +1165,13 @@ function hasLootAccess(data, zone, playerName) {
 }
 
 function getPlayerSettlement(data, playerName) {
-  return data.settlements.find((settlement) => settlement.creatorName === playerName)
-    ?? data.settlements.find((settlement) => Boolean(settlement.members?.[playerName]));
+  return data.settlements.find((settlement) => samePlayerName(settlement.creatorName, playerName))
+    ?? data.settlements.find((settlement) => Object.keys(settlement.members || {}).some((memberName) => samePlayerName(memberName, playerName)));
 }
 
 function isMember(settlement, playerName) {
-  return settlement.creatorName === playerName || Boolean(settlement.members?.[playerName]);
+  return samePlayerName(settlement.creatorName, playerName)
+    || Object.keys(settlement.members || {}).some((memberName) => samePlayerName(memberName, playerName));
 }
 
 function areAllied(data, firstId, secondId) {
@@ -1334,6 +1374,10 @@ function blockPosition(location) {
 
 function sameBlock(first, second) {
   return first.x === second.x && first.y === second.y && first.z === second.z;
+}
+
+function samePlayerName(first, second) {
+  return String(first ?? "").toLowerCase() === String(second ?? "").toLowerCase();
 }
 
 function distance2D(first, second) {
