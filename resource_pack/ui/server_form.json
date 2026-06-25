@@ -18,12 +18,22 @@
       }
     ]
   },
-  "kingdoms_long_form_root": {
-    "type": "panel",
-    "size": [
-      "100%",
-      "100%"
+  "kingdoms_long_form_root@common_dialogs.main_panel_no_buttons": {
+    "$title_panel": "server_form.kingdoms_title_label",
+    "$title_size": [
+      "100% - 15px",
+      14
     ],
+    "$title_max_size": [
+      "100% - 15px",
+      14
+    ],
+    "$child_control": "server_form.kingdoms_long_form_panel",
+    "size": [
+      310,
+      230
+    ],
+    "layer": 2,
     "bindings": [
       {
         "binding_name": "#title_text"
@@ -33,313 +43,244 @@
         "source_property_name": "(not ((#title_text - 'kingdoms:settlement') = #title_text))",
         "target_property_name": "#visible"
       }
+    ]
+  },
+  "kingdoms_title_label": {
+    "type": "label",
+    "text": "Войны королевств",
+    "font_size": "large",
+    "font_scale_factor": 0.82,
+    "shadow": true,
+    "color": [
+      0.95,
+      0.82,
+      0.48
+    ],
+    "text_alignment": "center",
+    "anchor_from": "center",
+    "anchor_to": "center",
+    "size": [
+      "100%",
+      "default"
+    ]
+  },
+  "kingdoms_long_form_panel": {
+    "type": "panel",
+    "size": [
+      "100%",
+      "100%"
     ],
     "controls": [
       {
-        "screen_dim": {
-          "type": "image",
-          "texture": "textures/ui/Black",
-          "alpha": 0.48,
+        "info_scroll@common.scrolling_panel": {
+          "$show_background": false,
           "size": [
             "100%",
+            94
+          ],
+          "offset": [
+            0,
+            0
+          ],
+          "anchor_from": "top_left",
+          "anchor_to": "top_left",
+          "$scrolling_content": "server_form.kingdoms_info_content",
+          "$scroll_size": [
+            4,
+            "100% - 4px"
+          ],
+          "$scrolling_pane_size": [
+            "100% - 6px",
             "100%"
           ],
-          "anchor_from": "center",
-          "anchor_to": "center",
-          "layer": 0
+          "$scrolling_pane_offset": [
+            2,
+            0
+          ],
+          "$scroll_bar_right_padding_size": [
+            0,
+            0
+          ]
         }
       },
       {
-        "main_frame": {
-          "type": "panel",
+        "button_scroll@common.scrolling_panel": {
+          "$show_background": false,
           "size": [
-            "92%",
-            "84%"
+            "100%",
+            "100% - 98px"
           ],
-          "anchor_from": "center",
-          "anchor_to": "center",
-          "layer": 2,
-          "controls": [
-            {
-              "parchment": {
-                "type": "image",
-                "texture": "textures/ui/kingdoms/parchment_panel",
-                "size": [
-                  "100%",
-                  "100%"
-                ],
-                "nineslice_size": 8,
-                "layer": 0
-              }
-            },
-            {
-              "inner_shadow": {
-                "type": "image",
-                "texture": "textures/ui/kingdoms/panel_shadow",
-                "alpha": 0.45,
-                "size": [
-                  "100% - 10px",
-                  "100% - 10px"
-                ],
-                "anchor_from": "center",
-                "anchor_to": "center",
-                "nineslice_size": 6,
-                "layer": 1
-              }
-            },
-            {
-              "title": {
-                "type": "label",
-                "text": "ВОЙНЫ КОРОЛЕВСТВ",
-                "font_size": "large",
-                "font_scale_factor": 0.9,
-                "shadow": true,
-                "color": [
-                  0.35,
-                  0.18,
-                  0.06
-                ],
-                "size": [
-                  "100% - 30px",
-                  18
-                ],
-                "offset": [
-                  0,
-                  10
-                ],
-                "anchor_from": "top_middle",
-                "anchor_to": "top_middle",
-                "text_alignment": "center",
-                "layer": 4
-              }
-            },
-            {
-              "divider": {
-                "type": "image",
-                "texture": "textures/ui/kingdoms/divider",
-                "size": [
-                  "90%",
-                  3
-                ],
-                "offset": [
-                  0,
-                  32
-                ],
-                "anchor_from": "top_middle",
-                "anchor_to": "top_middle",
-                "layer": 4
-              }
-            },
-            {
-              "content_area": {
-                "type": "stack_panel",
-                "orientation": "horizontal",
-                "size": [
-                  "100% - 34px",
-                  "100% - 54px"
-                ],
-                "offset": [
-                  0,
-                  44
-                ],
-                "anchor_from": "top_middle",
-                "anchor_to": "top_middle",
-                "layer": 4,
-                "controls": [
-                  {
-                    "info_column": {
-                      "type": "panel",
-                      "size": [
-                        "42%",
-                        "100%"
-                      ],
-                      "controls": [
-                        {
-                          "info_back": {
-                            "type": "image",
-                            "texture": "textures/ui/kingdoms/info_panel",
-                            "size": [
-                              "100%",
-                              "100%"
-                            ],
-                            "nineslice_size": 6,
-                            "alpha": 0.78,
-                            "layer": 1
-                          }
-                        },
-                        {
-                          "info_heading": {
-                            "type": "label",
-                            "text": "Сведения о поселении",
-                            "font_size": "small",
-                            "font_scale_factor": 0.75,
-                            "shadow": true,
-                            "color": [
-                              0.38,
-                              0.17,
-                              0.04
-                            ],
-                            "size": [
-                              "100% - 14px",
-                              10
-                            ],
-                            "offset": [
-                              7,
-                              7
-                            ],
-                            "anchor_from": "top_left",
-                            "anchor_to": "top_left",
-                            "layer": 3
-                          }
-                        },
-                        {
-                          "info_text": {
-                            "type": "label",
-                            "text": "#form_text",
-                            "font_size": "small",
-                            "font_scale_factor": 0.66,
-                            "line_padding": 1,
-                            "shadow": false,
-                            "color": [
-                              0.18,
-                              0.1,
-                              0.04
-                            ],
-                            "size": [
-                              "100% - 14px",
-                              "100% - 28px"
-                            ],
-                            "offset": [
-                              7,
-                              21
-                            ],
-                            "anchor_from": "top_left",
-                            "anchor_to": "top_left",
-                            "layer": 3
-                          }
-                        }
-                      ]
-                    }
-                  },
-                  {
-                    "button_column_padding": {
-                      "type": "panel",
-                      "size": [
-                        10,
-                        "100%"
-                      ]
-                    }
-                  },
-                  {
-                    "button_column": {
-                      "type": "panel",
-                      "size": [
-                        "fill",
-                        "100%"
-                      ],
-                      "controls": [
-                        {
-                          "actions_heading": {
-                            "type": "label",
-                            "text": "Действия совета",
-                            "font_size": "small",
-                            "font_scale_factor": 0.76,
-                            "shadow": true,
-                            "color": [
-                              0.38,
-                              0.17,
-                              0.04
-                            ],
-                            "size": [
-                              "100%",
-                              10
-                            ],
-                            "offset": [
-                              0,
-                              4
-                            ],
-                            "anchor_from": "top_middle",
-                            "anchor_to": "top_middle",
-                            "text_alignment": "center",
-                            "layer": 3
-                          }
-                        },
-                        {
-                          "buttons_grid@server_form.kingdoms_buttons_grid": {
-                            "offset": [
-                              0,
-                              20
-                            ],
-                            "anchor_from": "top_middle",
-                            "anchor_to": "top_middle"
-                          }
-                        }
-                      ]
-                    }
-                  }
-                ]
-              }
-            }
+          "offset": [
+            0,
+            98
+          ],
+          "anchor_from": "top_left",
+          "anchor_to": "top_left",
+          "$scrolling_content": "server_form.kingdoms_buttons_content",
+          "$scroll_size": [
+            4,
+            "100% - 4px"
+          ],
+          "$scrolling_pane_size": [
+            "100% - 6px",
+            "100%"
+          ],
+          "$scrolling_pane_offset": [
+            2,
+            0
+          ],
+          "$scroll_bar_right_padding_size": [
+            0,
+            0
           ]
         }
       }
     ]
   },
-  "kingdoms_buttons_grid": {
-    "type": "grid",
+  "kingdoms_info_content": {
+    "type": "stack_panel",
+    "orientation": "vertical",
     "size": [
-      "100%",
-      "100% - 20px"
-    ],
-    "grid_dimensions": [
-      2,
-      4
-    ],
-    "maximum_grid_items": 8,
-    "grid_item_template": "server_form.kingdoms_dynamic_button",
-    "grid_fill_direction": "vertical",
-    "collection_name": "form_buttons"
-  },
-  "kingdoms_dynamic_button": {
-    "type": "panel",
-    "size": [
-      "100%",
-      38
+      "100% - 4px",
+      "100%c"
     ],
     "controls": [
       {
-        "icon": {
-          "type": "image",
-          "texture": "#form_button_texture",
-          "texture_file_system": "#form_button_texture_file_system",
+        "heading": {
+          "type": "label",
+          "text": "Сведения о поселении",
+          "font_size": "small",
+          "font_scale_factor": 0.75,
+          "shadow": true,
+          "color": "$main_header_text_color",
           "size": [
-            18,
-            18
+            "100%",
+            "default"
+          ]
+        }
+      },
+      {
+        "info_text": {
+          "type": "label",
+          "text": "#form_text",
+          "font_size": "small",
+          "font_scale_factor": 0.68,
+          "line_padding": 1,
+          "color": "$main_header_text_color",
+          "size": [
+            "100%",
+            "default"
+          ]
+        }
+      }
+    ]
+  },
+  "kingdoms_buttons_content": {
+    "type": "stack_panel",
+    "orientation": "vertical",
+    "size": [
+      "100% - 4px",
+      "100%c"
+    ],
+    "offset": [
+      2,
+      0
+    ],
+    "factory": {
+      "name": "buttons",
+      "control_ids": {
+        "button": "server_form.kingdoms_dynamic_button",
+        "label": "@server_form.dynamic_label",
+        "header": "@server_form.dynamic_header",
+        "divider": "@settings_common.option_group_section_divider"
+      }
+    },
+    "collection_name": "form_buttons",
+    "bindings": [
+      {
+        "binding_name": "#form_button_contents",
+        "binding_name_override": "#collection_length"
+      }
+    ]
+  },
+  "kingdoms_dynamic_button": {
+    "type": "stack_panel",
+    "orientation": "horizontal",
+    "size": [
+      "100%",
+      31
+    ],
+    "controls": [
+      {
+        "icon_panel": {
+          "type": "panel",
+          "size": [
+            30,
+            "100%c"
           ],
-          "offset": [
-            8,
-            0
-          ],
-          "anchor_from": "left_middle",
-          "anchor_to": "left_middle",
-          "layer": 6,
           "bindings": [
             {
-              "binding_name": "#form_button_texture",
-              "binding_name_override": "#texture",
-              "binding_type": "collection",
-              "binding_collection_name": "form_buttons"
-            },
-            {
-              "binding_name": "#form_button_texture_file_system",
-              "binding_name_override": "#texture_file_system",
-              "binding_type": "collection",
-              "binding_collection_name": "form_buttons"
-            },
-            {
+              "source_control_name": "icon",
+              "resolve_sibling_scope": true,
               "binding_type": "view",
-              "source_property_name": "(not ((#texture = '') or (#texture = 'loading')))",
+              "source_property_name": "(not (#texture = ''))",
               "target_property_name": "#visible"
+            }
+          ],
+          "controls": [
+            {
+              "icon": {
+                "type": "image",
+                "layer": 2,
+                "size": [
+                  24,
+                  24
+                ],
+                "offset": [
+                  0,
+                  2
+                ],
+                "bindings": [
+                  {
+                    "binding_name": "#form_button_texture",
+                    "binding_name_override": "#texture",
+                    "binding_type": "collection",
+                    "binding_collection_name": "form_buttons"
+                  },
+                  {
+                    "binding_name": "#form_button_texture_file_system",
+                    "binding_name_override": "#texture_file_system",
+                    "binding_type": "collection",
+                    "binding_collection_name": "form_buttons"
+                  },
+                  {
+                    "binding_type": "view",
+                    "source_property_name": "(not ((#texture = '') or (#texture = 'loading')))",
+                    "target_property_name": "#visible"
+                  }
+                ]
+              }
+            },
+            {
+              "progress@progress.progress_loading_bars": {
+                "size": [
+                  24,
+                  4
+                ],
+                "offset": [
+                  0,
+                  14
+                ],
+                "bindings": [
+                  {
+                    "source_control_name": "icon",
+                    "resolve_sibling_scope": true,
+                    "binding_type": "view",
+                    "source_property_name": "(#texture = 'loading')",
+                    "target_property_name": "#visible"
+                  }
+                ]
+              }
             }
           ]
         }
@@ -347,31 +288,19 @@
       {
         "form_button@common_buttons.light_text_button": {
           "$pressed_button_name": "button.form_button_click",
-          "$default_button_texture": "textures/ui/kingdoms/button_default",
-          "$hover_button_texture": "textures/ui/kingdoms/button_hover",
-          "$pressed_button_texture": "textures/ui/kingdoms/button_pressed",
-          "$locked_button_texture": "textures/ui/kingdoms/button_default",
+          "anchor_from": "top_left",
+          "anchor_to": "top_left",
+          "size": [
+            "fill",
+            30
+          ],
           "$button_text": "#form_button_text",
           "$button_text_binding_type": "collection",
           "$button_text_grid_collection_name": "form_buttons",
           "$button_text_max_size": [
-            "100% - 30px",
-            18
+            "100%",
+            20
           ],
-          "$button_text_size": [
-            "100% - 30px",
-            "default"
-          ],
-          "size": [
-            "100% - 6px",
-            34
-          ],
-          "offset": [
-            0,
-            0
-          ],
-          "anchor_from": "center",
-          "anchor_to": "center",
           "layer": 4,
           "bindings": [
             {
