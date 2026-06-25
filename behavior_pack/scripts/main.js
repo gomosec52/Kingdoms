@@ -981,8 +981,6 @@ function applyPlayerPrefix(player, prefix) {
 }
 
 function tryApplyDirectChatPrefix(player, formattedPrefix) {
-  if (!("chatNamePrefix" in player)) return false;
-
   try {
     player.chatNamePrefix = formattedPrefix;
     player.chatNameSuffix = "";
