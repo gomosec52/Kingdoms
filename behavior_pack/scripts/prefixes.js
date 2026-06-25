@@ -1,5 +1,6 @@
 import { system, world } from "@minecraft/server";
 import { creatorPrefixFor } from "./config.js";
+import { isPlacementApiAvailable } from "./flag.js";
 
 const playerPrefixCache = new Map();
 const prefixedChatCooldown = new Map();
@@ -18,17 +19,11 @@ export function configurePrefixResolver(resolver) {
 }
 
 export function bindPrefixSystem() {
-  world.beforeEvents.chatSend?.subscribe((event) => handlePrefixedChat(event, true));
-
-  if (chatPrefixMode === "none" && world.beforeEvents.chatSend) {
-    chatPrefixMode = "before";
-  }
-
-  if (!world.beforeEvents.chatSend) {
+  if (world.beforeEvents.chatSend?.subscribe) {
+    world.beforeEvents.chatSend.subscribe((event) => handlePrefixedChat(event, true));
+    if (chatPrefixMode === "none") chatPrefixMode = "before";
+  } else {
     chatPrefixMode = "none";
-    system.runTimeout(() => {
-      world.sendMessage("§c[Королевства] Beta APIs выключены. Включите: Создать мир → Эксперименты → Beta APIs.");
-    }, 80);
   }
 }
 
@@ -62,7 +57,11 @@ export function announceChatPrefixStatus() {
     chatPrefixNoticeShown.add(playerName);
     const active = chatPrefixMode === "chatNamePrefix" || chatPrefixMode === "before";
     if (active) player.sendMessage(`§aПрефикс в чате активен. Режим: ${chatPrefixMode}.`);
-    else player.sendMessage("§cПрефикс в чате не подключился. Префикс над ником работает.");
+    else if (!world.beforeEvents.chatSend) {
+      player.sendMessage("§7Префикс над ником активен. Чат-префиксы требуют обновления игры.");
+    } else {
+      player.sendMessage("§cПрефикс в чате не подключился. Префикс над ником работает.");
+    }
   }
 }
 
@@ -166,4 +165,11 @@ function cleanChatMessage(value) {
 
 function samePlayerName(first, second) {
   return String(first ?? "").toLowerCase() === String(second ?? "").toLowerCase();
+}
+
+export function describeScriptApiStatus(worldRef = world) {
+  const placement = isPlacementApiAvailable(worldRef);
+  const chat = Boolean(worldRef.beforeEvents?.chatSend);
+  const forms = Boolean(worldRef.afterEvents?.playerSpawn);
+  return { placement, chat, forms };
 }

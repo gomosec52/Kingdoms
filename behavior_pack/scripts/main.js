@@ -18,11 +18,12 @@ import {
   STORE_LIMIT,
   TAX_COOLDOWN_TICKS
 } from "./config.js";
-import { bindFlagUseOnFallback, registerFlagComponent, setFlagPlacementHandler } from "./flag.js";
+import { bindFlagUseOnEvents, registerFlagComponent, setFlagPlacementHandler } from "./flag.js";
 import {
   announceChatPrefixStatus,
   bindPrefixSystem,
   configurePrefixResolver,
+  describeScriptApiStatus,
   getPrefixFor,
   resetChatPrefixNotice,
   updatePlayerPrefixDisplays as refreshPlayerPrefixes
@@ -31,29 +32,12 @@ import {
 const flagInteractionCooldown = new Map();
 const flagPlacementCooldown = new Map();
 const loadedNoticeShown = new Set();
-const PENDING_SETUP_TAG = "kingdoms_pending_setup";
 
 system.beforeEvents.startup.subscribe((event) => {
   registerFlagComponent(event.itemComponentRegistry);
 });
 
-if (world.afterEvents.entitySpawn) {
-  world.afterEvents.entitySpawn.subscribe((event) => {
-    const entity = event.entity;
-    if (entity?.typeId !== FLAG_ENTITY) return;
-
-    system.run(() => handleWildFlagSpawn(entity));
-  });
-}
-
-if (world.afterEvents.itemUseOn) {
-  bindFlagUseOnFallback((handler) => world.afterEvents.itemUseOn.subscribe(handler));
-}
-
-if (world.beforeEvents.itemUseOn) {
-  bindFlagUseOnFallback((handler) => world.beforeEvents.itemUseOn.subscribe(handler));
-}
-
+bindFlagUseOnEvents(world);
 setFlagPlacementHandler(beginSettlementCreationFromItem);
 
 world.afterEvents.playerInteractWithEntity?.subscribe((event) => {
@@ -69,9 +53,12 @@ world.afterEvents.playerSpawn.subscribe((event) => {
 
     if (!loadedNoticeShown.has(player.name)) {
       loadedNoticeShown.add(player.name);
-      player.sendMessage("§6[Королевства] §fАддон загружен (v1.0.19).");
-      if (!world.beforeEvents.chatSend) {
-        player.sendMessage("§eВключите §6Beta APIs§e в настройках мира: Создать мир → Эксперименты.");
+      const api = describeScriptApiStatus();
+      player.sendMessage("§6[Королевства] §fАддон загружен (v1.0.20).");
+      if (!api.placement) {
+        player.sendMessage("§cУстановка флага недоступна: обновите Minecraft до 1.26.20+ и включите Beta APIs.");
+      } else {
+        player.sendMessage("§7Кликните флагом по блоку (нужно 15 изумрудов).");
       }
     }
 
@@ -87,6 +74,11 @@ world.afterEvents.playerPlaceBlock?.subscribe((event) => {
 });
 
 world.afterEvents.playerInteractWithBlock?.subscribe((event) => {
+  if (event.itemStack?.typeId === FLAG_ITEM && event.block) {
+    system.run(() => beginSettlementCreationFromItem(event.player, event.block, "Up", "interactBlock"));
+    return;
+  }
+
   if (event.block.typeId !== LEGACY_FLAG_BLOCK) return;
   handleFlagInteraction(event.player, event.block);
 });
@@ -234,39 +226,6 @@ system.runInterval(() => updateMoraleForNewDay(), 1200);
 system.runInterval(() => cleanupExpiredLootZones(), 100);
 system.runInterval(() => syncPlayerPrefixes(), 40);
 
-function isManagedFlagEntity(entity) {
-  if (!entity) return false;
-  return entity.hasTag("kingdoms_flag") || entity.getTags().some((tag) => tag.startsWith("kingdoms_id_"));
-}
-
-function findNearestPlayer(entity, maxDistance = 8) {
-  let nearest;
-  let nearestDistance = maxDistance;
-
-  for (const player of world.getPlayers()) {
-    if (player.dimension.id !== entity.dimension.id) continue;
-    const dx = player.location.x - entity.location.x;
-    const dy = player.location.y - entity.location.y;
-    const dz = player.location.z - entity.location.z;
-    const distance = Math.sqrt(dx * dx + dy * dy + dz * dz);
-    if (distance <= nearestDistance) {
-      nearest = player;
-      nearestDistance = distance;
-    }
-  }
-
-  return nearest;
-}
-
-function abortWildFlagPlacement(player, entity) {
-  try {
-    if (entity?.isValid) entity.remove();
-  } catch (_error) {
-    // Ignore cleanup failures.
-  }
-  giveItemStack(player, new ItemStack(FLAG_ITEM, 1));
-}
-
 function validateNewSettlement(player, territoryCenter, dimensionId) {
   const data = loadData();
   const playerName = getPlayerName(player);
@@ -287,109 +246,7 @@ function validateNewSettlement(player, territoryCenter, dimensionId) {
   return undefined;
 }
 
-function hasWildFlagNear(location, dimensionId) {
-  const dimension = safeDimension(dimensionId);
-  if (!dimension) return false;
-
-  try {
-    const flags = dimension.getEntities({ type: FLAG_ENTITY, location, maxDistance: 2.5 });
-    return flags.some((entity) => !isManagedFlagEntity(entity));
-  } catch (_error) {
-    return false;
-  }
-}
-
-async function handleWildFlagSpawn(entity) {
-  if (!entity?.isValid || isManagedFlagEntity(entity) || entity.hasTag(PENDING_SETUP_TAG)) return;
-
-  entity.addTag(PENDING_SETUP_TAG);
-  const player = findNearestPlayer(entity, 8);
-  if (!player) {
-    try { entity.remove(); } catch (_error) { /* Ignore orphan cleanup failures. */ }
-    return;
-  }
-
-  await beginSettlementCreationFromEntity(player, entity);
-}
-
-async function beginSettlementCreationFromEntity(player, entity) {
-  if (!player || !entity?.isValid) return;
-
-  const dimensionId = getDimensionId(entity.dimension);
-  const territoryCenter = blockPosition(entity.location);
-  const playerName = getPlayerName(player);
-  const cooldownKey = `${playerName}:${dimensionId}:${territoryCenter.x}:${territoryCenter.y}:${territoryCenter.z}`;
-  const lastPlacementTick = flagPlacementCooldown.get(cooldownKey) ?? -20;
-  if (system.currentTick - lastPlacementTick < 10) return;
-  flagPlacementCooldown.set(cooldownKey, system.currentTick);
-
-  const validationError = validateNewSettlement(player, territoryCenter, dimensionId);
-  if (validationError) {
-    player.sendMessage(validationError);
-    abortWildFlagPlacement(player, entity);
-    return;
-  }
-
-  const form = new ModalFormData().title("Создание поселения");
-  modalTextField(form, `Название поселения (${CREATION_COST} изумрудов)`, "Например: Новгород", `Поселение ${playerName}`);
-  const response = await showForm(player, form);
-  if (response.canceled) {
-    player.sendMessage("§7Создание поселения отменено, флаг возвращён.");
-    abortWildFlagPlacement(player, entity);
-    return;
-  }
-
-  const name = cleanName(response.formValues?.[0]);
-  if (!name) {
-    player.sendMessage("§cНазвание не может быть пустым.");
-    abortWildFlagPlacement(player, entity);
-    return;
-  }
-
-  if (!takeItem(player, "minecraft:emerald", CREATION_COST)) {
-    player.sendMessage(`§cНе хватает изумрудов. Нужно ${CREATION_COST}.`);
-    abortWildFlagPlacement(player, entity);
-    return;
-  }
-
-  const data = loadData();
-  const nowDay = getCurrentDay();
-  const settlement = {
-    id: nextSettlementId(data),
-    name,
-    typeIndex: 0,
-    creatorName: playerName,
-    creatorPrefix: creatorPrefixFor(0),
-    members: {},
-    hp: SETTLEMENT_TYPES[0].hp,
-    morale: 75,
-    territoryBonus: 0,
-    dimensionId,
-    flag: territoryCenter,
-    wars: [],
-    allianceId: undefined,
-    createdTick: system.currentTick,
-    lastTaxTick: -TAX_COOLDOWN_TICKS,
-    lastMoraleDay: nowDay
-  };
-
-  try {
-    spawnOrUpdateFlagEntity(settlement, data, entity);
-  } catch (error) {
-    giveEmeralds(player, CREATION_COST);
-    abortWildFlagPlacement(player, entity);
-    player.sendMessage(`§cНе удалось поставить флаг: ${error}`);
-    return;
-  }
-
-  data.settlements.push(settlement);
-  saveData(data);
-  updateFlagLabelFor(settlement, data);
-  syncPlayerPrefixes(data);
-  world.sendMessage(`§6[Королевства] §f${playerName} основал(а) ${settlementDisplayName(data, settlement)} за ${CREATION_COST} изумрудов.`);
-}
-
-async function beginSettlementCreationFromItem(player, clickedBlock, blockFace) {
+async function beginSettlementCreationFromItem(player, clickedBlock, blockFace, origin = "script") {
   if (!player || !clickedBlock) return;
 
   const data = loadData();
@@ -402,7 +259,7 @@ async function beginSettlementCreationFromItem(player, clickedBlock, blockFace) 
   if (system.currentTick - lastPlacementTick < 10) return;
   flagPlacementCooldown.set(cooldownKey, system.currentTick);
 
-  if (hasWildFlagNear(spawnLocation, dimensionId)) return;
+  player.sendMessage(`§7[Королевства] Размещение флага (${origin})...`);
 
   const validationError = validateNewSettlement(player, territoryCenter, dimensionId);
   if (validationError) {
@@ -1124,7 +981,6 @@ function spawnOrUpdateFlagEntity(settlement, data, existingEntity) {
   const flag = existingEntity?.isValid ? existingEntity : (flags[0] ?? dimension.spawnEntity(FLAG_ENTITY, location));
   if (!flag.hasTag("kingdoms_flag")) flag.addTag("kingdoms_flag");
   if (!flag.hasTag(tag)) flag.addTag(tag);
-  flag.removeTag(PENDING_SETUP_TAG);
   flag.nameTag = settlementLabel(data, settlement);
   try { flag.teleport(location, { dimension }); } catch (_error) { /* Keep the entity if teleport is unavailable. */ }
 
