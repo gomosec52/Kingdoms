@@ -73,6 +73,16 @@ const PREFIXES = [
   { name: "Советник", description: "Даёт стратегические решения владельцу и координирует развитие." }
 ];
 
+const CREATOR_PREFIXES = [
+  "Староста",
+  "Войт",
+  "Посадник",
+  "Бургомистр",
+  "Кастелян",
+  "Король",
+  "Император"
+];
+
 const flagInteractionCooldown = new Map();
 const flagPlacementCooldown = new Map();
 let flagItemComponentRegistered = false;
@@ -272,9 +282,23 @@ world.beforeEvents.entityHurt?.subscribe((event) => {
   }
 });
 
+world.beforeEvents.chatSend?.subscribe((event) => {
+  const player = event.sender;
+  if (!player || player.typeId !== "minecraft:player") return;
+
+  const data = loadData();
+  const prefix = playerDisplayPrefix(data, getPlayerName(player));
+  if (!prefix) return;
+
+  event.cancel = true;
+  const message = cleanChatMessage(event.message);
+  system.run(() => world.sendMessage(`§7[§6${prefix}§7] §f${getPlayerName(player)}§7: §f${message}`));
+});
+
 system.runInterval(() => updateFlagLabels(), 60);
 system.runInterval(() => updateMoraleForNewDay(), 1200);
 system.runInterval(() => cleanupExpiredLootZones(), 100);
+system.runInterval(() => updatePlayerPrefixDisplays(), 40);
 
 async function beginSettlementCreationFromItem(player, clickedBlock, blockFace) {
   if (!player || !clickedBlock) return;
@@ -337,7 +361,7 @@ async function beginSettlementCreationFromItem(player, clickedBlock, blockFace) 
     name,
     typeIndex: 0,
     creatorName: playerName,
-    creatorPrefix: "Основатель",
+    creatorPrefix: creatorPrefixFor(0),
     members: {},
     hp: SETTLEMENT_TYPES[0].hp,
     morale: 75,
@@ -363,6 +387,7 @@ async function beginSettlementCreationFromItem(player, clickedBlock, blockFace) 
   data.settlements.push(settlement);
   saveData(data);
   updateFlagLabelFor(settlement, data);
+  updatePlayerPrefixDisplays(data);
   world.sendMessage(`§6[Королевства] §f${playerName} основал(а) ${settlementDisplayName(data, settlement)} за ${CREATION_COST} изумрудов.`);
 }
 
@@ -419,7 +444,7 @@ async function beginSettlementCreation(player, block) {
     name,
     typeIndex: 0,
     creatorName: playerName,
-    creatorPrefix: "Основатель",
+    creatorPrefix: creatorPrefixFor(0),
     members: {},
     hp: SETTLEMENT_TYPES[0].hp,
     morale: 75,
@@ -436,6 +461,7 @@ async function beginSettlementCreation(player, block) {
   data.settlements.push(settlement);
   saveData(data);
   updateFlagLabelFor(settlement);
+  updatePlayerPrefixDisplays(data);
   world.sendMessage(`§6[Королевства] §f${playerName} основал(а) ${settlementDisplayName(data, settlement)} за ${CREATION_COST} изумрудов.`);
 }
 
@@ -509,10 +535,12 @@ async function upgradeSettlement(player, settlementId) {
   }
 
   settlement.typeIndex += 1;
+  settlement.creatorPrefix = creatorPrefixFor(settlement.typeIndex);
   settlement.hp = getMaxHp(settlement);
   settlement.morale = Math.min(100, settlement.morale + 10);
   saveData(data);
   updateFlagLabelFor(settlement);
+  updatePlayerPrefixDisplays(data);
   world.sendMessage(`§6[Королевства] §f${settlementDisplayName(data, settlement)} улучшено за ${nextType.upgradeCost} изумрудов. Мораль выросла.`);
 }
 
@@ -553,6 +581,7 @@ async function addResident(player, settlementId) {
   const name = candidates[response.formValues?.[0] ?? 0];
   settlement.members[name] = { prefix: PREFIXES[0].name, joinedTick: system.currentTick };
   saveData(data);
+  updatePlayerPrefixDisplays(data);
   world.sendMessage(`§6[Королевства] §f${name} теперь житель ${settlementDisplayName(data, settlement)}.`);
 }
 
@@ -574,6 +603,7 @@ async function removeResident(player, settlementId) {
   const name = members[response.formValues?.[0] ?? 0];
   delete settlement.members[name];
   saveData(data);
+  updatePlayerPrefixDisplays(data);
   world.sendMessage(`§6[Королевства] §f${name} исключён(а) из ${settlementDisplayName(data, settlement)}.`);
 }
 
@@ -599,6 +629,7 @@ async function openPrefixesMenu(player, settlementId) {
 
   settlement.members[memberName].prefix = PREFIXES[prefixResponse.formValues?.[0] ?? 0].name;
   saveData(data);
+  updatePlayerPrefixDisplays(data);
   player.sendMessage(`§a${memberName}: ${settlement.members[memberName].prefix}.`);
 }
 
@@ -806,6 +837,7 @@ function disbandSettlement(data, settlementId, reason, announce = true) {
   removeFlagBlock(settlement);
   removeFlagLabel(settlement);
   data.settlements = data.settlements.filter((entry) => entry.id !== settlement.id);
+  updatePlayerPrefixDisplays(data);
   if (announce) world.sendMessage(`§6[Королевства] §f${settlement.name} распалось: ${reason}.`);
 }
 
@@ -885,7 +917,7 @@ function settlementInfo(data, settlement) {
     "",
     `Тип: ${type.name}`,
     `Название: ${settlement.name}`,
-    `Создатель: ${settlement.creatorPrefix || "Основатель"} ${settlement.creatorName}`,
+    `Создатель: ${creatorPrefixFor(settlement.typeIndex)} ${settlement.creatorName}`,
     `Прочность: ${settlement.hp}/${getMaxHp(settlement)}`,
     `Мораль: ${settlement.morale}/100`,
     `Жители: ${getPopulation(settlement)}`,
@@ -899,7 +931,32 @@ function settlementInfo(data, settlement) {
 }
 
 function settlementLabel(data, settlement) {
-  return `${settlementDisplayName(data, settlement)}\n${settlement.creatorPrefix || "Основатель"} ${settlement.creatorName}\nHP ${settlement.hp}/${getMaxHp(settlement)} | Мораль ${settlement.morale}`;
+  return `${settlementDisplayName(data, settlement)}\n${creatorPrefixFor(settlement.typeIndex)} ${settlement.creatorName}\nHP ${settlement.hp}/${getMaxHp(settlement)} | Мораль ${settlement.morale}`;
+}
+
+function updatePlayerPrefixDisplays(knownData) {
+  const data = knownData ?? loadData();
+  for (const player of world.getPlayers()) {
+    const playerName = getPlayerName(player);
+    const prefix = playerDisplayPrefix(data, playerName);
+    const nextNameTag = prefix ? `§6[${prefix}]§r ${playerName}` : playerName;
+    if (player.nameTag !== nextNameTag) player.nameTag = nextNameTag;
+  }
+}
+
+function playerDisplayPrefix(data, playerName) {
+  const settlement = getPlayerSettlement(data, playerName);
+  if (!settlement) return undefined;
+
+  const role = settlement.creatorName === playerName
+    ? creatorPrefixFor(settlement.typeIndex)
+    : settlement.members?.[playerName]?.prefix;
+  if (!role) return undefined;
+  return `${settlementType(settlement).name}-${role}`;
+}
+
+function creatorPrefixFor(typeIndex) {
+  return CREATOR_PREFIXES[typeIndex] ?? CREATOR_PREFIXES[0];
 }
 
 function settlementDisplayName(data, settlement) {
@@ -1042,7 +1099,8 @@ function hasLootAccess(data, zone, playerName) {
 }
 
 function getPlayerSettlement(data, playerName) {
-  return data.settlements.find((settlement) => isMember(settlement, playerName));
+  return data.settlements.find((settlement) => settlement.creatorName === playerName)
+    ?? data.settlements.find((settlement) => Boolean(settlement.members?.[playerName]));
 }
 
 function isMember(settlement, playerName) {
@@ -1093,6 +1151,10 @@ function getPopulation(settlement) {
 
 function cleanName(value) {
   return String(value ?? "").replace(/[\n\r§]/g, "").trim().slice(0, 32);
+}
+
+function cleanChatMessage(value) {
+  return String(value ?? "").replace(/§/g, "");
 }
 
 async function showForm(player, form) {

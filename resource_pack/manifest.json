@@ -4,14 +4,14 @@
     "name": "Kingdoms Wars Resource Pack",
     "description": "Resources for Kingdoms Wars: flag block placeholder model and textures.",
     "uuid": "e8d3a9ca-729a-43a1-b769-1f772a8708d1",
-    "version": [1, 0, 4],
+    "version": [1, 0, 5],
     "min_engine_version": [1, 26, 20]
   },
   "modules": [
     {
       "type": "resources",
       "uuid": "6a3b1a63-96db-40d3-a4ce-29fb9c8b98e9",
-      "version": [1, 0, 4]
+      "version": [1, 0, 5]
     }
   ]
 }
