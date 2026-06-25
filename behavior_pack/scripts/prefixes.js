@@ -27,7 +27,7 @@ export function bindPrefixSystem() {
   if (!world.beforeEvents.chatSend) {
     chatPrefixMode = "none";
     system.runTimeout(() => {
-      world.sendMessage("§c[Королевства] Чат-префиксы недоступны: включите Beta APIs / Script API для этого мира.");
+      world.sendMessage("§c[Королевства] Beta APIs выключены. Включите: Создать мир → Эксперименты → Beta APIs.");
     }, 80);
   }
 }

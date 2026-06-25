@@ -11,7 +11,10 @@
     "components": {
       "minecraft:icon": "kingdoms:flag_item",
       "minecraft:interact_button": "Поставить флаг",
-      "minecraft:max_stack_size": 16
+      "minecraft:max_stack_size": 16,
+      "minecraft:entity_placer": {
+        "entity": "kingdoms:flag"
+      }
     }
   }
 }
