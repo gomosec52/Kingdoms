@@ -98,11 +98,13 @@ const flagPlacementCooldown = new Map();
 const prefixedChatCooldown = new Map();
 const playerPrefixCache = new Map();
 const playerTeamCache = new Map();
+const playerScoreboardOk = new Map();
 const playerIdByName = new Map();
 let flagItemComponentRegistered = false;
 let dynamicPropertiesRegistered = false;
 let prefixTeamsReady = false;
-let scoreboardPrefixWorking = false;
+let chatInterceptSubscribed = false;
+let chatEchoSubscribed = false;
 
 system.beforeEvents?.startup?.subscribe((event) => {
   registerFlagItemComponent(event.itemComponentRegistry);
@@ -177,6 +179,7 @@ world.afterEvents.playerLeave?.subscribe((event) => {
   if (event.playerName) {
     playerTeamCache.delete(event.playerName);
     playerPrefixCache.delete(event.playerName);
+    playerScoreboardOk.delete(event.playerName);
     playerIdByName.delete(event.playerName);
   }
   if (event.playerId) removePlayerPrefixLabelById(event.playerId);
@@ -981,7 +984,7 @@ function updatePlayerPrefixDisplays(knownData) {
 
     applyScoreboardPrefix(player, prefix);
     updatePlayerPrefixLabel(player, prefix);
-    applyOptionalChatNamePrefix(player, prefix);
+    applyDirectChatPrefix(player, prefix);
 
     try {
       const nextNameTag = prefix ? "" : playerName;
@@ -996,6 +999,9 @@ function updatePlayerPrefixDisplays(knownData) {
   }
   for (const cachedName of playerTeamCache.keys()) {
     if (!onlineNames.has(cachedName)) playerTeamCache.delete(cachedName);
+  }
+  for (const cachedName of playerScoreboardOk.keys()) {
+    if (!onlineNames.has(cachedName)) playerScoreboardOk.delete(cachedName);
   }
 }
 
@@ -1025,7 +1031,7 @@ function ensurePrefixTeams() {
   if (!dimension) return;
 
   for (const [roleName, teamId] of PREFIX_TEAM_IDS) {
-    const prefixText = `§7[§6${roleName}§7] §r`;
+    const prefixText = `[${roleName}] `;
     try {
       dimension.runCommand(`scoreboard teams add ${teamId}`);
     } catch (_error) {
@@ -1033,6 +1039,8 @@ function ensurePrefixTeams() {
     }
     try {
       dimension.runCommand(`scoreboard teams modify ${teamId} prefix "${prefixText}"`);
+      dimension.runCommand(`scoreboard teams modify ${teamId} nametagVisibility always`);
+      dimension.runCommand(`scoreboard teams modify ${teamId} collisionRule never`);
     } catch (_error) {
       // Best-effort only.
     }
@@ -1042,22 +1050,16 @@ function ensurePrefixTeams() {
 }
 
 function applyScoreboardPrefix(player, prefix) {
-  if (chatPrefixEventsSubscribed) return;
-
   const playerName = getPlayerName(player);
   const teamId = prefix ? PREFIX_TEAM_IDS.get(prefix) : undefined;
   if (playerTeamCache.get(playerName) === teamId) return;
 
-  const dimension = player.dimension ?? safeDimension("overworld");
-  if (!dimension) return;
-
-  const quotedName = `"${escapeCommandArg(playerName)}"`;
   let worked = false;
 
   try {
-    dimension.runCommand(`scoreboard teams leave ${quotedName}`);
+    player.runCommand("scoreboard teams leave @s");
     if (teamId) {
-      const joinResult = dimension.runCommand(`scoreboard teams join ${teamId} ${quotedName}`);
+      const joinResult = player.runCommand(`scoreboard teams join ${teamId}`);
       worked = commandSucceeded(joinResult);
     } else {
       worked = true;
@@ -1066,18 +1068,53 @@ function applyScoreboardPrefix(player, prefix) {
     worked = false;
   }
 
+  if (!worked && teamId) {
+    worked = applyScoreboardPrefixByName(player, teamId, playerName);
+  }
+
   playerTeamCache.set(playerName, teamId);
-  if (worked) scoreboardPrefixWorking = true;
+  playerScoreboardOk.set(playerName, Boolean(teamId && worked));
 }
 
-function applyOptionalChatNamePrefix(player, prefix) {
-  if (!("chatNamePrefix" in player)) return;
+function applyScoreboardPrefixByName(player, teamId, playerName) {
+  const dimension = player.dimension ?? safeDimension("overworld");
+  if (!dimension) return false;
+
+  const quotedName = `"${escapeCommandArg(playerName)}"`;
 
   try {
-    player.chatNamePrefix = prefix ? `§7[§6${prefix}§7] ` : undefined;
+    dimension.runCommand(`scoreboard teams leave ${quotedName}`);
+    const joinResult = dimension.runCommand(`scoreboard teams join ${teamId} ${quotedName}`);
+    return commandSucceeded(joinResult);
   } catch (_error) {
-    // Property exists only on newer API versions.
+    return false;
   }
+}
+
+function applyDirectChatPrefix(player, prefix) {
+  const formattedPrefix = prefix ? `§7[§6${prefix}§7] ` : "";
+
+  try {
+    if (prefix) {
+      player.chatNamePrefix = formattedPrefix;
+      player.chatNameSuffix = "";
+      player.chatMessagePrefix = "";
+      if (player.chatNamePrefix === formattedPrefix) {
+        playerScoreboardOk.set(getPlayerName(player), true);
+      }
+      return;
+    }
+
+    player.chatNamePrefix = "";
+    player.chatNameSuffix = "";
+    player.chatMessagePrefix = "";
+  } catch (_error) {
+    // chatNamePrefix is unavailable on API 1.17 module builds.
+  }
+}
+
+function scoreboardChatWorksFor(playerName) {
+  return playerScoreboardOk.get(playerName) === true;
 }
 
 function playerPrefixLabelTag(player) {
@@ -1161,43 +1198,48 @@ function creatorPrefixFor(typeIndex) {
 let chatPrefixEventsSubscribed = false;
 
 function subscribeChatPrefixEvents() {
-  if (chatPrefixEventsSubscribed) return;
-
-  const beforeHandler = (event) => handlePrefixedChat(event);
-
-  if (world.beforeEvents.chatSend?.subscribe) {
-    world.beforeEvents.chatSend.subscribe(beforeHandler);
+  if (!chatInterceptSubscribed && world.beforeEvents.chatSend?.subscribe) {
+    world.beforeEvents.chatSend.subscribe((event) => handlePrefixedChatBefore(event));
+    chatInterceptSubscribed = true;
     chatPrefixEventsSubscribed = true;
-    return;
   }
 
-  if (world.beforeEvents.chat?.subscribe) {
-    world.beforeEvents.chat.subscribe(beforeHandler);
+  if (!chatInterceptSubscribed && world.beforeEvents.chat?.subscribe) {
+    world.beforeEvents.chat.subscribe((event) => handlePrefixedChatBefore(event));
+    chatInterceptSubscribed = true;
+    chatPrefixEventsSubscribed = true;
+  }
+
+  if (!chatEchoSubscribed && !chatInterceptSubscribed && world.afterEvents.chatSend?.subscribe) {
+    world.afterEvents.chatSend.subscribe((event) => handlePrefixedChatEcho(event));
+    chatEchoSubscribed = true;
     chatPrefixEventsSubscribed = true;
   }
 
   system.runTimeout(() => {
     subscribeChatPrefixEvents();
-    if (chatPrefixEventsSubscribed || scoreboardPrefixWorking) return;
-    world.sendMessage("§7[Королевства] Префикс в чате: включите Beta APIs в экспериментах мира или читы.");
+    const anyChatMode = chatPrefixEventsSubscribed || [...playerScoreboardOk.values()].some(Boolean);
+    if (anyChatMode) return;
+    world.sendMessage("§7[Королевства] Префикс в чате не подключился. Проверьте читы и Beta APIs.");
   }, 160);
 }
 
 function notifyPlayerAboutPrefixes(player) {
   if (!player) return;
 
-  const prefix = playerDisplayPrefix(loadData(), getPlayerName(player));
+  const playerName = getPlayerName(player);
+  const prefix = playerDisplayPrefix(loadData(), playerName);
   if (!prefix) return;
 
-  const chatHint = chatPrefixEventsSubscribed
-    ? "Префикс также виден в чате."
-    : scoreboardPrefixWorking
-      ? "Префикс в чате работает через scoreboard."
-      : "Для префикса в чате включите Beta APIs или читы мира.";
+  const chatHint = scoreboardChatWorksFor(playerName)
+    ? "Префикс в чате подключён (scoreboard)."
+    : chatPrefixEventsSubscribed
+      ? "Префикс в чате через перехват сообщений."
+      : "Префикс в чате не подключился — включите читы и Beta APIs.";
   player.sendMessage(`§7[Королевства] Ваш префикс: §6${prefix}§7. ${chatHint}`);
 }
 
-function handlePrefixedChat(event) {
+function handlePrefixedChatBefore(event) {
   const message = event.message;
   if (typeof message !== "string" || !message.length) return;
 
@@ -1206,8 +1248,27 @@ function handlePrefixedChat(event) {
   if (!resolved) return;
 
   const { playerName, prefix } = resolved;
-  event.cancel = true;
+  if (scoreboardChatWorksFor(playerName)) return;
 
+  event.cancel = true;
+  queuePrefixedChatMessage(playerName, prefix, message);
+}
+
+function handlePrefixedChatEcho(event) {
+  const message = event.message;
+  if (typeof message !== "string" || !message.length) return;
+
+  const player = event.sender ?? event.player;
+  const resolved = resolveChatPrefix(player, event);
+  if (!resolved) return;
+
+  const { playerName, prefix } = resolved;
+  if (scoreboardChatWorksFor(playerName)) return;
+
+  queuePrefixedChatMessage(playerName, prefix, message);
+}
+
+function queuePrefixedChatMessage(playerName, prefix, message) {
   const duplicateKey = `${playerName}:${system.currentTick}:${message}`;
   if (prefixedChatCooldown.get(duplicateKey) === system.currentTick) return;
   prefixedChatCooldown.set(duplicateKey, system.currentTick);
