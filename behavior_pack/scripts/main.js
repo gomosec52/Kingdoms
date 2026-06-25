@@ -1052,7 +1052,7 @@ function subscribeChatPrefixEvents() {
   if (!subscribed) {
     chatPrefixMode = "none";
     system.runTimeout(() => {
-      world.sendMessage("§7[Королевства] Чат-префиксы недоступны в этой версии Script API. Префиксы над ником продолжают работать.");
+      world.sendMessage("§c[Королевства] Чат-префиксы недоступны: включите Beta APIs / Script API для этого мира.");
     }, 80);
   }
 }
