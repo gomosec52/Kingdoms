@@ -1,10 +1,13 @@
 import { system } from "@minecraft/server";
-import { FLAG_ITEM, FLAG_ITEM_USE_COMPONENT } from "./config.js";
+import { FLAG_ENTITY, FLAG_ITEM, FLAG_ITEM_USE_COMPONENT } from "./config.js";
 
 const recentPlacementKeys = new Set();
 
 /** @type {((player: import("@minecraft/server").Player, block: import("@minecraft/server").Block, blockFace: import("@minecraft/server").Direction, origin: string) => void) | null} */
 let onFlagUseOn = null;
+
+/** @type {((entity: import("@minecraft/server").Entity) => void) | null} */
+let onWildFlagSpawn = null;
 
 function placementKey(player, block) {
   const location = block.location;
@@ -32,22 +35,12 @@ function resolvePlayer(event) {
   return event.source ?? event.player;
 }
 
-function resolveBlock(event) {
-  return event.block;
-}
-
-function resolveBlockFace(event) {
-  return event.blockFace ?? event.face;
-}
-
 /** @type {import("@minecraft/server").ItemCustomComponent} */
 const flagPlacerComponent = {
   onUseOn(event) {
     const player = event.source;
-    const itemStack = event.itemStack;
-    if (itemStack?.typeId !== FLAG_ITEM) return;
-    if (player?.typeId !== "minecraft:player") return;
-    if (!event.block) return;
+    if (event.itemStack?.typeId !== FLAG_ITEM) return;
+    if (player?.typeId !== "minecraft:player" || !event.block) return;
     queuePlacement(player, event.block, event.blockFace, "component");
   }
 };
@@ -56,6 +49,10 @@ let registered = false;
 
 export function setFlagPlacementHandler(handler) {
   onFlagUseOn = handler;
+}
+
+export function setWildFlagSpawnHandler(handler) {
+  onWildFlagSpawn = handler;
 }
 
 export function registerFlagComponent(registry) {
@@ -67,27 +64,34 @@ export function registerFlagComponent(registry) {
 export function bindFlagUseOnEvents(world) {
   const handler = (event, origin) => {
     if (event.itemStack?.typeId !== FLAG_ITEM) return;
-
     const player = resolvePlayer(event);
-    const block = resolveBlock(event);
-    const blockFace = resolveBlockFace(event);
+    const block = event.block;
+    const blockFace = event.blockFace ?? event.face;
     if (!player || player.typeId !== "minecraft:player" || !block) return;
-
     queuePlacement(player, block, blockFace, origin);
   };
 
-  if (world.afterEvents?.itemUseOn) {
-    world.afterEvents.itemUseOn.subscribe((event) => handler(event, "afterUseOn"));
-  }
-  if (world.beforeEvents?.itemUseOn) {
-    world.beforeEvents.itemUseOn.subscribe((event) => handler(event, "beforeUseOn"));
-  }
+  world.afterEvents?.itemUseOn?.subscribe((event) => handler(event, "afterUseOn"));
+  world.beforeEvents?.itemUseOn?.subscribe((event) => handler(event, "beforeUseOn"));
+}
+
+export function bindFlagEntitySpawn(world) {
+  world.afterEvents?.entitySpawn?.subscribe((event) => {
+    if (event.entity?.typeId !== FLAG_ENTITY) return;
+    system.run(() => {
+      try {
+        if (typeof onWildFlagSpawn === "function") onWildFlagSpawn(event.entity);
+      } catch (error) {
+        console.warn(`[Kingdoms] Ошибка обработки флага-сущности: ${error}`);
+      }
+    });
+  });
 }
 
 export function isPlacementApiAvailable(world) {
   return Boolean(
     world.afterEvents?.itemUseOn ||
-    world.beforeEvents?.itemUseOn ||
+    world.afterEvents?.entitySpawn ||
     system.beforeEvents?.startup
   );
 }
