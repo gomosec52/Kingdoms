@@ -335,7 +335,7 @@
           "type": "label",
           "text": "Сведения о поселении",
           "font_size": "small",
-          "font_scale_factor": 1.35,
+          "font_scale_factor": 1.5,
           "shadow": true,
           "color": [
             0.29,
@@ -353,7 +353,7 @@
           "type": "label",
           "text": "#form_text",
           "font_size": "small",
-          "font_scale_factor": 1.17,
+          "font_scale_factor": 1.4,
           "line_padding": 3,
           "color": [
             0.16,
