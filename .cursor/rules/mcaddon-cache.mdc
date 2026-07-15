@@ -1,0 +1,15 @@
+---
+description: Bedrock mcaddon release must bypass Minecraft/GitHub cache
+alwaysApply: true
+---
+
+# Minecraft Bedrock pack cache
+
+When publishing or fixing `.mcaddon` / behavior packs for this repo:
+
+1. **Always generate new pack + module UUIDs** for each release that the user must reinstall.
+2. **Always use a new versioned filename** (e.g. `KingdomsWars-Reloaded-v1.2.1.mcaddon`), not only overwrite `KingdomsWars.mcaddon`.
+3. **Bump pack version** in every `manifest.json` and make the in-game greet string unique (include version + `FRESH UUID` or similar).
+4. Reason: Minecraft and GitHub raw downloads often keep old packs; users can load cached old scripts while thinking they installed the fix. Proven on 1.26.20 with Kingdoms Prefixes.
+
+Do this even if the change "might" work without UUID rotation.
