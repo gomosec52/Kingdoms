@@ -1,15 +1,12 @@
 import * as server from "@minecraft/server";
 import { ActionFormData, MessageFormData, ModalFormData } from "@minecraft/server-ui";
-import {
-  FLAG_ENTITY,
-  FLAG_ITEM,
-  FLAG_LABEL_ENTITY,
-  LEGACY_FLAG_BLOCK,
-  PENDING_SETUP_TAG
-} from "./constants.js";
-import { bindFlagSystem, entityIsValid, isFlagComponentRegistered, setFlagPlacementHandler, setWildFlagSpawnHandler } from "./flag.js";
 
 const { BlockPermutation, ItemStack, system, world } = server;
+const FLAG_ITEM = "kingdoms:flag";
+const FLAG_ENTITY = "kingdoms:flag";
+const LEGACY_FLAG_BLOCK = "kingdoms:flag";
+const FLAG_LABEL_ENTITY = "kingdoms:flag_label";
+const FLAG_ITEM_USE_COMPONENT = "kingdoms:flag_placer";
 const STORE_KEY = "kingdoms:data:v1";
 const STORE_LIMIT = 32767;
 const SETTLEMENT_MENU_TITLE = "kingdoms:settlement";
@@ -86,24 +83,22 @@ const CREATOR_PREFIXES = [
   "Император"
 ];
 
-const PLAYER_PREFIX_LABEL_TAG = "kingdoms_player_prefix_label";
-
 const flagInteractionCooldown = new Map();
 const flagPlacementCooldown = new Map();
-const pendingPlacementLocks = new Set();
 const playerPrefixCache = new Map();
-const playerIdByName = new Map();
 const chatPrefixNoticeShown = new Set();
-const loadedNoticeShown = new Set();
-let directChatPrefixAvailable = false;
+const prefixedChatCooldown = new Map();
+let flagItemComponentRegistered = false;
 let dynamicPropertiesRegistered = false;
+let directChatPrefixAvailable = false;
 
-bindFlagSystem(world);
-setFlagPlacementHandler(beginSettlementCreationFromItem);
-setWildFlagSpawnHandler(handleWildFlagEntitySpawn);
+system.beforeEvents?.startup?.subscribe((event) => {
+  registerFlagItemComponent(event.itemComponentRegistry);
+});
 
 world.beforeEvents?.worldInitialize?.subscribe((event) => {
   registerDynamicProperties(event.propertyRegistry);
+  registerFlagItemComponent(event.itemComponentRegistry);
 });
 
 function registerDynamicProperties(registry) {
@@ -120,31 +115,37 @@ function registerDynamicProperties(registry) {
   }
 }
 
+function registerFlagItemComponent(registry) {
+  if (flagItemComponentRegistered || !registry?.registerCustomComponent) return;
+
+  try {
+    registry.registerCustomComponent(FLAG_ITEM_USE_COMPONENT, {
+      onUseOn(event) {
+        if (event.itemStack?.typeId !== FLAG_ITEM) return;
+        system.run(() => beginSettlementCreationFromItem(event.source, event.block, event.blockFace));
+      }
+    });
+    flagItemComponentRegistered = true;
+  } catch (error) {
+    console.warn(`[Kingdoms] Не удалось зарегистрировать компонент флага: ${error}`);
+  }
+}
+
+world.beforeEvents.itemUseOn?.subscribe((event) => {
+  if (event.itemStack?.typeId !== FLAG_ITEM) return;
+  event.cancel = true;
+  system.run(() => beginSettlementCreationFromItem(event.source, event.block, event.blockFace));
+});
+
+world.afterEvents.itemUseOn?.subscribe((event) => {
+  if (event.itemStack?.typeId !== FLAG_ITEM) return;
+  system.run(() => beginSettlementCreationFromItem(event.source, event.block, event.blockFace));
+});
+
 world.afterEvents.playerInteractWithEntity?.subscribe((event) => {
   const target = event.target ?? event.entity;
   if (!target || target.typeId !== FLAG_ENTITY) return;
   handleFlagInteraction(event.player, target);
-});
-
-world.afterEvents.playerSpawn?.subscribe((event) => {
-  const player = event.player;
-  if (!player) return;
-
-  playerIdByName.set(getPlayerName(player), player.id);
-  system.run(() => {
-    updatePlayerPrefixDisplays();
-    notifyPlayerAboutPrefixes(player);
-    notifyPlayerAboutAddon(player);
-  });
-});
-
-world.afterEvents.playerLeave?.subscribe((event) => {
-  if (event.playerName) {
-    playerPrefixCache.delete(event.playerName);
-    playerIdByName.delete(event.playerName);
-    chatPrefixNoticeShown.delete(event.playerName);
-  }
-  if (event.playerId) removePlayerPrefixLabelById(event.playerId);
 });
 
 world.afterEvents.playerPlaceBlock?.subscribe((event) => {
@@ -157,6 +158,27 @@ world.afterEvents.playerInteractWithBlock?.subscribe((event) => {
   handleFlagInteraction(event.player, event.block);
 });
 
+world.afterEvents.playerSpawn?.subscribe((event) => {
+  const player = event.player;
+  if (!player) return;
+  system.run(() => {
+    updatePlayerPrefixDisplays();
+    notifyPlayerAboutAddon(player);
+    notifyPlayerAboutPrefixes(player);
+  });
+});
+
+world.afterEvents.playerLeave?.subscribe((event) => {
+  if (event.playerName) {
+    playerPrefixCache.delete(event.playerName);
+    chatPrefixNoticeShown.delete(event.playerName);
+  }
+});
+
+if (world.beforeEvents?.chatSend?.subscribe) {
+  world.beforeEvents.chatSend.subscribe((event) => handlePrefixedChat(event));
+}
+
 function handleFlagInteraction(player, flagSource) {
   const cooldownKey = `${getPlayerName(player)}:${getDimensionId(flagSource.dimension)}:${Math.floor(flagSource.location.x)}:${Math.floor(flagSource.location.y)}:${Math.floor(flagSource.location.z)}`;
   const lastInteractionTick = flagInteractionCooldown.get(cooldownKey) ?? -20;
@@ -168,11 +190,7 @@ function handleFlagInteraction(player, flagSource) {
     ? findSettlementByFlagEntity(data, flagSource)
     : findSettlementByFlag(data, flagSource);
   if (!settlement) {
-    if (flagSource.typeId === FLAG_ENTITY && !isRegisteredFlagEntity(flagSource)) {
-      system.run(() => handleWildFlagEntitySpawn(flagSource, player));
-      return;
-    }
-    player.sendMessage("§cЭтот флаг не привязан к поселению. Уберите его и поставьте заново.");
+    player.sendMessage("§cЭтот флаг не привязан к поселению. Сломайте его и поставьте заново.");
     return;
   }
   system.run(() => openSettlementMenu(player, settlement.id));
@@ -289,131 +307,67 @@ world.beforeEvents.entityHurt?.subscribe((event) => {
   }
 });
 
-system.run(() => updatePlayerPrefixDisplays());
-
 system.runInterval(() => updateFlagLabels(), 60);
 system.runInterval(() => updateMoraleForNewDay(), 1200);
 system.runInterval(() => cleanupExpiredLootZones(), 100);
 system.runInterval(() => updatePlayerPrefixDisplays(), 40);
+system.run(() => updatePlayerPrefixDisplays());
 
-async function beginSettlementCreationFromItem(player, clickedBlock, blockFace, origin = "script") {
+async function beginSettlementCreationFromItem(player, clickedBlock, blockFace) {
   if (!player || !clickedBlock) return;
 
+  const data = loadData();
   const playerName = getPlayerName(player);
   const dimensionId = getDimensionId(clickedBlock.dimension);
   const spawnLocation = getFlagPlacementLocation(clickedBlock, blockFace);
   const territoryCenter = blockPosition(spawnLocation);
-  const lockKey = placementLockKey(dimensionId, territoryCenter);
-  if (!lockPlacement(lockKey)) return;
+  const cooldownKey = `${playerName}:${dimensionId}:${territoryCenter.x}:${territoryCenter.y}:${territoryCenter.z}`;
+  const lastPlacementTick = flagPlacementCooldown.get(cooldownKey) ?? -20;
+  if (system.currentTick - lastPlacementTick < 10) return;
+  flagPlacementCooldown.set(cooldownKey, system.currentTick);
 
-  const validationError = validateNewSettlement(player, territoryCenter, dimensionId);
-  if (validationError) {
-    player.sendMessage(validationError);
+  if (data.settlements.some((settlement) => settlement.creatorName === playerName)) {
+    player.sendMessage("§cУ вас уже есть поселение. Один создатель может владеть только одним флагом.");
     return;
   }
 
-  let flagEntity = findPendingFlagEntityAt(territoryCenter, dimensionId);
-  let flagItemConsumed = Boolean(flagEntity);
-
-  if (!flagEntity) {
-    const dimension = safeDimension(dimensionId);
-    if (!dimension) {
-      player.sendMessage("§cНе удалось получить измерение мира.");
-      return;
-    }
-
-    try {
-      flagEntity = dimension.spawnEntity(FLAG_ENTITY, getFlagEntityLocation(territoryCenter));
-      flagEntity.addTag(PENDING_SETUP_TAG);
-      flagItemConsumed = false;
-      player.sendMessage(`§aФлаг-сущность установлена (${origin}).`);
-    } catch (error) {
-      player.sendMessage(`§cНе удалось создать флаг-сущность: ${error}`);
-      return;
-    }
-  } else {
-    player.sendMessage(`§7Флаг-сущность найдена (${origin}).`);
-  }
-
-  await runSettlementCreationFlow(player, {
-    territoryCenter,
-    dimensionId,
-    flagEntity,
-    flagItemConsumed
-  });
-}
-
-async function handleWildFlagEntitySpawn(entity, knownPlayer) {
-  if (!entityIsValid(entity) || isRegisteredFlagEntity(entity)) return;
-
-  const territoryCenter = blockPosition(entity.location);
-  const dimensionId = getDimensionId(entity.dimension);
-  const lockKey = placementLockKey(dimensionId, territoryCenter);
-  if (!lockPlacement(lockKey)) return;
-
-  const player = knownPlayer ?? findNearestPlayer(entity, 12);
-  if (!player) {
-    entity.addTag(PENDING_SETUP_TAG);
+  if (countItem(player, "minecraft:emerald") < CREATION_COST) {
+    player.sendMessage(`§cДля создания поселения нужно ${CREATION_COST} изумрудов.`);
     return;
   }
 
-  if (!entity.hasTag(PENDING_SETUP_TAG)) entity.addTag(PENDING_SETUP_TAG);
-  player.sendMessage("§aФлаг-сущность появилась. Открываю меню создания поселения...");
-
-  await runSettlementCreationFlow(player, {
-    territoryCenter,
-    dimensionId,
-    flagEntity: entity,
-    flagItemConsumed: true
-  });
-}
-
-async function runSettlementCreationFlow(player, context) {
-  const { territoryCenter, dimensionId, flagEntity, flagItemConsumed } = context;
-  const playerName = getPlayerName(player);
-
-  const validationError = validateNewSettlement(player, territoryCenter, dimensionId);
-  if (validationError) {
-    player.sendMessage(validationError);
-    cleanupFailedPlacement(player, flagEntity, flagItemConsumed);
+  const overlap = findTerritoryOverlap(data, territoryCenter, dimensionId, SETTLEMENT_TYPES[0].radius, undefined, undefined);
+  if (overlap) {
+    player.sendMessage(`§cСлишком близко к территории: ${settlementDisplayName(data, overlap)}.`);
     return;
   }
 
   const form = new ModalFormData()
     .title("Создание поселения")
-    .textField({
-      label: `Название поселения (${CREATION_COST} изумрудов)`,
-      placeholder: "Например: Новгород",
-      defaultValue: `Поселение ${playerName}`
-    });
+    .textField(`Название поселения (${CREATION_COST} изумрудов)`, "Например: Новгород", `Поселение ${playerName}`);
   const response = await showForm(player, form);
   if (response.canceled) {
     player.sendMessage("§7Создание поселения отменено.");
-    cleanupFailedPlacement(player, flagEntity, flagItemConsumed);
     return;
   }
 
   const name = cleanName(response.formValues?.[0]);
   if (!name) {
     player.sendMessage("§cНазвание не может быть пустым.");
-    cleanupFailedPlacement(player, flagEntity, flagItemConsumed);
     return;
   }
 
   if (!takeItem(player, "minecraft:emerald", CREATION_COST)) {
     player.sendMessage(`§cНе хватает изумрудов. Нужно ${CREATION_COST}.`);
-    cleanupFailedPlacement(player, flagEntity, flagItemConsumed);
     return;
   }
 
-  if (!flagItemConsumed && !takeItem(player, FLAG_ITEM, 1)) {
+  if (!takeItem(player, FLAG_ITEM, 1)) {
     giveEmeralds(player, CREATION_COST);
-    cleanupFailedPlacement(player, flagEntity, false);
     player.sendMessage("§cПредмет флага не найден в инвентаре.");
     return;
   }
 
-  const data = loadData();
   const nowDay = getCurrentDay();
   const settlement = {
     id: nextSettlementId(data),
@@ -435,11 +389,11 @@ async function runSettlementCreationFlow(player, context) {
   };
 
   try {
-    spawnOrUpdateFlagEntity(settlement, data, flagEntity);
+    spawnOrUpdateFlagEntity(settlement, data);
   } catch (error) {
     giveEmeralds(player, CREATION_COST);
-    cleanupFailedPlacement(player, flagEntity, flagItemConsumed);
-    player.sendMessage(`§cНе удалось закрепить флаг-сущность: ${error}`);
+    giveItemStack(player, new ItemStack(FLAG_ITEM, 1));
+    player.sendMessage(`§cНе удалось поставить флаг-сущность: ${error}`);
     return;
   }
 
@@ -448,86 +402,6 @@ async function runSettlementCreationFlow(player, context) {
   updateFlagLabelFor(settlement, data);
   updatePlayerPrefixDisplays(data);
   world.sendMessage(`§6[Королевства] §f${playerName} основал(а) ${settlementDisplayName(data, settlement)} за ${CREATION_COST} изумрудов.`);
-}
-
-function isRegisteredFlagEntity(entity) {
-  if (!entityIsValid(entity)) return false;
-  return entity.getTags().some((tag) => tag.startsWith("kingdoms_id_"));
-}
-
-function findNearestPlayer(entity, maxDistance = 12) {
-  let nearest;
-  let nearestDistance = maxDistance;
-
-  for (const player of world.getPlayers()) {
-    if (player.dimension.id !== entity.dimension.id) continue;
-    const dx = player.location.x - entity.location.x;
-    const dy = player.location.y - entity.location.y;
-    const dz = player.location.z - entity.location.z;
-    const distance = Math.sqrt(dx * dx + dy * dy + dz * dz);
-    if (distance <= nearestDistance) {
-      nearest = player;
-      nearestDistance = distance;
-    }
-  }
-
-  return nearest;
-}
-
-function findPendingFlagEntityAt(territoryCenter, dimensionId) {
-  const dimension = safeDimension(dimensionId);
-  if (!dimension) return undefined;
-
-  try {
-    const entities = dimension.getEntities({
-      type: FLAG_ENTITY,
-      location: getFlagEntityLocation(territoryCenter),
-      maxDistance: 2.5
-    });
-    return entities.find((entity) => !isRegisteredFlagEntity(entity));
-  } catch (_error) {
-    return undefined;
-  }
-}
-
-function placementLockKey(dimensionId, territoryCenter) {
-  return `place:${dimensionId}:${territoryCenter.x}:${territoryCenter.y}:${territoryCenter.z}`;
-}
-
-function lockPlacement(lockKey) {
-  if (pendingPlacementLocks.has(lockKey)) return false;
-  pendingPlacementLocks.add(lockKey);
-  system.runTimeout(() => pendingPlacementLocks.delete(lockKey), 30);
-  return true;
-}
-
-function cleanupFailedPlacement(player, flagEntity, restoreFlagItem) {
-  try {
-    if (entityIsValid(flagEntity)) flagEntity.remove();
-  } catch (_error) {
-    // Ignore cleanup failures.
-  }
-  if (restoreFlagItem) giveItemStack(player, new ItemStack(FLAG_ITEM, 1));
-}
-
-function validateNewSettlement(player, territoryCenter, dimensionId) {
-  const data = loadData();
-  const playerName = getPlayerName(player);
-
-  if (data.settlements.some((settlement) => samePlayerName(settlement.creatorName, playerName))) {
-    return "§cУ вас уже есть поселение. Один создатель может владеть только одним флагом.";
-  }
-
-  if (countItem(player, "minecraft:emerald") < CREATION_COST) {
-    return `§cДля создания поселения нужно ${CREATION_COST} изумрудов.`;
-  }
-
-  const overlap = findTerritoryOverlap(data, territoryCenter, dimensionId, SETTLEMENT_TYPES[0].radius, undefined, undefined);
-  if (overlap) {
-    return `§cСлишком близко к территории: ${settlementDisplayName(data, overlap)}.`;
-  }
-
-  return undefined;
 }
 
 async function beginSettlementCreation(player, block) {
@@ -556,11 +430,7 @@ async function beginSettlementCreation(player, block) {
 
   const form = new ModalFormData()
     .title("Создание поселения")
-    .textField({
-      label: `Название поселения (${CREATION_COST} изумрудов)`,
-      placeholder: "Например: Новгород",
-      defaultValue: `Поселение ${playerName}`
-    });
+    .textField(`Название поселения (${CREATION_COST} изумрудов)`, "Например: Новгород", `Поселение ${playerName}`);
   const response = await showForm(player, form);
   if (response.canceled) {
     removePlacedFlag(block, player);
@@ -819,11 +689,7 @@ async function openAllianceMenu(player, settlementId) {
 
   const nameResponse = await showForm(player, new ModalFormData()
     .title("Название альянса")
-    .textField({
-      label: "Название альянса",
-      placeholder: "Например: Северная корона",
-      defaultValue: `${settlement.name} и ${target.name}`
-    }));
+    .textField("Название альянса", "Например: Северная корона", `${settlement.name} и ${target.name}`));
   if (nameResponse.canceled) return;
 
   const name = cleanName(nameResponse.formValues?.[0]);
@@ -1062,7 +928,6 @@ function settlementInfo(data, settlement) {
   const alliance = getAlliance(data, settlement.allianceId);
   const wars = (settlement.wars || []).map((id) => getSettlement(data, id)?.name).filter(Boolean);
   const creatorTitle = settlement.creatorPrefix || creatorPrefixFor(settlement.typeIndex);
-  const nextType = SETTLEMENT_TYPES[settlement.typeIndex + 1];
   return [
     settlementDisplayName(data, settlement),
     "",
@@ -1075,7 +940,7 @@ function settlementInfo(data, settlement) {
     `Территория: ${getTerritoryRadius(settlement)} блок(ов)`,
     `Налог: ${type.tax} изумруд(ов) раз в 25 минут`,
     `Создание поселения: ${CREATION_COST} изумрудов`,
-    `Следующее улучшение: ${nextType ? `${nextType.upgradeCost} изумрудов` : "нет"}`,
+    `Следующее улучшение: ${SETTLEMENT_TYPES[settlement.typeIndex + 1]?.upgradeCost ?? "нет"} изумрудов`,
     `Альянс: ${alliance ? alliance.name : "нет"}`,
     `Войны: ${wars.length ? wars.join(", ") : "нет"}`
   ].join("\n");
@@ -1093,7 +958,6 @@ function updatePlayerPrefixDisplays(knownData) {
   for (const player of world.getPlayers()) {
     const playerName = getPlayerName(player);
     onlineNames.add(playerName);
-    playerIdByName.set(playerName, player.id);
 
     const prefix = playerDisplayPrefix(data, playerName);
     if (prefix) playerPrefixCache.set(playerName, prefix);
@@ -1112,7 +976,7 @@ function applyPlayerPrefix(player, prefix) {
   const formattedPrefix = prefix ? `§7[§6${prefix}§7] ` : "";
   const nextNameTag = prefix ? `${formattedPrefix}§f${playerName}` : playerName;
 
-  // Overhead name always includes the medieval role prefix.
+  // Overhead name — works on stable Script API 1.17 without changing flag placement.
   try {
     if (player.nameTag !== nextNameTag) player.nameTag = nextNameTag;
   } catch (_error) {
@@ -1121,19 +985,12 @@ function applyPlayerPrefix(player, prefix) {
 
   if (!prefix) {
     clearDirectChatPrefix(player);
-    removePlayerPrefixLabel(player);
     return;
   }
 
-  // Chat prefix requires Script API beta (Bedrock 1.26.20+ with Beta APIs enabled).
   if (tryApplyDirectChatPrefix(player, formattedPrefix)) {
     directChatPrefixAvailable = true;
-    removePlayerPrefixLabel(player);
-    return;
   }
-
-  // Fallback floating label if chatNamePrefix is unavailable.
-  updatePlayerPrefixLabel(player, prefix);
 }
 
 function tryApplyDirectChatPrefix(player, formattedPrefix) {
@@ -1141,7 +998,6 @@ function tryApplyDirectChatPrefix(player, formattedPrefix) {
     player.chatNamePrefix = formattedPrefix;
     player.chatNameSuffix = "";
     player.chatMessagePrefix = "";
-    // chatDisplayName is beta-only on 1.26.20; verifies the write actually stuck.
     if (typeof player.chatDisplayName === "string") {
       return player.chatDisplayName.startsWith(formattedPrefix) || player.chatNamePrefix === formattedPrefix;
     }
@@ -1157,7 +1013,7 @@ function clearDirectChatPrefix(player) {
     player.chatNameSuffix = "";
     player.chatMessagePrefix = "";
   } catch (_error) {
-    // chatNamePrefix is unavailable on older API modules.
+    // Optional API.
   }
 }
 
@@ -1165,100 +1021,49 @@ function playerDisplayPrefix(data, playerName) {
   const settlement = getPlayerSettlement(data, playerName);
   if (!settlement) return undefined;
 
-  const role = samePlayerName(settlement.creatorName, playerName)
-    ? (settlement.creatorPrefix ?? creatorPrefixFor(settlement.typeIndex))
-    : getMemberRecord(settlement, playerName)?.prefix;
-  if (!role) return undefined;
-  return role;
-}
-
-function playerPrefixLabelTag(player) {
-  return `kingdoms_pid_${player.id}`;
-}
-
-function getPlayerPrefixLabelLocation(player) {
-  const sneakingOffset = player.isSneaking ? -0.25 : 0;
-  return {
-    x: player.location.x,
-    y: player.location.y + 2.05 + sneakingOffset,
-    z: player.location.z
-  };
-}
-
-function updatePlayerPrefixLabel(player, prefix) {
-  const dimension = player.dimension;
-  if (!dimension) return;
-
-  const pidTag = playerPrefixLabelTag(player);
-  const location = getPlayerPrefixLabelLocation(player);
-  const displayText = `§7[§6${prefix}§7] §f${getPlayerName(player)}`;
-  let labels = [];
-
-  try {
-    labels = dimension.getEntities({ type: FLAG_LABEL_ENTITY, tags: [PLAYER_PREFIX_LABEL_TAG, pidTag] });
-  } catch (_error) {
-    labels = [];
+  if (samePlayerName(settlement.creatorName, playerName)) {
+    return settlement.creatorPrefix || creatorPrefixFor(settlement.typeIndex);
   }
 
-  const label = labels[0] ?? dimension.spawnEntity(FLAG_LABEL_ENTITY, location);
-  if (!label.hasTag(PLAYER_PREFIX_LABEL_TAG)) label.addTag(PLAYER_PREFIX_LABEL_TAG);
-  if (!label.hasTag(pidTag)) label.addTag(pidTag);
-  label.nameTag = displayText;
-
-  try {
-    label.teleport(location, { dimension });
-  } catch (_error) {
-    // Keep the label at its last known position if teleport fails.
-  }
-
-  for (const duplicate of labels.slice(1)) duplicate.remove();
-}
-
-function removePlayerPrefixLabel(player) {
-  if (!player) return;
-  removePlayerPrefixLabelById(player.id, player.dimension);
-}
-
-function removePlayerPrefixLabelById(playerId, preferredDimension) {
-  const pidTag = `kingdoms_pid_${playerId}`;
-  const dimensions = preferredDimension
-    ? [preferredDimension]
-    : ["overworld", "nether", "the_end"].map((id) => safeDimension(id)).filter(Boolean);
-
-  for (const dimension of dimensions) {
-    try {
-      for (const entity of dimension.getEntities({ type: FLAG_LABEL_ENTITY, tags: [PLAYER_PREFIX_LABEL_TAG, pidTag] })) {
-        entity.remove();
-      }
-    } catch (_error) {
-      // Ignore cleanup failures.
-    }
-  }
-}
-
-function getMemberRecord(settlement, playerName) {
   const memberName = Object.keys(settlement.members || {}).find((name) => samePlayerName(name, playerName));
-  return memberName ? settlement.members[memberName] : undefined;
+  return memberName ? settlement.members[memberName]?.prefix : undefined;
 }
 
 function creatorPrefixFor(typeIndex) {
   return CREATOR_PREFIXES[typeIndex] ?? CREATOR_PREFIXES[0];
 }
 
+function handlePrefixedChat(event) {
+  if (directChatPrefixAvailable) return;
+
+  const message = event.message;
+  if (typeof message !== "string" || !message.length) return;
+
+  const player = event.sender;
+  const playerName = player?.name ?? "";
+  if (!playerName) return;
+
+  const prefix = playerPrefixCache.get(playerName) ?? playerDisplayPrefix(loadData(), playerName);
+  if (!prefix) return;
+
+  try { event.cancel = true; } catch (_error) { return; }
+
+  const duplicateKey = `${playerName}:${system.currentTick}:${message}`;
+  if (prefixedChatCooldown.get(duplicateKey) === system.currentTick) return;
+  prefixedChatCooldown.set(duplicateKey, system.currentTick);
+
+  system.run(() => {
+    world.sendMessage(`§7[§6${prefix}§7] §f${playerName}§7: §f${String(message).replace(/§/g, "")}`);
+  });
+}
+
 function notifyPlayerAboutAddon(player) {
   if (!player) return;
-
   const playerName = getPlayerName(player);
-  if (loadedNoticeShown.has(playerName)) return;
-  loadedNoticeShown.add(playerName);
-
-  player.sendMessage("§6[Королевства] §fАддон загружен (v1.0.7).");
+  if (chatPrefixNoticeShown.has(`loaded:${playerName}`)) return;
+  chatPrefixNoticeShown.add(`loaded:${playerName}`);
+  player.sendMessage("§6[Королевства] §fАддон загружен (v1.0.8).");
   player.sendMessage(`§7Флаг: кликните предметом по блоку. Нужно ${CREATION_COST} изумрудов.`);
-  player.sendMessage(
-    isFlagComponentRegistered()
-      ? "§7Префиксы: включите Beta APIs в настройках мира (1.26.20+)."
-      : "§cКомпонент флага не зарегистрирован. Перезапустите мир/аддон."
-  );
 }
 
 function notifyPlayerAboutPrefixes(player) {
@@ -1271,10 +1076,7 @@ function notifyPlayerAboutPrefixes(player) {
   if (!prefix) return;
 
   chatPrefixNoticeShown.add(playerName);
-  const chatHint = directChatPrefixAvailable
-    ? "Префикс активен в чате и над головой."
-    : "Префикс над головой активен. Для чата включите Beta APIs (1.26.20).";
-  player.sendMessage(`§7[Королевства] Ваш префикс: §6${prefix}§7. ${chatHint}`);
+  player.sendMessage(`§7[Королевства] Ваш префикс: §6${prefix}§7 (над головой${directChatPrefixAvailable ? " и в чате" : ""}).`);
 }
 
 function settlementDisplayName(data, settlement) {
@@ -1300,9 +1102,8 @@ function loadData() {
       if (typeof settlement.morale !== "number") settlement.morale = 75;
       if (typeof settlement.territoryBonus !== "number") settlement.territoryBonus = 0;
       if (typeof settlement.typeIndex !== "number") settlement.typeIndex = 0;
-      const expectedCreatorPrefix = creatorPrefixFor(settlement.typeIndex);
       if (!settlement.creatorPrefix || settlement.creatorPrefix === "Основатель") {
-        settlement.creatorPrefix = expectedCreatorPrefix;
+        settlement.creatorPrefix = creatorPrefixFor(settlement.typeIndex);
       }
       for (const memberName of Object.keys(settlement.members)) {
         const member = settlement.members[memberName];
@@ -1365,7 +1166,7 @@ function findSettlementByFlagEntity(data, entity) {
   return data.settlements.find((settlement) => settlement.dimensionId === dimensionId && distance2D(settlement.flag, position) <= 1.5);
 }
 
-function spawnOrUpdateFlagEntity(settlement, data, existingEntity) {
+function spawnOrUpdateFlagEntity(settlement, data) {
   const dimension = safeDimension(settlement.dimensionId);
   if (!dimension) return undefined;
 
@@ -1378,10 +1179,9 @@ function spawnOrUpdateFlagEntity(settlement, data, existingEntity) {
     flags = [];
   }
 
-  const flag = entityIsValid(existingEntity) ? existingEntity : (flags[0] ?? dimension.spawnEntity(FLAG_ENTITY, location));
+  const flag = flags[0] ?? dimension.spawnEntity(FLAG_ENTITY, location);
   if (!flag.hasTag("kingdoms_flag")) flag.addTag("kingdoms_flag");
   if (!flag.hasTag(tag)) flag.addTag(tag);
-  flag.removeTag(PENDING_SETUP_TAG);
   flag.nameTag = settlementLabel(data, settlement);
   try { flag.teleport(location, { dimension }); } catch (_error) { /* Keep the entity if teleport is unavailable. */ }
 
@@ -1484,16 +1284,6 @@ function getPopulation(settlement) {
 
 function cleanName(value) {
   return String(value ?? "").replace(/[\n\r§]/g, "").trim().slice(0, 32);
-}
-
-function cleanChatMessage(value) {
-  return String(value ?? "").replace(/§/g, "");
-}
-
-function shortText(value, maxLength) {
-  const text = String(value ?? "").replace(/[\n\r§]/g, "").trim();
-  if (text.length <= maxLength) return text;
-  return `${text.slice(0, Math.max(0, maxLength - 3))}...`;
 }
 
 async function showForm(player, form) {
