@@ -3,36 +3,21 @@
  *  QUEST DIALOGUE NPCS — РЕДАКТИРУЙ ЭТОТ ФАЙЛ
  * ============================================================
  *
- * Как добавить нового NPC:
- * 1) Скопируй блок в NPC_PROFILES с новым id (например "merchant").
- * 2) Поменяй name, lines[].text, lines[].voice, lines[].voiceSeconds.
- * 3) Для своих звуков: положи .ogg в resource_pack/sounds/quests/
- *    и пропиши в sounds/sound_definitions.json, затем укажи id звука здесь.
- *    Пока стоят ванильные звуки-заглушки для теста тайминга кнопок.
- * 4) Поставь NPC предметом "Поставить NPC квестов".
- * 5) Назначь профиль:
- *      /tag @e[type=quests:npc,c=1] add npc_profile:merchant
- *    (старый тег профиля лучше снять: /tag ... remove npc_profile:elder)
+ * voiceSeconds — пауза ПОСЛЕ старта звука, затем кнопки.
+ * Ставь примерно длину своего .ogg (часто 0.4–2 сек).
  *
- * Модель / скин (замени сам):
- * - resource_pack/models/entity/quest_npc.geo.json
- * - resource_pack/textures/entity/quest_npc.png
- * - resource_pack/entity/quest_npc.entity.json
- *
- * voiceSeconds — длительность озвучки в секундах.
- * Кнопки появляются ТОЛЬКО после окончания этого времени.
+ * Квест type:"quest":
+ *  - Принятие → тег quest:<questId>
+ *  - Повторный разговор → кнопка «Завершить» (если хватает предметов)
  */
 
-/** Профиль по умолчанию, если у сущности нет тега npc_profile:... */
 export const DEFAULT_PROFILE_ID = "elder";
-
-/** Радиус приветственного звука (блоки). */
 export const DEFAULT_PROXIMITY_RADIUS = 10;
+export const DIALOGUE_FORM_TITLE = "quests:dialogue";
 
 export const NPC_PROFILES = {
   elder: {
     name: "§eСтарейшина",
-    // Заглушка: потом замени на "quests.npc.notice"
     proximitySound: "note.bell",
     proximityRadius: 10,
     proximityCooldownSeconds: 12,
@@ -40,27 +25,40 @@ export const NPC_PROFILES = {
       {
         text: "§fПривет! Как твои дела, путник?",
         voice: "mob.villager.idle",
-        voiceSeconds: 2.5,
+        voiceSeconds: 0.5,
         type: "next"
       },
       {
         text: "§fНашему поселению нужна помощь.\nТы как раз вовремя.",
         voice: "mob.villager.haggle",
-        voiceSeconds: 3.0,
+        voiceSeconds: 0.5,
         type: "next"
       },
       {
-        text: "§fПримешь квест?\n§7Собери §a10 дубовых брёвен§7 и вернись ко мне.",
+        text: "§fПримешь квест?\n§7Собери §a10 дубовых брёвен§7 и вернись.",
         voice: "mob.villager.yes",
-        voiceSeconds: 3.5,
+        voiceSeconds: 0.6,
         type: "quest",
         questId: "gather_oak",
+        requireItem: "minecraft:oak_log",
+        requireCount: 10,
+        rewardItem: "minecraft:emerald",
+        rewardCount: 5,
         acceptText: "§aСпасибо! Жду 10 дубовых брёвен.",
         acceptVoice: "random.orb",
-        acceptVoiceSeconds: 1.5,
+        acceptVoiceSeconds: 0.3,
         declineText: "§7Ничего страшного. Загляни позже.",
         declineVoice: "mob.villager.no",
-        declineVoiceSeconds: 1.5
+        declineVoiceSeconds: 0.3,
+        readyText: "§fВижу дуб! Готов сдать квест?",
+        readyVoice: "mob.villager.yes",
+        readyVoiceSeconds: 0.4,
+        incompleteText: "§7Тебе нужно ещё дубовых брёвен.\n§8(сейчас: {have}/{need})",
+        incompleteVoice: "mob.villager.no",
+        incompleteVoiceSeconds: 0.4,
+        completeText: "§aОтлично! Вот твоя награда.",
+        completeVoice: "random.levelup",
+        completeVoiceSeconds: 0.4
       }
     ]
   },
@@ -74,25 +72,35 @@ export const NPC_PROFILES = {
       {
         text: "§fЭй! Не интересуют редкие товары?",
         voice: "mob.villager.idle",
-        voiceSeconds: 2.0,
+        voiceSeconds: 0.5,
         type: "next"
       },
       {
-        text: "§fПринеси мне §e8 золотых слитков§f —\nи получишь награду.",
+        text: "§fПринеси мне §e8 золотых слитков§f.",
         voice: "mob.villager.haggle",
-        voiceSeconds: 3.0,
+        voiceSeconds: 0.5,
         type: "quest",
         questId: "gather_gold",
-        acceptText: "§aДоговорились. Удачи в поисках!",
+        requireItem: "minecraft:gold_ingot",
+        requireCount: 8,
+        rewardItem: "minecraft:diamond",
+        rewardCount: 1,
+        acceptText: "§aДоговорились. Удачи!",
         acceptVoice: "random.orb",
-        acceptVoiceSeconds: 1.5,
+        acceptVoiceSeconds: 0.3,
         declineText: "§7Ну как знаешь...",
         declineVoice: "mob.villager.no",
-        declineVoiceSeconds: 1.5
+        declineVoiceSeconds: 0.3,
+        readyText: "§fЗолото при тебе? Сдаём?",
+        readyVoice: "mob.villager.yes",
+        readyVoiceSeconds: 0.4,
+        incompleteText: "§7Мало золота.\n§8(сейчас: {have}/{need})",
+        incompleteVoice: "mob.villager.no",
+        incompleteVoiceSeconds: 0.4,
+        completeText: "§aВот алмаз за труды!",
+        completeVoice: "random.levelup",
+        completeVoiceSeconds: 0.4
       }
     ]
   }
 };
-
-/** Текст скрытого заголовка формы — не меняй, если не трогаешь UI. */
-export const DIALOGUE_FORM_TITLE = "quests:dialogue";

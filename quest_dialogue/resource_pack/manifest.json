@@ -1,17 +1,17 @@
 {
   "format_version": 2,
   "header": {
-    "name": "Quest Dialogue NPCs Resources",
-    "description": "Models, textures, sounds and RPG dialogue UI for Quest Dialogue NPCs. Replace placeholders yourself.",
-    "uuid": "f21f4a75-9504-430a-8e48-d49e275fdf27",
-    "version": [1, 0, 0],
+    "name": "Quest Dialogue NPCs Reloaded Resources",
+    "description": "RPG bottom dialogue UI, models and sounds. v1.1.0 FRESH UUID",
+    "uuid": "942b5960-2ee6-4a40-9f80-f28e09486b55",
+    "version": [1, 1, 0],
     "min_engine_version": [1, 26, 20]
   },
   "modules": [
     {
       "type": "resources",
-      "uuid": "464dddd4-7c7a-4105-a9a3-7b57904c44e0",
-      "version": [1, 0, 0]
+      "uuid": "758a598c-4cdd-4ad8-b13f-097438277191",
+      "version": [1, 1, 0]
     }
   ]
 }

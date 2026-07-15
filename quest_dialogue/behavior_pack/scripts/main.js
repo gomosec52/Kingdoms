@@ -1,4 +1,4 @@
-import { system, world } from "@minecraft/server";
+import { ItemStack, system, world } from "@minecraft/server";
 import { ActionFormData } from "@minecraft/server-ui";
 import {
   DEFAULT_PROFILE_ID,
@@ -9,13 +9,11 @@ import {
 
 const NPC_TYPE = "quests:npc";
 const PROFILE_TAG_PREFIX = "npc_profile:";
+const QUEST_TAG_PREFIX = "quest:";
 const BUSY_TAG = "quests_dialogue_busy";
 
-/** playerName -> last proximity tick per npc id */
 const proximityMemory = new Map();
-/** playerName currently in dialogue */
 const dialogueLock = new Set();
-
 const greeted = new Set();
 
 world.afterEvents.playerSpawn.subscribe((event) => {
@@ -24,9 +22,9 @@ world.afterEvents.playerSpawn.subscribe((event) => {
     const name = event.player.name;
     if (greeted.has(name)) return;
     greeted.add(name);
-    event.player.sendMessage("§6[Quest Dialogue] §fv1.0.0 FRESH UUID");
-    event.player.sendMessage("§7Предмет: §fПоставить NPC квестов");
-    event.player.sendMessage("§7Профили правятся в §fscripts/config.js");
+    event.player.sendMessage("§6[Quest Dialogue] §fv1.1.0 FRESH UUID");
+    event.player.sendMessage("§7UI снизу + кнопка §aЗавершить§7 для сдачи квеста.");
+    event.player.sendMessage("§7`/give @s quests:npc_spawner`");
   });
 });
 
@@ -48,51 +46,43 @@ world.afterEvents.playerInteractWithEntity.subscribe((event) => {
   system.run(() => {
     startDialogue(player, entity).catch((error) => {
       dialogueLock.delete(player.name);
-      player.sendMessage(`§c[Quest Dialogue] Ошибка диалога: ${error}`);
+      player.sendMessage(`§c[Quest Dialogue] Ошибка: ${error}`);
     });
   });
 });
 
 system.runInterval(() => {
-  for (const player of world.getPlayers()) {
-    checkProximity(player);
-  }
+  for (const player of world.getPlayers()) checkProximity(player);
 }, 8);
 
 function ensureProfileTag(entity) {
-  const tags = entity.getTags();
-  const hasProfile = tags.some((tag) => tag.startsWith(PROFILE_TAG_PREFIX));
-  if (!hasProfile) {
+  if (!entity.getTags().some((t) => t.startsWith(PROFILE_TAG_PREFIX))) {
     entity.addTag(`${PROFILE_TAG_PREFIX}${DEFAULT_PROFILE_ID}`);
   }
 }
 
 function getProfileId(entity) {
   const tag = entity.getTags().find((t) => t.startsWith(PROFILE_TAG_PREFIX));
-  if (!tag) return DEFAULT_PROFILE_ID;
-  return tag.slice(PROFILE_TAG_PREFIX.length);
+  return tag ? tag.slice(PROFILE_TAG_PREFIX.length) : DEFAULT_PROFILE_ID;
 }
 
 function getProfile(entity) {
-  const id = getProfileId(entity);
-  return NPC_PROFILES[id] ?? NPC_PROFILES[DEFAULT_PROFILE_ID];
+  return NPC_PROFILES[getProfileId(entity)] ?? NPC_PROFILES[DEFAULT_PROFILE_ID];
 }
 
 function applyNameTag(entity) {
   const profile = getProfile(entity);
-  if (!profile) return;
   try {
-    entity.nameTag = profile.name ?? "NPC";
+    entity.nameTag = profile?.name ?? "NPC";
   } catch (_error) {
     // ignore
   }
 }
 
 function checkProximity(player) {
-  const dimension = player.dimension;
   let nearby;
   try {
-    nearby = dimension.getEntities({
+    nearby = player.dimension.getEntities({
       type: NPC_TYPE,
       location: player.location,
       maxDistance: 24
@@ -104,8 +94,7 @@ function checkProximity(player) {
   for (const npc of nearby) {
     const profile = getProfile(npc);
     const radius = profile?.proximityRadius ?? DEFAULT_PROXIMITY_RADIUS;
-    const dist = distance(player.location, npc.location);
-    if (dist > radius) continue;
+    if (distance(player.location, npc.location) > radius) continue;
 
     const cooldownTicks = Math.ceil((profile.proximityCooldownSeconds ?? 12) * 20);
     const key = `${player.name}|${npc.id}`;
@@ -115,6 +104,19 @@ function checkProximity(player) {
     proximityMemory.set(key, system.currentTick);
     playVoice(player, profile.proximitySound);
   }
+}
+
+function getQuestLines(profile) {
+  return (profile.lines || []).filter((line) => line.type === "quest");
+}
+
+function getActiveQuestLine(player, profile) {
+  for (const line of getQuestLines(profile)) {
+    const id = line.questId;
+    if (!id) continue;
+    if (player.hasTag(`${QUEST_TAG_PREFIX}${id}`)) return line;
+  }
+  return undefined;
 }
 
 async function startDialogue(player, npc) {
@@ -132,9 +134,14 @@ async function startDialogue(player, npc) {
   }
 
   try {
-    for (let index = 0; index < profile.lines.length; index++) {
-      const line = profile.lines[index];
-      const stillHere = await playAndShowLine(player, npc, profile, line);
+    const activeQuest = getActiveQuestLine(player, profile);
+    if (activeQuest) {
+      await showQuestTurnIn(player, activeQuest);
+      return;
+    }
+
+    for (const line of profile.lines) {
+      const stillHere = await playAndShowLine(player, line);
       if (!stillHere) break;
     }
   } finally {
@@ -147,34 +154,80 @@ async function startDialogue(player, npc) {
   }
 }
 
-async function playAndShowLine(player, npc, profile, line) {
-  // 1) Озвучка сначала — кнопки только после окончания voiceSeconds
-  playVoice(player, line.voice);
-  await waitSeconds(line.voiceSeconds ?? 2);
+async function showQuestTurnIn(player, line) {
+  const need = Math.max(1, Number(line.requireCount || 1));
+  const itemId = line.requireItem || "minecraft:oak_log";
+  const have = countItem(player, itemId);
+  const canComplete = have >= need;
 
-  if (!isPlayerOk(player)) return false;
+  if (canComplete) {
+    playVoice(player, line.readyVoice || line.voice);
+    showPreview(player, line.readyText || "§fГотов сдать квест?");
+    await waitSeconds(line.readyVoiceSeconds ?? line.voiceSeconds ?? 0.4);
+    if (!isPlayerOk(player)) return;
 
-  // 2) Форма с текстом и кнопками
-  const form = new ActionFormData()
-    .title(DIALOGUE_FORM_TITLE)
-    .body(line.text || "…");
+    const response = await showDialogue(player, line.readyText || "§fГотов сдать квест?", [
+      "§aЗавершить",
+      "§7Позже"
+    ]);
+    if (response.canceled || response.selection !== 0) return;
 
-  if (line.type === "quest") {
-    form.button("§aПринять");
-    form.button("§cОтклонить");
-  } else {
-    form.button("§eДалее");
+    if (countItem(player, itemId) < need) {
+      player.sendMessage("§cПредметов уже не хватает.");
+      return;
+    }
+
+    if (!takeItem(player, itemId, need)) {
+      player.sendMessage("§cНе удалось забрать предметы.");
+      return;
+    }
+
+    if (line.rewardItem && line.rewardCount) {
+      giveItem(player, line.rewardItem, Number(line.rewardCount));
+    }
+
+    try {
+      player.removeTag(`${QUEST_TAG_PREFIX}${line.questId}`);
+    } catch (_error) {
+      // ignore
+    }
+
+    playVoice(player, line.completeVoice || "random.levelup");
+    await waitSeconds(line.completeVoiceSeconds ?? 0.3);
+    if (isPlayerOk(player)) {
+      player.sendMessage(line.completeText || "§aКвест завершён!");
+    }
+    return;
   }
 
-  const response = await form.show(player);
+  const text = String(line.incompleteText || "§7Квест ещё не выполнен.")
+    .replace("{have}", String(have))
+    .replace("{need}", String(need));
+
+  playVoice(player, line.incompleteVoice || line.voice);
+  showPreview(player, text);
+  await waitSeconds(line.incompleteVoiceSeconds ?? line.voiceSeconds ?? 0.4);
+  if (!isPlayerOk(player)) return;
+
+  await showDialogue(player, text, ["§eПонятно"]);
+}
+
+async function playAndShowLine(player, line) {
+  playVoice(player, line.voice);
+  showPreview(player, line.text || "…");
+  await waitSeconds(line.voiceSeconds ?? 0.4);
+  if (!isPlayerOk(player)) return false;
+
+  const buttons =
+    line.type === "quest"
+      ? ["§aПринять", "§cОтклонить"]
+      : ["§eДалее"];
+
+  const response = await showDialogue(player, line.text || "…", buttons);
   if (response.canceled) return false;
 
   if (line.type === "quest") {
-    if (response.selection === 0) {
-      await finishQuestChoice(player, line, true);
-    } else {
-      await finishQuestChoice(player, line, false);
-    }
+    await finishQuestChoice(player, line, response.selection === 0);
     return false;
   }
 
@@ -185,21 +238,31 @@ async function finishQuestChoice(player, line, accepted) {
   const questId = line.questId || "quest";
   if (accepted) {
     try {
-      player.addTag(`quest:${questId}`);
+      player.addTag(`${QUEST_TAG_PREFIX}${questId}`);
     } catch (_error) {
       // ignore
     }
     playVoice(player, line.acceptVoice);
-    await waitSeconds(line.acceptVoiceSeconds ?? 1.5);
-    if (isPlayerOk(player)) {
-      player.sendMessage(line.acceptText || "§aКвест принят.");
-    }
+    await waitSeconds(line.acceptVoiceSeconds ?? 0.3);
+    if (isPlayerOk(player)) player.sendMessage(line.acceptText || "§aКвест принят.");
   } else {
     playVoice(player, line.declineVoice);
-    await waitSeconds(line.declineVoiceSeconds ?? 1.5);
-    if (isPlayerOk(player)) {
-      player.sendMessage(line.declineText || "§7Квест отклонён.");
-    }
+    await waitSeconds(line.declineVoiceSeconds ?? 0.3);
+    if (isPlayerOk(player)) player.sendMessage(line.declineText || "§7Квест отклонён.");
+  }
+}
+
+async function showDialogue(player, body, buttons) {
+  const form = new ActionFormData().title(DIALOGUE_FORM_TITLE).body(body);
+  for (const label of buttons) form.button(label);
+  return form.show(player);
+}
+
+function showPreview(player, text) {
+  try {
+    player.onScreenDisplay.setActionBar(String(text).replace(/\n/g, " "));
+  } catch (_error) {
+    // ignore
   }
 }
 
@@ -211,8 +274,61 @@ function playVoice(player, soundId) {
     try {
       player.dimension.playSound(soundId, player.location);
     } catch (_error2) {
-      // Missing custom sound until user adds .ogg files.
+      // ignore
     }
+  }
+}
+
+function getInventory(player) {
+  try {
+    return player.getComponent("minecraft:inventory")?.container;
+  } catch (_error) {
+    return undefined;
+  }
+}
+
+function countItem(player, typeId) {
+  const container = getInventory(player);
+  if (!container) return 0;
+  let total = 0;
+  for (let i = 0; i < container.size; i++) {
+    const stack = container.getItem(i);
+    if (stack?.typeId === typeId) total += stack.amount;
+  }
+  return total;
+}
+
+function takeItem(player, typeId, amount) {
+  const container = getInventory(player);
+  if (!container) return false;
+  let left = amount;
+  for (let i = 0; i < container.size && left > 0; i++) {
+    const stack = container.getItem(i);
+    if (!stack || stack.typeId !== typeId) continue;
+    if (stack.amount > left) {
+      stack.amount -= left;
+      container.setItem(i, stack);
+      left = 0;
+    } else {
+      left -= stack.amount;
+      container.setItem(i, undefined);
+    }
+  }
+  return left === 0;
+}
+
+function giveItem(player, typeId, amount) {
+  const container = getInventory(player);
+  try {
+    const stack = new ItemStack(typeId, amount);
+    if (container) {
+      const leftover = container.addItem(stack);
+      if (leftover) player.dimension.spawnItem(leftover, player.location);
+    } else {
+      player.dimension.spawnItem(stack, player.location);
+    }
+  } catch (_error) {
+    player.sendMessage(`§cНе удалось выдать награду: ${typeId}`);
   }
 }
 
@@ -225,10 +341,12 @@ function isPlayerOk(player) {
 }
 
 function waitSeconds(seconds) {
-  const ticks = Math.max(1, Math.ceil(Number(seconds || 0) * 20));
-  return new Promise((resolve) => {
-    system.runTimeout(resolve, ticks);
-  });
+  const value = Number(seconds);
+  if (!value || value <= 0) {
+    return new Promise((resolve) => system.run(resolve));
+  }
+  const ticks = Math.max(1, Math.ceil(value * 20));
+  return new Promise((resolve) => system.runTimeout(resolve, ticks));
 }
 
 function distance(a, b) {

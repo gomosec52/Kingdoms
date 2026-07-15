@@ -46,4 +46,11 @@
 - `resource_pack/textures/entity/quest_npc.png`
 - `resource_pack/entity/quest_npc.entity.json`
 
-Квест при принятии вешает игроку тег `quest:<questId>` (например `quest:gather_oak`). Логику награды/сдачи можно дописать в `scripts/main.js`.
+## Сдача квеста
+
+Если квест принят, повторный разговор с NPC:
+
+- мало предметов → текст «не хватает» + кнопка «Понятно»
+- хватает предметов → кнопка **«Завершить»** (забирает предметы, выдаёт награду, снимает тег квеста)
+
+Настрой `requireItem`, `requireCount`, `rewardItem`, `rewardCount` в `config.js`.

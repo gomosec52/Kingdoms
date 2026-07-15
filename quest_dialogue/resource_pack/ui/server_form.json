@@ -1,14 +1,13 @@
 {
   "namespace": "server_form",
+
   "long_form": {
     "modifications": [
       {
         "array_name": "bindings",
         "operation": "insert_back",
         "value": [
-          {
-            "binding_name": "#title_text"
-          },
+          { "binding_name": "#title_text" },
           {
             "binding_type": "view",
             "source_property_name": "((#title_text - 'quests:dialogue') = #title_text)",
@@ -18,6 +17,7 @@
       }
     ]
   },
+
   "main_screen_content": {
     "modifications": [
       {
@@ -39,14 +39,13 @@
       }
     ]
   },
+
   "quests_dialogue_root": {
     "type": "panel",
     "size": ["100%", "100%"],
-    "layer": 60,
+    "layer": 80,
     "bindings": [
-      {
-        "binding_name": "#title_text"
-      },
+      { "binding_name": "#title_text" },
       {
         "binding_type": "view",
         "source_property_name": "(not ((#title_text - 'quests:dialogue') = #title_text))",
@@ -55,65 +54,64 @@
     ],
     "controls": [
       {
-        "bottom_bar": {
+        "bottom_panel": {
           "type": "panel",
-          "size": ["100%", "25%"],
+          "size": ["100%", "28%"],
           "anchor_from": "bottom_middle",
           "anchor_to": "bottom_middle",
-          "layer": 2,
+          "layer": 1,
           "controls": [
             {
-              "dim": {
+              "bg_black": {
                 "type": "image",
                 "texture": "textures/ui/Black",
-                "alpha": 0.55,
+                "alpha": 0.62,
                 "size": ["100%", "100%"],
-                "anchor_from": "center",
-                "anchor_to": "center",
                 "layer": 0
               }
             },
             {
-              "panel_bg": {
+              "bg_panel": {
                 "type": "image",
                 "texture": "textures/ui/dialogue_panel",
-                "alpha": 0.75,
+                "alpha": 0.85,
                 "size": ["100%", "100%"],
-                "anchor_from": "center",
-                "anchor_to": "center",
                 "nineslice_size": 8,
                 "layer": 1
               }
             },
             {
-              "dialogue_scroll@common.scrolling_panel": {
-                "$show_background": false,
-                "size": ["100% - 28px", "100% - 52px"],
-                "offset": [14, 10],
+              "dialogue_label": {
+                "type": "label",
+                "text": "#form_text",
+                "font_size": "large",
+                "font_scale_factor": 1.35,
+                "line_padding": 2,
+                "shadow": true,
+                "color": [0.95, 0.95, 0.97],
+                "text_alignment": "left",
+                "size": ["100% - 160px", "100% - 24px"],
+                "offset": [16, 10],
                 "anchor_from": "top_left",
                 "anchor_to": "top_left",
-                "$scrolling_content": "server_form.quests_dialogue_body",
-                "$scroll_size": [4, "100% - 4px"],
-                "$scrolling_pane_size": ["100% - 8px", "100%"],
-                "$scrolling_pane_offset": [0, 0],
-                "$scroll_bar_right_padding_size": [0, 0],
-                "layer": 3
+                "layer": 4,
+                "bindings": [{ "binding_name": "#form_text" }]
               }
             },
             {
-              "buttons_wrap": {
+              "buttons_area": {
                 "type": "panel",
-                "size": [220, 40],
-                "offset": [-12, -10],
-                "anchor_from": "bottom_right",
-                "anchor_to": "bottom_right",
+                "size": [140, "100% - 16px"],
+                "offset": [-12, 0],
+                "anchor_from": "right_middle",
+                "anchor_to": "right_middle",
                 "layer": 5,
                 "controls": [
                   {
-                    "form_buttons@server_form.quests_buttons_content": {
+                    "buttons_grid@server_form.quests_buttons_grid": {
                       "size": ["100%", "100%"],
-                      "anchor_from": "bottom_right",
-                      "anchor_to": "bottom_right"
+                      "anchor_from": "center",
+                      "anchor_to": "center"
                     }
                   }
                 ]
@@ -124,72 +122,43 @@
       }
     ]
   },
-  "quests_dialogue_body": {
-    "type": "panel",
-    "controls": [
-      {
-        "text_label": {
-          "type": "label",
-          "text": "#form_text",
-          "font_size": "large",
-          "font_scale_factor": 1.2,
-          "color": [0.94, 0.94, 0.96],
-          "shadow": true,
-          "text_alignment": "left",
-          "size": ["100%", "default"],
-          "anchor_from": "top_left",
-          "anchor_to": "top_left",
-          "layer": 2,
-          "bindings": [
-            {
-              "binding_name": "#form_text"
-            }
-          ]
-        }
-      }
-    ]
-  },
-  "quests_buttons_content": {
-    "type": "stack_panel",
-    "orientation": "horizontal",
+
+  "quests_buttons_grid": {
+    "type": "grid",
     "size": ["100%", "100%"],
+    "grid_dimensions": [1, 3],
+    "maximum_grid_items": 3,
+    "grid_item_template": "server_form.quests_dynamic_button",
+    "grid_fill_direction": "vertical",
+    "collection_name": "form_buttons"
+  },
+
+  "quests_dynamic_button": {
+    "type": "panel",
+    "size": ["100%", 36],
     "controls": [
       {
-        "buttons_factory": {
-          "type": "factory",
-          "max_size": ["100%", "100%"],
-          "control_ids": {
-            "form_button": "@server_form.quests_form_button"
-          },
+        "form_button@common_buttons.light_text_button": {
+          "$pressed_button_name": "button.form_button_click",
+          "$default_button_texture": "textures/ui/button_borderless_dark",
+          "$hover_button_texture": "textures/ui/button_borderless_darkhover",
+          "$pressed_button_texture": "textures/ui/button_borderless_darkpressed",
+          "$locked_button_texture": "textures/ui/button_borderless_dark",
+          "$button_text": "#form_button_text",
+          "$button_text_binding_type": "collection",
+          "$button_text_grid_collection_name": "form_buttons",
+          "$button_text_max_size": ["100% - 10px", 18],
+          "size": ["100% - 4px", 32],
+          "anchor_from": "center",
+          "anchor_to": "center",
+          "layer": 4,
           "bindings": [
             {
-              "binding_name": "#form_button_length",
-              "binding_name_override": "#collection_length",
-              "binding_type": "collection",
+              "binding_type": "collection_details",
               "binding_collection_name": "form_buttons"
             }
           ]
         }
-      }
-    ]
-  },
-  "quests_form_button@common_buttons.light_text_button": {
-    "$pressed_button_name": "button.form_button_click",
-    "$default_button_texture": "textures/ui/button_borderless_light",
-    "$hover_button_texture": "textures/ui/button_borderless_lighthover",
-    "$pressed_button_texture": "textures/ui/button_borderless_lightpressed",
-    "$locked_button_texture": "textures/ui/button_borderless_light",
-    "$button_text": "#form_button_text",
-    "$button_text_binding_type": "collection",
-    "$button_text_grid_collection_name": "form_buttons",
-    "$button_text_max_size": ["100% - 8px", 20],
-    "size": [100, 32],
-    "offset": [4, 0],
-    "layer": 4,
-    "bindings": [
-      {
-        "binding_type": "collection_details",
-        "binding_collection_name": "form_buttons"
       }
     ]
   }
