@@ -1,5 +1,14 @@
 import { system, world } from "@minecraft/server";
 
+/**
+ * Kingdoms Prefixes v1.0.2
+ *
+ * Strategy (chosen because chatNamePrefix alone did not change <Nick> chat on 1.26):
+ * 1) Rewrite chat: cancel chatSend + world.sendMessage with [Role] Nick: text
+ * 2) Also set chatNamePrefix when chatDisplayName proves it is real
+ * 3) Also set nameTag (backup; Kingdoms Wars core also sets nameTag)
+ */
+
 const STORE_KEY = "kingdoms:data:v1";
 const CREATOR_PREFIXES = [
   "Староста",
@@ -11,187 +20,169 @@ const CREATOR_PREFIXES = [
   "Император"
 ];
 
-/** @type {Map<string, string | undefined>} */
-const lastAppliedPrefix = new Map();
 const noticeShown = new Set();
-const chatHookCooldown = new Map();
+const lastToldPrefix = new Map();
+const chatDedup = new Map();
 
-/** @type {"unknown" | "native" | "fallback" | "none"} */
-let chatMode = "unknown";
-let apiProbeDone = false;
+let chatSendBound = false;
+let nativeChatOk = false;
 
-system.runInterval(() => syncAllPrefixes(), 10);
+bindChatRewrite();
+system.runInterval(() => syncPlayers(), 10);
 
 world.afterEvents.playerSpawn.subscribe((event) => {
   const player = event.player;
   if (!player) return;
   system.run(() => {
-    ensureChatApiProbe(player);
-    syncAllPrefixes();
-    notifyPlayer(player);
+    syncPlayers();
+    greet(player);
   });
 });
 
 world.afterEvents.playerLeave.subscribe((event) => {
   if (!event.playerName) return;
   noticeShown.delete(event.playerName);
-  lastAppliedPrefix.delete(event.playerName);
-  chatHookCooldown.delete(event.playerName);
+  lastToldPrefix.delete(event.playerName);
 });
 
-bindChatFallback();
+function bindChatRewrite() {
+  const before = world.beforeEvents?.chatSend;
+  const after = world.afterEvents?.chatSend;
 
-function bindChatFallback() {
-  const chatSend = world.beforeEvents?.chatSend;
-  if (!chatSend?.subscribe) return;
+  if (before?.subscribe) {
+    before.subscribe((event) => {
+      const player = event.sender;
+      const playerName = player?.name;
+      const message = event.message;
+      if (!playerName || typeof message !== "string") return;
 
-  chatSend.subscribe((event) => {
-    // Only rewrite chat when native chatNamePrefix is unavailable.
-    if (chatMode === "native") return;
+      const prefix = resolvePrefix(loadData(), playerName);
+      if (!prefix) return;
 
-    const player = event.sender;
-    const playerName = player?.name;
-    const message = event.message;
-    if (!playerName || typeof message !== "string" || !message.length) return;
+      try {
+        event.cancel = true;
+      } catch (_error) {
+        // Continue — we still broadcast a prefixed line below.
+      }
 
-    const prefix = resolvePrefix(loadKingdomsData(), playerName);
-    if (!prefix) return;
-
-    try {
-      event.cancel = true;
-    } catch (_error) {
-      return;
-    }
-
-    const key = `${playerName}:${system.currentTick}:${message}`;
-    if (chatHookCooldown.get(key) === system.currentTick) return;
-    chatHookCooldown.set(key, system.currentTick);
-
-    system.run(() => {
-      world.sendMessage(`§7[§6${prefix}§7] §f${playerName}§7: §f${String(message).replace(/§/g, "")}`);
+      broadcastPrefixed(playerName, prefix, message);
     });
+    chatSendBound = true;
+    console.warn("[Kingdoms Prefixes] beforeEvents.chatSend bound.");
+  }
 
-    if (chatMode !== "fallback") {
-      chatMode = "fallback";
-      player.sendMessage("§e[Kingdoms Prefixes] Чат через перехват сообщений (fallback).");
-    }
+  if (after?.subscribe) {
+    after.subscribe((event) => {
+      const player = event.sender;
+      const playerName = player?.name;
+      const message = event.message;
+      if (!playerName || typeof message !== "string") return;
+
+      const prefix = resolvePrefix(loadData(), playerName);
+      if (!prefix) return;
+
+      // If before-cancel failed, this still prints a role line after vanilla chat.
+      broadcastPrefixed(playerName, prefix, message);
+    });
+    chatSendBound = true;
+    console.warn("[Kingdoms Prefixes] afterEvents.chatSend bound.");
+  }
+
+  if (!chatSendBound) {
+    console.warn("[Kingdoms Prefixes] chatSend events недоступны.");
+  }
+}
+
+function broadcastPrefixed(playerName, prefix, message) {
+  const dedupKey = `${playerName}|${system.currentTick}|${message}`;
+  if (chatDedup.has(dedupKey)) return;
+  chatDedup.set(dedupKey, true);
+  system.runTimeout(() => chatDedup.delete(dedupKey), 2);
+
+  const clean = String(message).replace(/§/g, "");
+  system.run(() => {
+    world.sendMessage(`§7[§6${prefix}§7] §f${playerName}§7: §f${clean}`);
   });
 }
 
-function syncAllPrefixes() {
-  const data = loadKingdomsData();
+function syncPlayers() {
+  const data = loadData();
   for (const player of world.getPlayers()) {
-    ensureChatApiProbe(player);
-    applyPrefix(player, resolvePrefix(data, player.name));
+    const prefix = resolvePrefix(data, player.name);
+    applyNameTag(player, prefix);
+    applyNativeChatPrefix(player, prefix);
+    maybeAnnounceRole(player, prefix);
   }
 }
 
-function applyPrefix(player, prefix) {
-  const playerName = player.name;
-  const previous = lastAppliedPrefix.get(playerName);
-  lastAppliedPrefix.set(playerName, prefix);
-
-  // Overhead name always (stable Entity.nameTag).
-  const nameTag = prefix ? `§7[§6${prefix}§7] §f${playerName}` : playerName;
+function applyNameTag(player, prefix) {
+  const next = prefix ? `§7[§6${prefix}§7] §f${player.name}` : player.name;
   try {
-    if (player.nameTag !== nameTag) player.nameTag = nameTag;
+    if (player.nameTag !== next) player.nameTag = next;
   } catch (_error) {
-    // Ignore brief nameTag write failures.
-  }
-
-  if (!prefix) {
-    clearNativeChatPrefix(player);
-    return;
-  }
-
-  // Chat name without § codes — more reliable for chatNamePrefix on some clients.
-  const chatPrefix = `[${prefix}] `;
-  if (setNativeChatPrefix(player, chatPrefix)) {
-    if (chatMode !== "native") {
-      chatMode = "native";
-      player.sendMessage(`§a[Kingdoms Prefixes] Чат-префикс активен: ${chatPrefix}§a(проверка chatDisplayName OK)`);
-    }
-  }
-
-  if (previous !== prefix) {
-    player.sendMessage(`§7[Kingdoms Prefixes] Префикс: §6${prefix}§7 | чат: §f${chatMode}`);
+    // ignore
   }
 }
 
-function setNativeChatPrefix(player, chatPrefix) {
+function applyNativeChatPrefix(player, prefix) {
+  const bare = prefix ? `[${prefix}] ` : "";
   try {
-    player.chatNamePrefix = chatPrefix;
-    player.chatNameSuffix = "";
-    // Optional: leave message body uncolored.
-    player.chatMessagePrefix = "";
-
-    const display = player.chatDisplayName;
-    if (typeof display !== "string") return false;
-    // Real API composes prefix + name (+ suffix).
-    return display.startsWith(chatPrefix) && display.includes(player.name);
-  } catch (_error) {
-    return false;
-  }
-}
-
-function clearNativeChatPrefix(player) {
-  try {
-    player.chatNamePrefix = "";
+    player.chatNamePrefix = bare;
     player.chatNameSuffix = "";
     player.chatMessagePrefix = "";
+    if (!prefix) return;
+
+    const display = player.chatDisplayName;
+    nativeChatOk = typeof display === "string" && display.startsWith(bare) && display.includes(player.name);
   } catch (_error) {
-    // Ignore.
+    nativeChatOk = false;
   }
 }
 
-function ensureChatApiProbe(player) {
-  if (apiProbeDone) return;
-  apiProbeDone = true;
+function maybeAnnounceRole(player, prefix) {
+  const prev = lastToldPrefix.get(player.name);
+  if (prev === prefix) return;
+  lastToldPrefix.set(player.name, prefix);
+  if (!prefix) return;
+  player.sendMessage(`§a[Kingdoms Prefixes] Роль: §6${prefix}`);
+}
 
-  const marker = "[KWTEST] ";
-  try {
-    const previous = player.chatNamePrefix ?? "";
-    player.chatNamePrefix = marker;
-    const display = player.chatDisplayName;
-    const ok = typeof display === "string" && display.startsWith(marker);
-    player.chatNamePrefix = typeof previous === "string" ? previous : "";
+function greet(player) {
+  if (noticeShown.has(player.name)) return;
+  noticeShown.add(player.name);
 
-    if (ok) {
-      chatMode = "native";
-      console.warn("[Kingdoms Prefixes] chatNamePrefix/chatDisplayName available.");
-    } else {
-      chatMode = world.beforeEvents?.chatSend ? "fallback" : "none";
-      console.warn(`[Kingdoms Prefixes] Native chatNamePrefix unavailable. mode=${chatMode}`);
-      player.sendMessage(
-        chatMode === "fallback"
-          ? "§e[Kingdoms Prefixes] chatNamePrefix недоступен. Использую перехват чата. Проверьте, что Beta APIs включены."
-          : "§c[Kingdoms Prefixes] Нет API для префикса в чате. В настройках мира включите Beta APIs и перезайдите."
-      );
-    }
-  } catch (error) {
-    chatMode = world.beforeEvents?.chatSend ? "fallback" : "none";
-    console.warn(`[Kingdoms Prefixes] chat API probe failed: ${error}`);
-    player.sendMessage("§c[Kingdoms Prefixes] Ошибка Beta chat API. Включите Beta APIs в мире.");
-  }
+  const prefix = resolvePrefix(loadData(), player.name);
+  player.sendMessage("§6[Kingdoms Prefixes] §fv1.0.2 загружен.");
+  player.sendMessage(
+    chatSendBound
+      ? "§aЧат: перехват chatSend включён (сообщения будут с [Роль])."
+      : "§cЧат: chatSend недоступен. Включите Beta APIs и пересоздайте/перезайдите в мир."
+  );
+  if (nativeChatOk) player.sendMessage("§aТакже доступен native chatNamePrefix.");
+  if (prefix) player.sendMessage(`§7Сейчас ваш префикс: §6${prefix}`);
+  else player.sendMessage("§7Нет роли — создайте поселение в Kingdoms Wars.");
 }
 
 function resolvePrefix(data, playerName) {
-  if (!data?.settlements?.length) return undefined;
+  const settlements = data?.settlements;
+  if (!Array.isArray(settlements) || !settlements.length) return undefined;
 
-  const settlement = data.settlements.find((entry) => sameName(entry.creatorName, playerName))
-    ?? data.settlements.find((entry) => Object.keys(entry.members || {}).some((name) => sameName(name, playerName)));
-  if (!settlement) return undefined;
-
-  if (sameName(settlement.creatorName, playerName)) {
-    const typeIndex = typeof settlement.typeIndex === "number" ? settlement.typeIndex : 0;
-    return settlement.creatorPrefix || CREATOR_PREFIXES[typeIndex] || CREATOR_PREFIXES[0];
+  const own = settlements.find((s) => same(s.creatorName, playerName));
+  if (own) {
+    const idx = typeof own.typeIndex === "number" ? own.typeIndex : 0;
+    return own.creatorPrefix || CREATOR_PREFIXES[idx] || CREATOR_PREFIXES[0];
   }
 
-  const memberKey = Object.keys(settlement.members || {}).find((name) => sameName(name, playerName));
-  return memberKey ? (settlement.members[memberKey]?.prefix || "Крестьянин") : undefined;
+  for (const settlement of settlements) {
+    for (const memberName of Object.keys(settlement.members || {})) {
+      if (!same(memberName, playerName)) continue;
+      return settlement.members[memberName]?.prefix || "Крестьянин";
+    }
+  }
+  return undefined;
 }
 
-function loadKingdomsData() {
+function loadData() {
   try {
     const raw = world.getDynamicProperty(STORE_KEY);
     if (typeof raw !== "string" || !raw) return { settlements: [] };
@@ -203,24 +194,6 @@ function loadKingdomsData() {
   }
 }
 
-function notifyPlayer(player) {
-  const name = player.name;
-  if (noticeShown.has(name)) return;
-  noticeShown.add(name);
-
-  const prefix = resolvePrefix(loadKingdomsData(), name);
-  player.sendMessage("§6[Kingdoms Prefixes] §fАддон префиксов загружен (v1.0.1 / API 2.8.0-beta.1.26.20).");
-  player.sendMessage(`§7Режим чата: §f${chatMode}§7. Beta APIs должны быть включены в настройках мира.`);
-  if (prefix) {
-    player.sendMessage(`§7Ваш префикс сейчас: §6${prefix}`);
-    if (typeof player.chatDisplayName === "string") {
-      player.sendMessage(`§7chatDisplayName: §f${player.chatDisplayName}`);
-    }
-  } else {
-    player.sendMessage("§7Создайте/улучшите поселение в Kingdoms Wars — префикс появится автоматически.");
-  }
-}
-
-function sameName(first, second) {
-  return String(first ?? "").toLowerCase() === String(second ?? "").toLowerCase();
+function same(a, b) {
+  return String(a ?? "").toLowerCase() === String(b ?? "").toLowerCase();
 }

@@ -158,8 +158,13 @@ world.afterEvents.playerInteractWithBlock?.subscribe((event) => {
 world.afterEvents.playerSpawn?.subscribe((event) => {
   const player = event.player;
   if (!player) return;
-  system.run(() => notifyPlayerAboutAddon(player));
+  system.run(() => {
+    notifyPlayerAboutAddon(player);
+    updateOverheadPrefixes();
+  });
 });
+
+system.runInterval(() => updateOverheadPrefixes(), 40);
 
 function handleFlagInteraction(player, flagSource) {
   const cooldownKey = `${getPlayerName(player)}:${getDimensionId(flagSource.dimension)}:${Math.floor(flagSource.location.x)}:${Math.floor(flagSource.location.y)}:${Math.floor(flagSource.location.z)}`;
@@ -380,6 +385,7 @@ async function beginSettlementCreationFromItem(player, clickedBlock, blockFace) 
   data.settlements.push(settlement);
   saveData(data);
   updateFlagLabelFor(settlement, data);
+  updateOverheadPrefixes(data);
   world.sendMessage(`§6[Королевства] §f${playerName} основал(а) ${settlementDisplayName(data, settlement)} за ${CREATION_COST} изумрудов.`);
 }
 
@@ -531,6 +537,7 @@ async function upgradeSettlement(player, settlementId) {
   settlement.morale = Math.min(100, settlement.morale + 10);
   saveData(data);
   updateFlagLabelFor(settlement);
+  updateOverheadPrefixes(data);
   world.sendMessage(`§6[Королевства] §f${settlementDisplayName(data, settlement)} улучшено за ${nextType.upgradeCost} изумрудов. Мораль выросла.`);
 }
 
@@ -571,6 +578,7 @@ async function addResident(player, settlementId) {
   const name = candidates[response.formValues?.[0] ?? 0];
   settlement.members[name] = { prefix: PREFIXES[0].name, joinedTick: system.currentTick };
   saveData(data);
+  updateOverheadPrefixes(data);
   world.sendMessage(`§6[Королевства] §f${name} теперь житель ${settlementDisplayName(data, settlement)}.`);
 }
 
@@ -592,6 +600,7 @@ async function removeResident(player, settlementId) {
   const name = members[response.formValues?.[0] ?? 0];
   delete settlement.members[name];
   saveData(data);
+  updateOverheadPrefixes(data);
   world.sendMessage(`§6[Королевства] §f${name} исключён(а) из ${settlementDisplayName(data, settlement)}.`);
 }
 
@@ -617,6 +626,7 @@ async function openPrefixesMenu(player, settlementId) {
 
   settlement.members[memberName].prefix = PREFIXES[prefixResponse.formValues?.[0] ?? 0].name;
   saveData(data);
+  updateOverheadPrefixes(data);
   player.sendMessage(`§a${memberName}: ${settlement.members[memberName].prefix}.`);
 }
 
@@ -826,6 +836,7 @@ function disbandSettlement(data, settlementId, reason, announce = true) {
   removeFlagBlock(settlement);
   removeFlagLabel(settlement);
   data.settlements = data.settlements.filter((entry) => entry.id !== settlement.id);
+  updateOverheadPrefixes(data);
   if (announce) world.sendMessage(`§6[Королевства] §f${settlement.name} распалось: ${reason}.`);
 }
 
@@ -928,14 +939,39 @@ function creatorPrefixFor(typeIndex) {
   return CREATOR_PREFIXES[typeIndex] ?? CREATOR_PREFIXES[0];
 }
 
+function playerRolePrefix(data, playerName) {
+  const settlement = getPlayerSettlement(data, playerName);
+  if (!settlement) return undefined;
+  if (samePlayerName(settlement.creatorName, playerName)) {
+    return settlement.creatorPrefix || creatorPrefixFor(settlement.typeIndex);
+  }
+  const memberName = Object.keys(settlement.members || {}).find((name) => samePlayerName(name, playerName));
+  return memberName ? (settlement.members[memberName]?.prefix || PREFIXES[0].name) : undefined;
+}
+
+/** Overhead prefixes only — never touches chat/placement APIs. */
+function updateOverheadPrefixes(knownData) {
+  const data = knownData ?? loadData();
+  for (const player of world.getPlayers()) {
+    const playerName = getPlayerName(player);
+    const prefix = playerRolePrefix(data, playerName);
+    const next = prefix ? `§7[§6${prefix}§7] §f${playerName}` : playerName;
+    try {
+      if (player.nameTag !== next) player.nameTag = next;
+    } catch (_error) {
+      // Ignore brief nameTag failures.
+    }
+  }
+}
+
 function notifyPlayerAboutAddon(player) {
   if (!player) return;
   const playerName = getPlayerName(player);
   if (loadedNoticeShown.has(playerName)) return;
   loadedNoticeShown.add(playerName);
-  player.sendMessage("§6[Королевства] §fАддон загружен (v1.0.9).");
+  player.sendMessage("§6[Королевства] §fАддон загружен (v1.1.0).");
   player.sendMessage(`§7Флаг: кликните предметом по блоку. Нужно ${CREATION_COST} изумрудов.`);
-  player.sendMessage("§7Префиксы в чате/над головой: установите аддон Kingdoms Prefixes и включите Beta APIs.");
+  player.sendMessage("§7Над головой: префикс через nameTag. Для чата нужен Kingdoms Prefixes + Beta APIs.");
 }
 
 function settlementDisplayName(data, settlement) {
