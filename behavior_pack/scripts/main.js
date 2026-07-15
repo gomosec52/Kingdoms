@@ -949,7 +949,7 @@ function playerRolePrefix(data, playerName) {
   return memberName ? (settlement.members[memberName]?.prefix || PREFIXES[0].name) : undefined;
 }
 
-/** Overhead prefixes only — never touches chat/placement APIs. */
+/** Overhead prefixes + shared role property for Kingdoms Prefixes companion. */
 function updateOverheadPrefixes(knownData) {
   const data = knownData ?? loadData();
   for (const player of world.getPlayers()) {
@@ -961,6 +961,15 @@ function updateOverheadPrefixes(knownData) {
     } catch (_error) {
       // Ignore brief nameTag failures.
     }
+
+    // Bridge role to the Prefixes pack without relying on world store reads.
+    try {
+      const current = player.getDynamicProperty("kingdoms:role");
+      const nextRole = prefix ?? "";
+      if (current !== nextRole) player.setDynamicProperty("kingdoms:role", nextRole);
+    } catch (_error) {
+      // Older runtimes without player dynamic properties still get nameTag.
+    }
   }
 }
 
@@ -969,9 +978,9 @@ function notifyPlayerAboutAddon(player) {
   const playerName = getPlayerName(player);
   if (loadedNoticeShown.has(playerName)) return;
   loadedNoticeShown.add(playerName);
-  player.sendMessage("§6[Королевства] §fАддон загружен (v1.1.0).");
+  player.sendMessage("§6[Королевства] §fАддон загружен (v1.1.1).");
   player.sendMessage(`§7Флаг: кликните предметом по блоку. Нужно ${CREATION_COST} изумрудов.`);
-  player.sendMessage("§7Над головой: префикс через nameTag. Для чата нужен Kingdoms Prefixes + Beta APIs.");
+  player.sendMessage("§7Над головой: префикс. Чат: аддон Kingdoms Prefixes + Beta APIs.");
 }
 
 function settlementDisplayName(data, settlement) {

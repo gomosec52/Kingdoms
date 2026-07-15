@@ -1,15 +1,16 @@
 import { system, world } from "@minecraft/server";
 
 /**
- * Kingdoms Prefixes v1.0.2
+ * Kingdoms Prefixes v1.0.3
  *
- * Strategy (chosen because chatNamePrefix alone did not change <Nick> chat on 1.26):
- * 1) Rewrite chat: cancel chatSend + world.sendMessage with [Role] Nick: text
- * 2) Also set chatNamePrefix when chatDisplayName proves it is real
- * 3) Also set nameTag (backup; Kingdoms Wars core also sets nameTag)
+ * Why this approach:
+ * - On Bedrock 1.26 the new chat UI (<Nick> text) often never fires chatSend.
+ * - Mojang's intended fix is Player.chatNamePrefix (Beta APIs).
+ * - Role is read from the player dynamic property written by Kingdoms Wars core.
  */
 
-const STORE_KEY = "kingdoms:data:v1";
+const PLAYER_ROLE_KEY = "kingdoms:role";
+const WORLD_STORE_KEY = "kingdoms:data:v1";
 const CREATOR_PREFIXES = [
   "Староста",
   "Войт",
@@ -20,103 +21,83 @@ const CREATOR_PREFIXES = [
   "Император"
 ];
 
-const noticeShown = new Set();
-const lastToldPrefix = new Map();
-const chatDedup = new Map();
+const greetShown = new Set();
+const lastStatus = new Map();
 
-let chatSendBound = false;
-let nativeChatOk = false;
+let nativeChatAvailable = false;
+let nativeChatChecked = false;
 
-bindChatRewrite();
-system.runInterval(() => syncPlayers(), 10);
+system.runInterval(() => {
+  for (const player of world.getPlayers()) {
+    syncPlayer(player);
+  }
+}, 5);
 
 world.afterEvents.playerSpawn.subscribe((event) => {
   const player = event.player;
   if (!player) return;
   system.run(() => {
-    syncPlayers();
+    syncPlayer(player);
     greet(player);
   });
 });
 
 world.afterEvents.playerLeave.subscribe((event) => {
-  if (!event.playerName) return;
-  noticeShown.delete(event.playerName);
-  lastToldPrefix.delete(event.playerName);
+  if (event.playerName) {
+    greetShown.delete(event.playerName);
+    lastStatus.delete(event.playerName);
+  }
 });
 
-function bindChatRewrite() {
-  const before = world.beforeEvents?.chatSend;
-  const after = world.afterEvents?.chatSend;
+function syncPlayer(player) {
+  const role = readRole(player);
+  applyNameTag(player, role);
+  const nativeOk = applyChatNamePrefix(player, role);
+  reportStatus(player, role, nativeOk);
+}
 
-  if (before?.subscribe) {
-    before.subscribe((event) => {
-      const player = event.sender;
-      const playerName = player?.name;
-      const message = event.message;
-      if (!playerName || typeof message !== "string") return;
+function readRole(player) {
+  // 1) Fast bridge from Kingdoms Wars core
+  try {
+    const fromPlayer = player.getDynamicProperty(PLAYER_ROLE_KEY);
+    if (typeof fromPlayer === "string" && fromPlayer.length) return fromPlayer;
+  } catch (_error) {
+    // ignore
+  }
 
-      const prefix = resolvePrefix(loadData(), playerName);
-      if (!prefix) return;
+  // 2) Fallback: parse world settlement store
+  return resolveFromWorldStore(player.name);
+}
 
-      try {
-        event.cancel = true;
-      } catch (_error) {
-        // Continue — we still broadcast a prefixed line below.
+function resolveFromWorldStore(playerName) {
+  try {
+    const raw = world.getDynamicProperty(WORLD_STORE_KEY);
+    if (typeof raw !== "string" || !raw) return undefined;
+    const data = JSON.parse(raw);
+    const settlements = Array.isArray(data.settlements) ? data.settlements : [];
+
+    for (const settlement of settlements) {
+      if (same(settlement.creatorName, playerName)) {
+        const idx = typeof settlement.typeIndex === "number" ? settlement.typeIndex : 0;
+        return settlement.creatorPrefix || CREATOR_PREFIXES[idx] || CREATOR_PREFIXES[0];
       }
+    }
 
-      broadcastPrefixed(playerName, prefix, message);
-    });
-    chatSendBound = true;
-    console.warn("[Kingdoms Prefixes] beforeEvents.chatSend bound.");
+    for (const settlement of settlements) {
+      for (const memberName of Object.keys(settlement.members || {})) {
+        if (same(memberName, playerName)) {
+          return settlement.members[memberName]?.prefix || "Крестьянин";
+        }
+      }
+    }
+  } catch (_error) {
+    return undefined;
   }
-
-  if (after?.subscribe) {
-    after.subscribe((event) => {
-      const player = event.sender;
-      const playerName = player?.name;
-      const message = event.message;
-      if (!playerName || typeof message !== "string") return;
-
-      const prefix = resolvePrefix(loadData(), playerName);
-      if (!prefix) return;
-
-      // If before-cancel failed, this still prints a role line after vanilla chat.
-      broadcastPrefixed(playerName, prefix, message);
-    });
-    chatSendBound = true;
-    console.warn("[Kingdoms Prefixes] afterEvents.chatSend bound.");
-  }
-
-  if (!chatSendBound) {
-    console.warn("[Kingdoms Prefixes] chatSend events недоступны.");
-  }
+  return undefined;
 }
 
-function broadcastPrefixed(playerName, prefix, message) {
-  const dedupKey = `${playerName}|${system.currentTick}|${message}`;
-  if (chatDedup.has(dedupKey)) return;
-  chatDedup.set(dedupKey, true);
-  system.runTimeout(() => chatDedup.delete(dedupKey), 2);
-
-  const clean = String(message).replace(/§/g, "");
-  system.run(() => {
-    world.sendMessage(`§7[§6${prefix}§7] §f${playerName}§7: §f${clean}`);
-  });
-}
-
-function syncPlayers() {
-  const data = loadData();
-  for (const player of world.getPlayers()) {
-    const prefix = resolvePrefix(data, player.name);
-    applyNameTag(player, prefix);
-    applyNativeChatPrefix(player, prefix);
-    maybeAnnounceRole(player, prefix);
-  }
-}
-
-function applyNameTag(player, prefix) {
-  const next = prefix ? `§7[§6${prefix}§7] §f${player.name}` : player.name;
+function applyNameTag(player, role) {
+  const next = role ? `§7[§6${role}§7] §f${player.name}` : player.name;
   try {
     if (player.nameTag !== next) player.nameTag = next;
   } catch (_error) {
@@ -124,74 +105,68 @@ function applyNameTag(player, prefix) {
   }
 }
 
-function applyNativeChatPrefix(player, prefix) {
-  const bare = prefix ? `[${prefix}] ` : "";
+function applyChatNamePrefix(player, role) {
+  // Plain ASCII brackets — no § codes (more reliable for chatNamePrefix).
+  const want = role ? `[${role}] ` : "";
+
   try {
-    player.chatNamePrefix = bare;
+    if ((player.chatNamePrefix ?? "") !== want) {
+      player.chatNamePrefix = want;
+    }
     player.chatNameSuffix = "";
     player.chatMessagePrefix = "";
-    if (!prefix) return;
 
     const display = player.chatDisplayName;
-    nativeChatOk = typeof display === "string" && display.startsWith(bare) && display.includes(player.name);
+    if (!nativeChatChecked) {
+      nativeChatChecked = true;
+      nativeChatAvailable = typeof display === "string";
+    }
+
+    if (!role) return nativeChatAvailable;
+    return typeof display === "string" && display.startsWith(want) && display.includes(player.name);
   } catch (_error) {
-    nativeChatOk = false;
+    if (!nativeChatChecked) {
+      nativeChatChecked = true;
+      nativeChatAvailable = false;
+    }
+    return false;
   }
 }
 
-function maybeAnnounceRole(player, prefix) {
-  const prev = lastToldPrefix.get(player.name);
-  if (prev === prefix) return;
-  lastToldPrefix.set(player.name, prefix);
-  if (!prefix) return;
-  player.sendMessage(`§a[Kingdoms Prefixes] Роль: §6${prefix}`);
+function reportStatus(player, role, nativeOk) {
+  const key = `${role || ""}|${nativeOk ? 1 : 0}|${nativeChatAvailable ? 1 : 0}`;
+  if (lastStatus.get(player.name) === key) return;
+  lastStatus.set(player.name, key);
+
+  if (!role) {
+    player.sendMessage("§7[Kingdoms Prefixes] Роли пока нет (создайте поселение).");
+    return;
+  }
+
+  let display = "?";
+  try {
+    display = String(player.chatDisplayName ?? "нет chatDisplayName");
+  } catch (_error) {
+    display = "ошибка чтения chatDisplayName";
+  }
+
+  if (nativeOk) {
+    player.sendMessage(`§a[Kingdoms Prefixes] Чат-префикс установлен: §f${display}`);
+    player.sendMessage("§7Напишите в чат — имя должно быть с [ролью].");
+  } else {
+    player.sendMessage(`§c[Kingdoms Prefixes] Роль есть (§6${role}§c), но chatNamePrefix НЕ работает.`);
+    player.sendMessage("§cВ настройках мира включите Beta APIs, сохраните мир и зайдите снова.");
+    player.sendMessage(`§7Диагностика: chatDisplayName=§f${display}`);
+  }
 }
 
 function greet(player) {
-  if (noticeShown.has(player.name)) return;
-  noticeShown.add(player.name);
+  if (greetShown.has(player.name)) return;
+  greetShown.add(player.name);
 
-  const prefix = resolvePrefix(loadData(), player.name);
-  player.sendMessage("§6[Kingdoms Prefixes] §fv1.0.2 загружен.");
-  player.sendMessage(
-    chatSendBound
-      ? "§aЧат: перехват chatSend включён (сообщения будут с [Роль])."
-      : "§cЧат: chatSend недоступен. Включите Beta APIs и пересоздайте/перезайдите в мир."
-  );
-  if (nativeChatOk) player.sendMessage("§aТакже доступен native chatNamePrefix.");
-  if (prefix) player.sendMessage(`§7Сейчас ваш префикс: §6${prefix}`);
-  else player.sendMessage("§7Нет роли — создайте поселение в Kingdoms Wars.");
-}
-
-function resolvePrefix(data, playerName) {
-  const settlements = data?.settlements;
-  if (!Array.isArray(settlements) || !settlements.length) return undefined;
-
-  const own = settlements.find((s) => same(s.creatorName, playerName));
-  if (own) {
-    const idx = typeof own.typeIndex === "number" ? own.typeIndex : 0;
-    return own.creatorPrefix || CREATOR_PREFIXES[idx] || CREATOR_PREFIXES[0];
-  }
-
-  for (const settlement of settlements) {
-    for (const memberName of Object.keys(settlement.members || {})) {
-      if (!same(memberName, playerName)) continue;
-      return settlement.members[memberName]?.prefix || "Крестьянин";
-    }
-  }
-  return undefined;
-}
-
-function loadData() {
-  try {
-    const raw = world.getDynamicProperty(STORE_KEY);
-    if (typeof raw !== "string" || !raw) return { settlements: [] };
-    const data = JSON.parse(raw);
-    if (!Array.isArray(data.settlements)) data.settlements = [];
-    return data;
-  } catch (_error) {
-    return { settlements: [] };
-  }
+  player.sendMessage("§6[Kingdoms Prefixes] §fv1.0.3");
+  player.sendMessage("§7Режим: официальный chatNamePrefix (новый чат Bedrock 1.26).");
+  player.sendMessage("§7Перехват chatSend на этом чате не используется — он не срабатывает.");
 }
 
 function same(a, b) {
