@@ -1,7 +1,7 @@
 import { system, world } from "@minecraft/server";
 
 /**
- * Kingdoms Prefixes v1.1.1
+ * Kingdoms Prefixes Reloaded v1.2.0
  *
  * Chat method: UpRanks+ V2.5 on Bedrock 1.26.20
  *   world.beforeEvents.chatSend → cancel → system.run → world.sendMessage
@@ -183,7 +183,7 @@ function greet(player) {
   if (greetShown.has(player.name)) return;
   greetShown.add(player.name);
 
-  player.sendMessage("§6[Kingdoms Prefixes] §fv1.1.1");
+  player.sendMessage("§6[Kingdoms Prefixes Reloaded] §fv1.2.0 FRESH UUID");
   if (chatHookInstalled) {
     player.sendMessage("§aПерехват чата активен (как UpRanks).");
   } else {

@@ -1020,7 +1020,7 @@ function notifyPlayerAboutAddon(player) {
   const playerName = getPlayerName(player);
   if (loadedNoticeShown.has(playerName)) return;
   loadedNoticeShown.add(playerName);
-  player.sendMessage("§6[Королевства] §fАддон загружен (v1.1.3).");
+  player.sendMessage("§6[Королевства Reloaded] §fАддон загружен (v1.2.0 FRESH UUID).");
   player.sendMessage(`§7Флаг: кликните предметом по блоку. Нужно ${CREATION_COST} изумрудов.`);
   player.sendMessage("§7Ник: \"поселение\" \"роль\" — над головой и в чате (Prefixes).");
 }

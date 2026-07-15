@@ -1,24 +1,24 @@
 {
   "format_version": 2,
   "header": {
-    "name": "Kingdoms Prefixes",
+    "name": "Kingdoms Prefixes Reloaded",
     "description": "Chat + nameTag: Nick \"Settlement\" \"Role\". UpRanks-style chatSend. Requires Beta APIs.",
-    "uuid": "35c64a1c-d177-4e79-aab8-43c15f0e47e6",
-    "version": [1, 1, 1],
+    "uuid": "f9b98319-8dc5-4c5a-ad0e-b46dfe58141e",
+    "version": [1, 2, 0],
     "min_engine_version": [1, 26, 20]
   },
   "modules": [
     {
       "type": "data",
-      "uuid": "e8278687-f503-4613-a5f6-8b5347204aec",
-      "version": [1, 1, 1]
+      "uuid": "9720fea8-cf55-4d5e-85b9-8c17c062d82a",
+      "version": [1, 2, 0]
     },
     {
       "type": "script",
       "language": "javascript",
-      "uuid": "03a6289a-9575-40bc-93fa-cafb60010a06",
+      "uuid": "c57fc249-53d2-4306-b230-d493942bbc5d",
       "entry": "scripts/main.js",
-      "version": [1, 1, 1]
+      "version": [1, 2, 0]
     }
   ],
   "dependencies": [
