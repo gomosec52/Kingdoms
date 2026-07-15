@@ -1,0 +1,21 @@
+{
+  "format_version": "1.21.90",
+  "minecraft:item": {
+    "description": {
+      "identifier": "quests:npc_spawner",
+      "menu_category": {
+        "category": "items"
+      }
+    },
+    "components": {
+      "minecraft:display_name": {
+        "value": "Поставить NPC квестов"
+      },
+      "minecraft:max_stack_size": 16,
+      "minecraft:icon": "quests_npc_spawner",
+      "minecraft:entity_placer": {
+        "entity": "quests:npc"
+      }
+    }
+  }
+}

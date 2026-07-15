@@ -1,0 +1,9 @@
+{
+  "resource_pack_name": "quest_dialogue",
+  "texture_name": "atlas.items",
+  "texture_data": {
+    "quests_npc_spawner": {
+      "textures": "textures/items/npc_spawner"
+    }
+  }
+}

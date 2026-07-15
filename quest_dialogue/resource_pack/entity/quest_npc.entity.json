@@ -1,0 +1,22 @@
+{
+  "format_version": "1.10.0",
+  "minecraft:client_entity": {
+    "description": {
+      "identifier": "quests:npc",
+      "materials": {
+        "default": "entity_alphatest"
+      },
+      "textures": {
+        "default": "textures/entity/quest_npc"
+      },
+      "geometry": {
+        "default": "geometry.quests.npc"
+      },
+      "render_controllers": ["controller.render.default"],
+      "spawn_egg": {
+        "base_color": "#c8aa3c",
+        "overlay_color": "#466e99"
+      }
+    }
+  }
+}

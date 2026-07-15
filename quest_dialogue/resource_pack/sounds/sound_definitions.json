@@ -1,0 +1,65 @@
+{
+  "format_version": "1.14.0",
+  "sound_definitions": {
+    "quests.npc.notice": {
+      "category": "hostile",
+      "sounds": [
+        {
+          "name": "sounds/quests/notice",
+          "volume": 1.0,
+          "pitch": 1.0
+        }
+      ]
+    },
+    "quests.npc.line1": {
+      "category": "hostile",
+      "sounds": [
+        {
+          "name": "sounds/quests/line1",
+          "volume": 1.0,
+          "pitch": 1.0
+        }
+      ]
+    },
+    "quests.npc.line2": {
+      "category": "hostile",
+      "sounds": [
+        {
+          "name": "sounds/quests/line2",
+          "volume": 1.0,
+          "pitch": 1.0
+        }
+      ]
+    },
+    "quests.npc.line3": {
+      "category": "hostile",
+      "sounds": [
+        {
+          "name": "sounds/quests/line3",
+          "volume": 1.0,
+          "pitch": 1.0
+        }
+      ]
+    },
+    "quests.npc.accept": {
+      "category": "hostile",
+      "sounds": [
+        {
+          "name": "sounds/quests/accept",
+          "volume": 1.0,
+          "pitch": 1.0
+        }
+      ]
+    },
+    "quests.npc.decline": {
+      "category": "hostile",
+      "sounds": [
+        {
+          "name": "sounds/quests/decline",
+          "volume": 1.0,
+          "pitch": 1.0
+        }
+      ]
+    }
+  }
+}

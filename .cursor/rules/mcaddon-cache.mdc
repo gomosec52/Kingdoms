@@ -1,0 +1,12 @@
+---
+description: Bedrock mcaddon release must bypass Minecraft/GitHub cache
+alwaysApply: true
+---
+
+# Minecraft Bedrock pack cache
+
+When publishing `.mcaddon` packs:
+
+1. Always generate new pack + module UUIDs for each user-facing release.
+2. Always use a new versioned filename (`*-Reloaded-vX.Y.Z.mcaddon`).
+3. Bump versions and make in-game greet strings unique.

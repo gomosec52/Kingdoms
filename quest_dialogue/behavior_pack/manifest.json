@@ -1,0 +1,38 @@
+{
+  "format_version": 2,
+  "header": {
+    "name": "Quest Dialogue NPCs",
+    "description": "Editable quest NPCs with RPG dialogue UI, proximity voice, custom model hooks. v1.0.0",
+    "uuid": "9bd288ed-7dfe-4c66-89c9-196dc73dee3a",
+    "version": [1, 0, 0],
+    "min_engine_version": [1, 26, 20]
+  },
+  "modules": [
+    {
+      "type": "data",
+      "uuid": "74411405-3dd1-46c4-a291-8cfaaf8b75be",
+      "version": [1, 0, 0]
+    },
+    {
+      "type": "script",
+      "language": "javascript",
+      "uuid": "72371b56-38eb-4f27-bf00-71059a040afd",
+      "entry": "scripts/main.js",
+      "version": [1, 0, 0]
+    }
+  ],
+  "dependencies": [
+    {
+      "uuid": "f21f4a75-9504-430a-8e48-d49e275fdf27",
+      "version": [1, 0, 0]
+    },
+    {
+      "module_name": "@minecraft/server",
+      "version": "1.17.0"
+    },
+    {
+      "module_name": "@minecraft/server-ui",
+      "version": "1.3.0"
+    }
+  ]
+}
