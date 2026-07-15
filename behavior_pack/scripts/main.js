@@ -7,7 +7,7 @@ import {
   LEGACY_FLAG_BLOCK,
   PENDING_SETUP_TAG
 } from "./constants.js";
-import { bindFlagSystem, setFlagPlacementHandler, setWildFlagSpawnHandler } from "./flag.js";
+import { bindFlagSystem, entityIsValid, isFlagComponentRegistered, setFlagPlacementHandler, setWildFlagSpawnHandler } from "./flag.js";
 
 const { BlockPermutation, ItemStack, system, world } = server;
 const STORE_KEY = "kingdoms:data:v1";
@@ -344,7 +344,7 @@ async function beginSettlementCreationFromItem(player, clickedBlock, blockFace, 
 }
 
 async function handleWildFlagEntitySpawn(entity, knownPlayer) {
-  if (!entity?.isValid || isRegisteredFlagEntity(entity)) return;
+  if (!entityIsValid(entity) || isRegisteredFlagEntity(entity)) return;
 
   const territoryCenter = blockPosition(entity.location);
   const dimensionId = getDimensionId(entity.dimension);
@@ -451,7 +451,7 @@ async function runSettlementCreationFlow(player, context) {
 }
 
 function isRegisteredFlagEntity(entity) {
-  if (!entity?.isValid) return false;
+  if (!entityIsValid(entity)) return false;
   return entity.getTags().some((tag) => tag.startsWith("kingdoms_id_"));
 }
 
@@ -503,7 +503,7 @@ function lockPlacement(lockKey) {
 
 function cleanupFailedPlacement(player, flagEntity, restoreFlagItem) {
   try {
-    if (flagEntity?.isValid) flagEntity.remove();
+    if (entityIsValid(flagEntity)) flagEntity.remove();
   } catch (_error) {
     // Ignore cleanup failures.
   }
@@ -1252,9 +1252,13 @@ function notifyPlayerAboutAddon(player) {
   if (loadedNoticeShown.has(playerName)) return;
   loadedNoticeShown.add(playerName);
 
-  player.sendMessage("§6[Королевства] §fАддон загружен (v1.0.6).");
-  player.sendMessage(`§7Флаг — сущность. Кликните предметом по блоку. Нужно ${CREATION_COST} изумрудов.`);
-  player.sendMessage("§7Префиксы: включите Beta APIs в настройках мира (1.26.20+).");
+  player.sendMessage("§6[Королевства] §fАддон загружен (v1.0.7).");
+  player.sendMessage(`§7Флаг: кликните предметом по блоку. Нужно ${CREATION_COST} изумрудов.`);
+  player.sendMessage(
+    isFlagComponentRegistered()
+      ? "§7Префиксы: включите Beta APIs в настройках мира (1.26.20+)."
+      : "§cКомпонент флага не зарегистрирован. Перезапустите мир/аддон."
+  );
 }
 
 function notifyPlayerAboutPrefixes(player) {
@@ -1374,7 +1378,7 @@ function spawnOrUpdateFlagEntity(settlement, data, existingEntity) {
     flags = [];
   }
 
-  const flag = existingEntity?.isValid ? existingEntity : (flags[0] ?? dimension.spawnEntity(FLAG_ENTITY, location));
+  const flag = entityIsValid(existingEntity) ? existingEntity : (flags[0] ?? dimension.spawnEntity(FLAG_ENTITY, location));
   if (!flag.hasTag("kingdoms_flag")) flag.addTag("kingdoms_flag");
   if (!flag.hasTag(tag)) flag.addTag(tag);
   flag.removeTag(PENDING_SETUP_TAG);
