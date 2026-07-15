@@ -459,6 +459,7 @@ async function beginSettlementCreation(player, block) {
   data.settlements.push(settlement);
   saveData(data);
   updateFlagLabelFor(settlement);
+  updateOverheadPrefixes(data);
   world.sendMessage(`§6[Королевства] §f${playerName} основал(а) ${settlementDisplayName(data, settlement)} за ${CREATION_COST} изумрудов.`);
 }
 
@@ -962,7 +963,27 @@ function formatPlayerIdentity(playerName, settlementName, prefix) {
   return `§f${playerName}`;
 }
 
-/** Overhead prefixes + shared properties for Kingdoms Prefixes companion. */
+/**
+ * Bridge identity to Kingdoms Prefixes via player tags (same idea as UpRanks rank: tags).
+ * Tags are reliable across packs with different Script API versions; DPs alone were not.
+ */
+function syncIdentityTags(player, settlementName, prefix) {
+  const wantSettlement = settlementName ? `kw_s:${settlementName}` : undefined;
+  const wantRole = prefix ? `kw_r:${prefix}` : undefined;
+  try {
+    const tags = player.getTags();
+    for (const tag of tags) {
+      if (tag.startsWith("kw_s:") && tag !== wantSettlement) player.removeTag(tag);
+      if (tag.startsWith("kw_r:") && tag !== wantRole) player.removeTag(tag);
+    }
+    if (wantSettlement && !player.hasTag(wantSettlement)) player.addTag(wantSettlement);
+    if (wantRole && !player.hasTag(wantRole)) player.addTag(wantRole);
+  } catch (_error) {
+    // Ignore tag sync failures; Prefixes can still try world store.
+  }
+}
+
+/** Overhead prefixes + shared tags/properties for Kingdoms Prefixes companion. */
 function updateOverheadPrefixes(knownData) {
   const data = knownData ?? loadData();
   for (const player of world.getPlayers()) {
@@ -976,7 +997,9 @@ function updateOverheadPrefixes(knownData) {
       // Ignore brief nameTag failures.
     }
 
-    // Bridge identity to the Prefixes pack (UpRanks-style chat rewrite).
+    syncIdentityTags(player, settlementName, prefix);
+
+    // Also keep DPs as a secondary bridge.
     try {
       const nextRole = prefix ?? "";
       const nextSettlement = settlementName ?? "";
@@ -987,7 +1010,7 @@ function updateOverheadPrefixes(knownData) {
         player.setDynamicProperty("kingdoms:settlement", nextSettlement);
       }
     } catch (_error) {
-      // Older runtimes without player dynamic properties still get nameTag.
+      // Older runtimes without player dynamic properties still get tags + nameTag.
     }
   }
 }
@@ -997,9 +1020,9 @@ function notifyPlayerAboutAddon(player) {
   const playerName = getPlayerName(player);
   if (loadedNoticeShown.has(playerName)) return;
   loadedNoticeShown.add(playerName);
-  player.sendMessage("§6[Королевства] §fАддон загружен (v1.1.2).");
+  player.sendMessage("§6[Королевства] §fАддон загружен (v1.1.3).");
   player.sendMessage(`§7Флаг: кликните предметом по блоку. Нужно ${CREATION_COST} изумрудов.`);
-  player.sendMessage("§7Ник: \"поселение\" \"роль\" — над головой. Чат: Kingdoms Prefixes + Beta APIs.");
+  player.sendMessage("§7Ник: \"поселение\" \"роль\" — над головой и в чате (Prefixes).");
 }
 
 function settlementDisplayName(data, settlement) {
