@@ -949,24 +949,43 @@ function playerRolePrefix(data, playerName) {
   return memberName ? (settlement.members[memberName]?.prefix || PREFIXES[0].name) : undefined;
 }
 
-/** Overhead prefixes + shared role property for Kingdoms Prefixes companion. */
+function playerSettlementName(data, playerName) {
+  const settlement = getPlayerSettlement(data, playerName);
+  return settlement?.name || undefined;
+}
+
+/** Format: Nick "Settlement" "Role" — used above head and by Prefixes pack in chat. */
+function formatPlayerIdentity(playerName, settlementName, prefix) {
+  if (settlementName && prefix) {
+    return `§f${playerName} §7"§e${settlementName}§7" §7"§6${prefix}§7"`;
+  }
+  return `§f${playerName}`;
+}
+
+/** Overhead prefixes + shared properties for Kingdoms Prefixes companion. */
 function updateOverheadPrefixes(knownData) {
   const data = knownData ?? loadData();
   for (const player of world.getPlayers()) {
     const playerName = getPlayerName(player);
     const prefix = playerRolePrefix(data, playerName);
-    const next = prefix ? `§7[§6${prefix}§7] §f${playerName}` : playerName;
+    const settlementName = playerSettlementName(data, playerName);
+    const next = formatPlayerIdentity(playerName, settlementName, prefix);
     try {
       if (player.nameTag !== next) player.nameTag = next;
     } catch (_error) {
       // Ignore brief nameTag failures.
     }
 
-    // Bridge role to the Prefixes pack without relying on world store reads.
+    // Bridge identity to the Prefixes pack (UpRanks-style chat rewrite).
     try {
-      const current = player.getDynamicProperty("kingdoms:role");
       const nextRole = prefix ?? "";
-      if (current !== nextRole) player.setDynamicProperty("kingdoms:role", nextRole);
+      const nextSettlement = settlementName ?? "";
+      if (player.getDynamicProperty("kingdoms:role") !== nextRole) {
+        player.setDynamicProperty("kingdoms:role", nextRole);
+      }
+      if (player.getDynamicProperty("kingdoms:settlement") !== nextSettlement) {
+        player.setDynamicProperty("kingdoms:settlement", nextSettlement);
+      }
     } catch (_error) {
       // Older runtimes without player dynamic properties still get nameTag.
     }
@@ -978,9 +997,9 @@ function notifyPlayerAboutAddon(player) {
   const playerName = getPlayerName(player);
   if (loadedNoticeShown.has(playerName)) return;
   loadedNoticeShown.add(playerName);
-  player.sendMessage("§6[Королевства] §fАддон загружен (v1.1.1).");
+  player.sendMessage("§6[Королевства] §fАддон загружен (v1.1.2).");
   player.sendMessage(`§7Флаг: кликните предметом по блоку. Нужно ${CREATION_COST} изумрудов.`);
-  player.sendMessage("§7Над головой: префикс. Чат: аддон Kingdoms Prefixes + Beta APIs.");
+  player.sendMessage("§7Ник: \"поселение\" \"роль\" — над головой. Чат: Kingdoms Prefixes + Beta APIs.");
 }
 
 function settlementDisplayName(data, settlement) {
