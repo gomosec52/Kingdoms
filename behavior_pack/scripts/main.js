@@ -85,12 +85,9 @@ const CREATOR_PREFIXES = [
 
 const flagInteractionCooldown = new Map();
 const flagPlacementCooldown = new Map();
-const playerPrefixCache = new Map();
-const chatPrefixNoticeShown = new Set();
-const prefixedChatCooldown = new Map();
+const loadedNoticeShown = new Set();
 let flagItemComponentRegistered = false;
 let dynamicPropertiesRegistered = false;
-let directChatPrefixAvailable = false;
 
 system.beforeEvents?.startup?.subscribe((event) => {
   registerFlagItemComponent(event.itemComponentRegistry);
@@ -161,23 +158,8 @@ world.afterEvents.playerInteractWithBlock?.subscribe((event) => {
 world.afterEvents.playerSpawn?.subscribe((event) => {
   const player = event.player;
   if (!player) return;
-  system.run(() => {
-    updatePlayerPrefixDisplays();
-    notifyPlayerAboutAddon(player);
-    notifyPlayerAboutPrefixes(player);
-  });
+  system.run(() => notifyPlayerAboutAddon(player));
 });
-
-world.afterEvents.playerLeave?.subscribe((event) => {
-  if (event.playerName) {
-    playerPrefixCache.delete(event.playerName);
-    chatPrefixNoticeShown.delete(event.playerName);
-  }
-});
-
-if (world.beforeEvents?.chatSend?.subscribe) {
-  world.beforeEvents.chatSend.subscribe((event) => handlePrefixedChat(event));
-}
 
 function handleFlagInteraction(player, flagSource) {
   const cooldownKey = `${getPlayerName(player)}:${getDimensionId(flagSource.dimension)}:${Math.floor(flagSource.location.x)}:${Math.floor(flagSource.location.y)}:${Math.floor(flagSource.location.z)}`;
@@ -310,8 +292,6 @@ world.beforeEvents.entityHurt?.subscribe((event) => {
 system.runInterval(() => updateFlagLabels(), 60);
 system.runInterval(() => updateMoraleForNewDay(), 1200);
 system.runInterval(() => cleanupExpiredLootZones(), 100);
-system.runInterval(() => updatePlayerPrefixDisplays(), 40);
-system.run(() => updatePlayerPrefixDisplays());
 
 async function beginSettlementCreationFromItem(player, clickedBlock, blockFace) {
   if (!player || !clickedBlock) return;
@@ -400,7 +380,6 @@ async function beginSettlementCreationFromItem(player, clickedBlock, blockFace) 
   data.settlements.push(settlement);
   saveData(data);
   updateFlagLabelFor(settlement, data);
-  updatePlayerPrefixDisplays(data);
   world.sendMessage(`§6[Королевства] §f${playerName} основал(а) ${settlementDisplayName(data, settlement)} за ${CREATION_COST} изумрудов.`);
 }
 
@@ -474,7 +453,6 @@ async function beginSettlementCreation(player, block) {
   data.settlements.push(settlement);
   saveData(data);
   updateFlagLabelFor(settlement);
-  updatePlayerPrefixDisplays(data);
   world.sendMessage(`§6[Королевства] §f${playerName} основал(а) ${settlementDisplayName(data, settlement)} за ${CREATION_COST} изумрудов.`);
 }
 
@@ -553,7 +531,6 @@ async function upgradeSettlement(player, settlementId) {
   settlement.morale = Math.min(100, settlement.morale + 10);
   saveData(data);
   updateFlagLabelFor(settlement);
-  updatePlayerPrefixDisplays(data);
   world.sendMessage(`§6[Королевства] §f${settlementDisplayName(data, settlement)} улучшено за ${nextType.upgradeCost} изумрудов. Мораль выросла.`);
 }
 
@@ -594,7 +571,6 @@ async function addResident(player, settlementId) {
   const name = candidates[response.formValues?.[0] ?? 0];
   settlement.members[name] = { prefix: PREFIXES[0].name, joinedTick: system.currentTick };
   saveData(data);
-  updatePlayerPrefixDisplays(data);
   world.sendMessage(`§6[Королевства] §f${name} теперь житель ${settlementDisplayName(data, settlement)}.`);
 }
 
@@ -616,7 +592,6 @@ async function removeResident(player, settlementId) {
   const name = members[response.formValues?.[0] ?? 0];
   delete settlement.members[name];
   saveData(data);
-  updatePlayerPrefixDisplays(data);
   world.sendMessage(`§6[Королевства] §f${name} исключён(а) из ${settlementDisplayName(data, settlement)}.`);
 }
 
@@ -642,7 +617,6 @@ async function openPrefixesMenu(player, settlementId) {
 
   settlement.members[memberName].prefix = PREFIXES[prefixResponse.formValues?.[0] ?? 0].name;
   saveData(data);
-  updatePlayerPrefixDisplays(data);
   player.sendMessage(`§a${memberName}: ${settlement.members[memberName].prefix}.`);
 }
 
@@ -852,7 +826,6 @@ function disbandSettlement(data, settlementId, reason, announce = true) {
   removeFlagBlock(settlement);
   removeFlagLabel(settlement);
   data.settlements = data.settlements.filter((entry) => entry.id !== settlement.id);
-  updatePlayerPrefixDisplays(data);
   if (announce) world.sendMessage(`§6[Королевства] §f${settlement.name} распалось: ${reason}.`);
 }
 
@@ -951,132 +924,18 @@ function settlementLabel(data, settlement) {
   return `${settlementDisplayName(data, settlement)}\n${creatorTitle} ${settlement.creatorName}\nHP ${settlement.hp}/${getMaxHp(settlement)} | Мораль ${settlement.morale}`;
 }
 
-function updatePlayerPrefixDisplays(knownData) {
-  const data = knownData ?? loadData();
-  const onlineNames = new Set();
-
-  for (const player of world.getPlayers()) {
-    const playerName = getPlayerName(player);
-    onlineNames.add(playerName);
-
-    const prefix = playerDisplayPrefix(data, playerName);
-    if (prefix) playerPrefixCache.set(playerName, prefix);
-    else playerPrefixCache.delete(playerName);
-
-    applyPlayerPrefix(player, prefix);
-  }
-
-  for (const cachedName of playerPrefixCache.keys()) {
-    if (!onlineNames.has(cachedName)) playerPrefixCache.delete(cachedName);
-  }
-}
-
-function applyPlayerPrefix(player, prefix) {
-  const playerName = getPlayerName(player);
-  const formattedPrefix = prefix ? `§7[§6${prefix}§7] ` : "";
-  const nextNameTag = prefix ? `${formattedPrefix}§f${playerName}` : playerName;
-
-  // Overhead name — works on stable Script API 1.17 without changing flag placement.
-  try {
-    if (player.nameTag !== nextNameTag) player.nameTag = nextNameTag;
-  } catch (_error) {
-    // Ignore nameTag write failures during player state transitions.
-  }
-
-  if (!prefix) {
-    clearDirectChatPrefix(player);
-    return;
-  }
-
-  if (tryApplyDirectChatPrefix(player, formattedPrefix)) {
-    directChatPrefixAvailable = true;
-  }
-}
-
-function tryApplyDirectChatPrefix(player, formattedPrefix) {
-  try {
-    player.chatNamePrefix = formattedPrefix;
-    player.chatNameSuffix = "";
-    player.chatMessagePrefix = "";
-    if (typeof player.chatDisplayName === "string") {
-      return player.chatDisplayName.startsWith(formattedPrefix) || player.chatNamePrefix === formattedPrefix;
-    }
-    return player.chatNamePrefix === formattedPrefix;
-  } catch (_error) {
-    return false;
-  }
-}
-
-function clearDirectChatPrefix(player) {
-  try {
-    player.chatNamePrefix = "";
-    player.chatNameSuffix = "";
-    player.chatMessagePrefix = "";
-  } catch (_error) {
-    // Optional API.
-  }
-}
-
-function playerDisplayPrefix(data, playerName) {
-  const settlement = getPlayerSettlement(data, playerName);
-  if (!settlement) return undefined;
-
-  if (samePlayerName(settlement.creatorName, playerName)) {
-    return settlement.creatorPrefix || creatorPrefixFor(settlement.typeIndex);
-  }
-
-  const memberName = Object.keys(settlement.members || {}).find((name) => samePlayerName(name, playerName));
-  return memberName ? settlement.members[memberName]?.prefix : undefined;
-}
-
 function creatorPrefixFor(typeIndex) {
   return CREATOR_PREFIXES[typeIndex] ?? CREATOR_PREFIXES[0];
-}
-
-function handlePrefixedChat(event) {
-  if (directChatPrefixAvailable) return;
-
-  const message = event.message;
-  if (typeof message !== "string" || !message.length) return;
-
-  const player = event.sender;
-  const playerName = player?.name ?? "";
-  if (!playerName) return;
-
-  const prefix = playerPrefixCache.get(playerName) ?? playerDisplayPrefix(loadData(), playerName);
-  if (!prefix) return;
-
-  try { event.cancel = true; } catch (_error) { return; }
-
-  const duplicateKey = `${playerName}:${system.currentTick}:${message}`;
-  if (prefixedChatCooldown.get(duplicateKey) === system.currentTick) return;
-  prefixedChatCooldown.set(duplicateKey, system.currentTick);
-
-  system.run(() => {
-    world.sendMessage(`§7[§6${prefix}§7] §f${playerName}§7: §f${String(message).replace(/§/g, "")}`);
-  });
 }
 
 function notifyPlayerAboutAddon(player) {
   if (!player) return;
   const playerName = getPlayerName(player);
-  if (chatPrefixNoticeShown.has(`loaded:${playerName}`)) return;
-  chatPrefixNoticeShown.add(`loaded:${playerName}`);
-  player.sendMessage("§6[Королевства] §fАддон загружен (v1.0.8).");
+  if (loadedNoticeShown.has(playerName)) return;
+  loadedNoticeShown.add(playerName);
+  player.sendMessage("§6[Королевства] §fАддон загружен (v1.0.9).");
   player.sendMessage(`§7Флаг: кликните предметом по блоку. Нужно ${CREATION_COST} изумрудов.`);
-}
-
-function notifyPlayerAboutPrefixes(player) {
-  if (!player) return;
-
-  const playerName = getPlayerName(player);
-  if (chatPrefixNoticeShown.has(playerName)) return;
-
-  const prefix = playerDisplayPrefix(loadData(), playerName);
-  if (!prefix) return;
-
-  chatPrefixNoticeShown.add(playerName);
-  player.sendMessage(`§7[Королевства] Ваш префикс: §6${prefix}§7 (над головой${directChatPrefixAvailable ? " и в чате" : ""}).`);
+  player.sendMessage("§7Префиксы в чате/над головой: установите аддон Kingdoms Prefixes и включите Beta APIs.");
 }
 
 function settlementDisplayName(data, settlement) {
