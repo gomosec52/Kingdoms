@@ -22,7 +22,7 @@ world.afterEvents.playerSpawn.subscribe((event) => {
     const name = event.player.name;
     if (greeted.has(name)) return;
     greeted.add(name);
-    event.player.sendMessage("§6[Quest Dialogue] §fv1.2.0 FRESH UUID");
+    event.player.sendMessage("§6[Quest Dialogue] §fv1.2.4 FRESH UUID");
     event.player.sendMessage("§7Нижняя RPG-панель. Квест: §aЗАВЕРШИТЬ§7 при сдаче.");
     event.player.sendMessage("§7С Kingdoms Wars: RP Kingdoms §eвыше§7 Quest RP в списке.");
     event.player.sendMessage("§7`/give @s quests:npc_spawner`");
