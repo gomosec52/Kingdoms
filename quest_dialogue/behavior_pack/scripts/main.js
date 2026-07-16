@@ -220,8 +220,8 @@ async function playAndShowLine(player, line) {
 
   const buttons =
     line.type === "quest"
-      ? ["§aПринять", "§cОтклонить"]
-      : ["§eДалее"];
+      ? ["§aПРИНЯТЬ", "§cОТКЛОНИТЬ"]
+      : ["§eДАЛЕЕ"];
 
   const response = await showDialogue(player, line.text || "…", buttons);
   if (response.canceled) return false;

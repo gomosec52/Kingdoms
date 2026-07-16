@@ -3,28 +3,48 @@
   "header": {
     "name": "Quest Dialogue NPCs Reloaded",
     "description": "Editable quest NPCs with bottom RPG dialogue UI. v1.1.0 FRESH UUID",
-    "uuid": "18d49fb4-79af-4a21-90bb-bc7134baef7c",
-    "version": [1, 1, 0],
-    "min_engine_version": [1, 26, 20]
+    "uuid": "75fbdc05-684e-434f-9153-7d1046a6122e",
+    "version": [
+      1,
+      1,
+      1
+    ],
+    "min_engine_version": [
+      1,
+      26,
+      20
+    ]
   },
   "modules": [
     {
       "type": "data",
-      "uuid": "4c964cfd-bb61-46d0-9c63-ec188012723b",
-      "version": [1, 1, 0]
+      "uuid": "952a7182-4f45-4a66-b8fd-8b1fd01ccde2",
+      "version": [
+        1,
+        1,
+        0
+      ]
     },
     {
       "type": "script",
       "language": "javascript",
-      "uuid": "4b1e26db-f5d7-432d-8211-1caf3db73e45",
+      "uuid": "95fe2f90-8b4f-4c1f-9ff7-f0825e183822",
       "entry": "scripts/main.js",
-      "version": [1, 1, 0]
+      "version": [
+        1,
+        1,
+        0
+      ]
     }
   ],
   "dependencies": [
     {
       "uuid": "942b5960-2ee6-4a40-9f80-f28e09486b55",
-      "version": [1, 1, 0]
+      "version": [
+        1,
+        1,
+        0
+      ]
     },
     {
       "module_name": "@minecraft/server",

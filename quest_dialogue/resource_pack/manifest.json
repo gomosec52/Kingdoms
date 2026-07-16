@@ -3,15 +3,27 @@
   "header": {
     "name": "Quest Dialogue NPCs Reloaded Resources",
     "description": "RPG bottom dialogue UI, models and sounds. v1.1.0 FRESH UUID",
-    "uuid": "942b5960-2ee6-4a40-9f80-f28e09486b55",
-    "version": [1, 1, 0],
-    "min_engine_version": [1, 26, 20]
+    "uuid": "d1741e55-7b26-45c8-87db-f4380b88cd32",
+    "version": [
+      1,
+      1,
+      1
+    ],
+    "min_engine_version": [
+      1,
+      26,
+      20
+    ]
   },
   "modules": [
     {
       "type": "resources",
-      "uuid": "758a598c-4cdd-4ad8-b13f-097438277191",
-      "version": [1, 1, 0]
+      "uuid": "dbc6190a-5610-435b-9c35-71e503fc5520",
+      "version": [
+        1,
+        1,
+        0
+      ]
     }
   ]
 }
