@@ -22,8 +22,9 @@ world.afterEvents.playerSpawn.subscribe((event) => {
     const name = event.player.name;
     if (greeted.has(name)) return;
     greeted.add(name);
-    event.player.sendMessage("§6[Quest Dialogue] §fv1.1.0 FRESH UUID");
-    event.player.sendMessage("§7UI снизу + кнопка §aЗавершить§7 для сдачи квеста.");
+    event.player.sendMessage("§6[Quest Dialogue] §fv1.2.0 FRESH UUID");
+    event.player.sendMessage("§7Нижняя RPG-панель. Квест: §aЗАВЕРШИТЬ§7 при сдаче.");
+    event.player.sendMessage("§7С Kingdoms Wars: RP Kingdoms §eвыше§7 Quest RP в списке.");
     event.player.sendMessage("§7`/give @s quests:npc_spawner`");
   });
 });
@@ -167,8 +168,8 @@ async function showQuestTurnIn(player, line) {
     if (!isPlayerOk(player)) return;
 
     const response = await showDialogue(player, line.readyText || "§fГотов сдать квест?", [
-      "§aЗавершить",
-      "§7Позже"
+      "§aЗАВЕРШИТЬ",
+      "§7ПОЗЖЕ"
     ]);
     if (response.canceled || response.selection !== 0) return;
 
@@ -209,7 +210,7 @@ async function showQuestTurnIn(player, line) {
   await waitSeconds(line.incompleteVoiceSeconds ?? line.voiceSeconds ?? 0.4);
   if (!isPlayerOk(player)) return;
 
-  await showDialogue(player, text, ["§eПонятно"]);
+  await showDialogue(player, text, ["§eПОНЯТНО"]);
 }
 
 async function playAndShowLine(player, line) {

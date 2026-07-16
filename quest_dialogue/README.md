@@ -4,10 +4,11 @@
 
 ## Установка
 
-1. Скачай `QuestDialogue-Reloaded-v1.0.0.mcaddon`
+1. Скачай **`QuestDialogue-Reloaded-v1.2.0.mcaddon`**
 2. Импортируй в Minecraft Bedrock 1.26.20+
-3. Включи behavior + resource pack в мире
-4. `/give @s quests:npc_spawner` и поставь NPC
+3. Включи **оба** пака (behavior + resource) в мире
+4. Если одновременно стоит **Kingdoms Wars** — поставь его resource pack **выше** Quest Dialogue RP в списке (иначе UI может не открыться)
+5. `/give @s quests:npc_spawner` и поставь NPC
 
 ## Что уже есть
 

@@ -11,7 +11,7 @@
           },
           {
             "binding_type": "view",
-            "source_property_name": "((#title_text - 'kingdoms:settlement') = #title_text)",
+            "source_property_name": "(((#title_text - 'kingdoms:settlement') = #title_text) and ((#title_text - 'quests:dialogue') = #title_text))",
             "target_property_name": "#visible"
           }
         ]
@@ -383,6 +383,226 @@
       }
     ]
   },
+  "kingdoms_quest_combined_router": {
+    "type": "panel",
+    "size": [
+      "100%",
+      "100%"
+    ],
+    "bindings": [
+      {
+        "binding_name": "#title_text"
+      }
+    ],
+    "controls": [
+      {
+        "kingdoms_ui@server_form.kingdoms_long_form_root": {}
+      },
+      {
+        "quests_ui@server_form.quests_dialogue_hud": {}
+      }
+    ]
+  },
+  "quests_dialogue_hud": {
+    "type": "panel",
+    "size": [
+      "100%",
+      "100%"
+    ],
+    "$title_needs_to_contain": "quests:dialogue",
+    "bindings": [
+      {
+        "binding_type": "view",
+        "source_control_name": "kingdoms_quest_combined_router",
+        "source_property_name": "(not ((#title_text - $title_needs_to_contain) = #title_text))",
+        "target_property_name": "#visible"
+      }
+    ],
+    "controls": [
+      {
+        "bottom_bar": {
+          "type": "panel",
+          "size": [
+            "100%",
+            "25%"
+          ],
+          "min_size": [
+            0,
+            92
+          ],
+          "anchor_from": "bottom_middle",
+          "anchor_to": "bottom_middle",
+          "controls": [
+            {
+              "bg_dim": {
+                "type": "image",
+                "texture": "textures/ui/Black",
+                "alpha": 0.55,
+                "size": [
+                  "100%",
+                  "100%"
+                ],
+                "layer": 0
+              }
+            },
+            {
+              "bg_panel": {
+                "type": "image",
+                "texture": "textures/ui/dialogue_panel",
+                "alpha": 0.92,
+                "size": [
+                  "100%",
+                  "100%"
+                ],
+                "nineslice_size": 8,
+                "layer": 1
+              }
+            },
+            {
+              "dialogue_text": {
+                "type": "label",
+                "text": "#form_text",
+                "font_size": "large",
+                "font_scale_factor": 1.65,
+                "line_padding": 3,
+                "shadow": true,
+                "color": [
+                  0.97,
+                  0.97,
+                  0.99
+                ],
+                "text_alignment": "left",
+                "size": [
+                  "100% - 240px",
+                  "100% - 28px"
+                ],
+                "offset": [
+                  22,
+                  14
+                ],
+                "anchor_from": "top_left",
+                "anchor_to": "top_left",
+                "layer": 4,
+                "bindings": [
+                  {
+                    "binding_name": "#form_text"
+                  }
+                ]
+              }
+            },
+            {
+              "buttons_dock": {
+                "type": "panel",
+                "size": [
+                  200,
+                  "100% - 20px"
+                ],
+                "offset": [
+                  -18,
+                  0
+                ],
+                "anchor_from": "right_middle",
+                "anchor_to": "right_middle",
+                "layer": 5,
+                "controls": [
+                  {
+                    "buttons_stack@server_form.quests_buttons_stack": {
+                      "size": [
+                        "100%",
+                        "100%"
+                      ],
+                      "anchor_from": "bottom_right",
+                      "anchor_to": "bottom_right"
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      }
+    ]
+  },
+  "quests_buttons_stack": {
+    "type": "stack_panel",
+    "orientation": "vertical",
+    "size": [
+      "100%",
+      "100%"
+    ],
+    "controls": [
+      {
+        "spacer": {
+          "type": "panel",
+          "size": [
+            "100%",
+            "fill"
+          ]
+        }
+      },
+      {
+        "buttons_grid@server_form.quests_buttons_grid": {
+          "size": [
+            "100%",
+            "100%c"
+          ]
+        }
+      }
+    ]
+  },
+  "quests_buttons_grid": {
+    "type": "grid",
+    "size": [
+      "100%",
+      "100%c"
+    ],
+    "grid_dimensions": [
+      1,
+      3
+    ],
+    "maximum_grid_items": 3,
+    "grid_item_template": "server_form.quests_dynamic_button",
+    "grid_fill_direction": "vertical",
+    "collection_name": "form_buttons"
+  },
+  "quests_dynamic_button": {
+    "type": "panel",
+    "size": [
+      "100%",
+      52
+    ],
+    "controls": [
+      {
+        "form_button@common_buttons.light_text_button": {
+          "$pressed_button_name": "button.form_button_click",
+          "$default_button_texture": "textures/ui/quest_button",
+          "$hover_button_texture": "textures/ui/quest_button",
+          "$pressed_button_texture": "textures/ui/quest_button",
+          "$locked_button_texture": "textures/ui/quest_button",
+          "$button_text": "#form_button_text",
+          "$button_text_binding_type": "collection",
+          "$button_text_grid_collection_name": "form_buttons",
+          "$button_text_max_size": [
+            "100% - 12px",
+            28
+          ],
+          "size": [
+            "100%",
+            48
+          ],
+          "anchor_from": "center",
+          "anchor_to": "center",
+          "layer": 4,
+          "bindings": [
+            {
+              "binding_type": "collection_details",
+              "binding_collection_name": "form_buttons"
+            }
+          ]
+        }
+      }
+    ]
+  },
   "main_screen_content": {
     "modifications": [
       {
@@ -395,7 +615,7 @@
               "factory": {
                 "name": "server_form_factory",
                 "control_ids": {
-                  "long_form": "@server_form.kingdoms_long_form_root"
+                  "long_form": "@server_form.kingdoms_quest_combined_router"
                 }
               }
             }
