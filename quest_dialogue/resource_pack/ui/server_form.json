@@ -5,7 +5,23 @@
     "modifications": [
       {
         "array_name": "bindings",
-        "operation": "insert_back",
+        "operation": "insert_front",
+        "value": [
+          { "binding_name": "#title_text" },
+          {
+            "binding_type": "view",
+            "source_property_name": "(((#title_text - 'quests:dialogue') = #title_text) and ((#title_text - 'kingdoms:settlement') = #title_text))",
+            "target_property_name": "#visible"
+          }
+        ]
+      }
+    ]
+  },
+  "custom_form": {
+    "modifications": [
+      {
+        "array_name": "bindings",
+        "operation": "insert_front",
         "value": [
           { "binding_name": "#title_text" },
           {
