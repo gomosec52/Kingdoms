@@ -398,9 +398,8 @@ async function runSettlementCreationFlow(player, context) {
     return;
   }
 
-  const form = new ModalFormData()
-    .title("Создание поселения")
-    .textField(`Название поселения (${CREATION_COST} изумрудов)`, "Например: Новгород", { defaultValue: `Поселение ${playerName}` });
+  const form = new ModalFormData().title("Создание поселения");
+  addTextField(form, `Название поселения (${CREATION_COST} изумрудов)`, "Например: Новгород", `Поселение ${playerName}`);
   const response = await showForm(player, form);
   if (response.canceled) {
     player.sendMessage("§7Создание поселения отменено.");
@@ -570,9 +569,8 @@ async function beginSettlementCreation(player, block) {
     return;
   }
 
-  const form = new ModalFormData()
-    .title("Создание поселения")
-    .textField(`Название поселения (${CREATION_COST} изумрудов)`, "Например: Новгород", { defaultValue: `Поселение ${playerName}` });
+  const form = new ModalFormData().title("Создание поселения");
+  addTextField(form, `Название поселения (${CREATION_COST} изумрудов)`, "Например: Новгород", `Поселение ${playerName}`);
   const response = await showForm(player, form);
   if (response.canceled) {
     removePlacedFlag(block, player);
@@ -833,7 +831,7 @@ async function openAllianceMenu(player, settlementId) {
 
   const nameResponse = await showForm(player, new ModalFormData()
     .title("Название альянса")
-    .textField("Название альянса", "Например: Северная корона", { defaultValue: `${settlement.name} и ${target.name}` }));
+    .textField("Название альянса", "Например: Северная корона", `${settlement.name} и ${target.name}`));
   if (nameResponse.canceled) return;
 
   const name = cleanName(nameResponse.formValues?.[0]);
@@ -1513,7 +1511,7 @@ function notifyPlayerAboutAddon(player) {
   if (loadedNoticeShown.has(playerName)) return;
   loadedNoticeShown.add(playerName);
 
-  player.sendMessage("§6[Королевства] §fАддон загружен (v1.3.0 FRESH UUID — Строительство).");
+  player.sendMessage("§6[Королевства] §fАддон загружен (v1.4.0 CACHEBUST FLAGFIX).");
   player.sendMessage(`§7Флаг — сущность. Кликните предметом по блоку. Нужно ${CREATION_COST} изумрудов.`);
 }
 
@@ -1738,6 +1736,19 @@ function shortText(value, maxLength) {
   const text = String(value ?? "").replace(/[\n\r§]/g, "").trim();
   if (text.length <= maxLength) return text;
   return `${text.slice(0, Math.max(0, maxLength - 3))}...`;
+}
+
+
+function addTextField(form, label, placeholder, defaultValue) {
+  try {
+    return form.textField(label, placeholder, defaultValue);
+  } catch (_error) {
+    try {
+      return form.textField(label, placeholder, { defaultValue });
+    } catch (_error2) {
+      return form.textField(label, placeholder);
+    }
+  }
 }
 
 async function showForm(player, form) {

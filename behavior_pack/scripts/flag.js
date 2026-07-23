@@ -50,23 +50,6 @@ function resolveBlock(event) {
   }
 }
 
-function getHeldItem(player) {
-  try {
-    const equippable = player.getComponent("minecraft:equippable") ?? player.getComponent("equippable");
-    const main = equippable?.getEquipment?.("Mainhand");
-    if (main) return main;
-  } catch (_error) {
-    // ignore
-  }
-  try {
-    const inventory = player.getComponent("minecraft:inventory")?.container ?? player.getComponent("inventory")?.container;
-    const slot = player.selectedSlotIndex ?? player.selectedSlot ?? 0;
-    return inventory?.getItem?.(slot);
-  } catch (_error2) {
-    return undefined;
-  }
-}
-
 /** @type {import("@minecraft/server").ItemCustomComponent} */
 const flagPlacerComponent = {
   onUseOn(event) {
@@ -93,12 +76,8 @@ export function setWildFlagSpawnHandler(handler) {
 
 export function registerFlagComponent(registry) {
   if (registered || !registry?.registerCustomComponent) return;
-  try {
-    registry.registerCustomComponent(FLAG_ITEM_USE_COMPONENT, flagPlacerComponent);
-    registered = true;
-  } catch (error) {
-    console.warn(`[Kingdoms] Не удалось зарегистрировать flag_placer: ${error}`);
-  }
+  registry.registerCustomComponent(FLAG_ITEM_USE_COMPONENT, flagPlacerComponent);
+  registered = true;
 }
 
 function bindUseOnHandler(event, origin) {
@@ -114,66 +93,33 @@ function bindUseOnHandler(event, origin) {
 }
 
 export function bindFlagPlacementEvents(world) {
-  try {
-    world.afterEvents?.itemUseOn?.subscribe((event) => bindUseOnHandler(event, "afterUseOn"));
-  } catch (_error) {
-    // itemUseOn removed on some API versions
-  }
-  try {
-    world.beforeEvents?.itemUseOn?.subscribe((event) => bindUseOnHandler(event, "beforeUseOn"));
-  } catch (_error2) {
-    // ignore
-  }
-
-  // Fallback: ПКМ по блоку с флагом в руке (работает даже без itemUseOn / custom component)
-  try {
-    world.afterEvents?.playerInteractWithBlock?.subscribe((event) => {
-      const player = event.player;
-      if (!player || player.typeId !== "minecraft:player") return;
-      const held = event.itemStack ?? getHeldItem(player);
-      if (held?.typeId !== FLAG_ITEM) return;
-      if (!event.block) return;
-      queueFlagPlacement(player, event.block, event.blockFace ?? event.face, "interactBlock");
-    });
-  } catch (_error3) {
-    // ignore
-  }
+  // itemUseOn is unavailable on Script API 2.0/beta; entity_placer + entitySpawn is the primary path.
+  world.afterEvents?.itemUseOn?.subscribe((event) => bindUseOnHandler(event, "afterUseOn"));
+  world.beforeEvents?.itemUseOn?.subscribe((event) => bindUseOnHandler(event, "beforeUseOn"));
 }
 
 export function bindFlagEntitySpawn(world) {
-  try {
-    world.afterEvents?.entitySpawn?.subscribe((event) => {
-      if (event.entity?.typeId !== FLAG_ENTITY) return;
+  world.afterEvents?.entitySpawn?.subscribe((event) => {
+    if (event.entity?.typeId !== FLAG_ENTITY) return;
 
-      system.run(() => {
-        try {
-          if (typeof onWildFlagSpawn === "function") onWildFlagSpawn(event.entity);
-        } catch (error) {
-          console.warn(`[Kingdoms] Ошибка обработки флага-сущности: ${error}`);
-        }
-      });
+    system.run(() => {
+      try {
+        if (typeof onWildFlagSpawn === "function") onWildFlagSpawn(event.entity);
+      } catch (error) {
+        console.warn(`[Kingdoms] Ошибка обработки флага-сущности: ${error}`);
+      }
     });
-  } catch (error) {
-    console.warn(`[Kingdoms] Не удалось подписаться на entitySpawn: ${error}`);
-  }
+  });
 }
 
 export function bindFlagSystem(world) {
-  try {
-    system.beforeEvents?.startup?.subscribe((event) => {
-      registerFlagComponent(event.itemComponentRegistry);
-    });
-  } catch (error) {
-    console.warn(`[Kingdoms] startup registry недоступен: ${error}`);
-  }
+  system.beforeEvents.startup.subscribe((event) => {
+    registerFlagComponent(event.itemComponentRegistry);
+  });
 
-  try {
-    world.beforeEvents?.worldInitialize?.subscribe((event) => {
-      registerFlagComponent(event.itemComponentRegistry);
-    });
-  } catch (_error) {
-    // ignore
-  }
+  world.beforeEvents?.worldInitialize?.subscribe((event) => {
+    registerFlagComponent(event.itemComponentRegistry);
+  });
 
   bindFlagPlacementEvents(world);
   bindFlagEntitySpawn(world);
