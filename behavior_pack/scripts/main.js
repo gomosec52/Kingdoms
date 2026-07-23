@@ -1248,7 +1248,7 @@ function notifyPlayerAboutAddon(player) {
   if (loadedNoticeShown.has(playerName)) return;
   loadedNoticeShown.add(playerName);
 
-  player.sendMessage("§6[Королевства] §fАддон загружен (v1.2.3 CLEAN).");
+  player.sendMessage("§6[Королевства] §fАддон загружен (v1.2.4 PARSEFIX).");
   player.sendMessage(`§7Флаг — сущность. Кликните предметом по блоку. Нужно ${CREATION_COST} изумрудов.`);
 }
 

@@ -1,13 +1,13 @@
 {
   "format_version": 2,
   "header": {
-    "name": "KW Clean Flag Resources",
-    "description": "v1.2.3 CLEAN resources",
-    "uuid": "14ad5554-5520-4ebe-a0cc-cb646eebb9de",
+    "name": "KW Flag PARSEFIX Resources",
+    "description": "v1.2.4 PARSEFIX resources",
+    "uuid": "7a695b4a-0dbd-4311-bd38-3f09689a72d1",
     "version": [
       1,
       2,
-      3
+      4
     ],
     "min_engine_version": [
       1,
@@ -18,11 +18,11 @@
   "modules": [
     {
       "type": "resources",
-      "uuid": "be1b3fbb-9dea-43c9-95a6-7c84c0af139d",
+      "uuid": "2a60044b-d68c-4b23-b178-e8511340012a",
       "version": [
         1,
         2,
-        3
+        4
       ]
     }
   ]

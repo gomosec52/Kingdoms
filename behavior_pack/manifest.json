@@ -1,13 +1,13 @@
 {
   "format_version": 2,
   "header": {
-    "name": "KW Clean Flag",
-    "description": "v1.2.3 CLEAN \u2014 exact working 1.2.1, fresh UUID, no construction",
-    "uuid": "5a6595b3-0c1b-4897-94b9-4de105574413",
+    "name": "KW Flag PARSEFIX",
+    "description": "v1.2.4 PARSEFIX \u2014 fixed menu_category group namespace + recipe + icon shortname",
+    "uuid": "13b680dc-b67d-4b74-9dbc-b60026cfb14d",
     "version": [
       1,
       2,
-      3
+      4
     ],
     "min_engine_version": [
       1,
@@ -18,32 +18,32 @@
   "modules": [
     {
       "type": "data",
-      "uuid": "a99ae3a5-4842-4667-95c8-59ebf72e4c7a",
+      "uuid": "532f3cae-5f4a-473c-b14c-d0c6e8dcdad5",
       "version": [
         1,
         2,
-        3
+        4
       ]
     },
     {
       "type": "script",
       "language": "javascript",
-      "uuid": "3c17e942-695e-4afb-9c11-3921c6a59f9d",
+      "uuid": "5ef186f1-ba6a-4ccd-92bb-e6c0e5b93746",
       "entry": "scripts/main.js",
       "version": [
         1,
         2,
-        3
+        4
       ]
     }
   ],
   "dependencies": [
     {
-      "uuid": "14ad5554-5520-4ebe-a0cc-cb646eebb9de",
+      "uuid": "7a695b4a-0dbd-4311-bd38-3f09689a72d1",
       "version": [
         1,
         2,
-        3
+        4
       ]
     },
     {
