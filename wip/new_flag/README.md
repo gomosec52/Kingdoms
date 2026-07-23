@@ -1,17 +1,22 @@
-# New kingdom flag model (WIP — not integrated)
+# New kingdom flag model (WIP — not integrated into the pack)
 
-- `model.gltf` — original Blockbench export (no animation)
-- `model_wind.gltf` — same model + looping `banner_wind` animation
+## Open this in Blockbench (all textures already applied)
 
-## Animation
-`banner_wind` (2.4s loop):
-- **Stick / pole** — static
-- **Banner** — slight root sway
-- **Top of Banner** — small motion (near crossbar)
-- **Middle part of the Banner** — medium wave, phase delay
-- **Bottom of the Banner** — strongest flap
+**File → Open → `kingdom_flag_textured.bbmodel`**
 
-Open `model_wind.gltf` in Blockbench or any glTF viewer to preview.
+This is a Free Model with 6 named textures already assigned to the right parts:
+- `pole_wood` → sticks
+- `crossbar_wood` → wooden bar
+- `banner_upper` / `banner_middle` / `banner_lower` → cloth
+- `banner_icon` → emblem
+
+No manual “apply texture” needed.
+
+## Other files
+- `model.gltf` / `model_wind.gltf` — original glTF (+ wind animation)
+- `model_textured.gltf` — same glTF with renamed materials
+- `textures/*.png` — exported PNGs
+- `BLOCKBENCH_TEXTURES.md` — old manual assign notes
 
 ## Integration
-Not wired into the Kingdoms resource/behavior packs yet.
+Not wired into Kingdoms resource/behavior packs yet.
