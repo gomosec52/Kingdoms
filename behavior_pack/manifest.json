@@ -1,13 +1,13 @@
 {
   "format_version": 2,
   "header": {
-    "name": "Kingdoms Wars NOIMPORT",
-    "description": "v1.5.1 NOIMPORT — construction inlined, flag untouched",
-    "uuid": "8014bbbc-f104-4191-bce2-470397573bed",
+    "name": "Kingdoms Wars Behavior Pack",
+    "description": "v1.5.2 SAMEUUID — construction on working flag pack",
+    "uuid": "7c61b36a-2ac2-4f52-b7fa-5cc8421f8c9f",
     "version": [
       1,
       5,
-      1
+      2
     ],
     "min_engine_version": [
       1,
@@ -18,32 +18,32 @@
   "modules": [
     {
       "type": "data",
-      "uuid": "d759feac-4bd1-4c4e-817f-d31124e0d6eb",
+      "uuid": "a5129a9d-2480-4adc-b3fd-1538cb589a46",
       "version": [
         1,
         5,
-        1
+        2
       ]
     },
     {
       "type": "script",
       "language": "javascript",
-      "uuid": "d615ed51-5c4e-4055-a3e9-ba41d15f866d",
+      "uuid": "e11f5421-eef6-47cf-85cf-99c4bc723df8",
       "entry": "scripts/main.js",
       "version": [
         1,
         5,
-        1
+        2
       ]
     }
   ],
   "dependencies": [
     {
-      "uuid": "6ad157b7-5794-4fb8-9eec-add0332554ef",
+      "uuid": "e8d3a9ca-729a-43a1-b769-1f772a8708d1",
       "version": [
         1,
         5,
-        1
+        2
       ]
     },
     {
