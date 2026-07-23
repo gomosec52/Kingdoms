@@ -2,12 +2,12 @@
   "format_version": 2,
   "header": {
     "name": "Kingdoms Wars Resource Pack",
-    "description": "v1.5.2 SAMEUUID resources",
+    "description": "v1.5.3 CODEFIX resources",
     "uuid": "e8d3a9ca-729a-43a1-b769-1f772a8708d1",
     "version": [
       1,
       5,
-      2
+      3
     ],
     "min_engine_version": [
       1,
@@ -22,7 +22,7 @@
       "version": [
         1,
         5,
-        2
+        3
       ]
     }
   ]
