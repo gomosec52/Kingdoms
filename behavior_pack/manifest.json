@@ -1,13 +1,13 @@
 {
   "format_version": 2,
   "header": {
-    "name": "KW MenuFIX2",
-    "description": "v1.2.6 MenuFIX2 — textField(label, ph, {defaultValue})",
-    "uuid": "a2dab748-eb58-4290-b109-956088907b89",
+    "name": "KW PrefixBridge",
+    "description": "v1.2.7 PrefixBridge — restore kw_s/kw_r tags for Prefixes Reloaded",
+    "uuid": "035f3a70-c0ca-4f75-9390-380c2cc48fb2",
     "version": [
       1,
       2,
-      6
+      7
     ],
     "min_engine_version": [
       1,
@@ -18,32 +18,32 @@
   "modules": [
     {
       "type": "data",
-      "uuid": "66e547dc-22b5-49c2-ade5-21138d0f06c8",
+      "uuid": "8ba5e9b9-81f6-4540-aeea-bf2fb0cff42c",
       "version": [
         1,
         2,
-        6
+        7
       ]
     },
     {
       "type": "script",
       "language": "javascript",
-      "uuid": "7a5cc232-c4bc-47f4-a7a2-2d9a198d012b",
+      "uuid": "c7b5d7ed-3525-444a-bd11-0fe00c85d69b",
       "entry": "scripts/main.js",
       "version": [
         1,
         2,
-        6
+        7
       ]
     }
   ],
   "dependencies": [
     {
-      "uuid": "21f63700-c4d9-4219-846e-c5dc48db82d9",
+      "uuid": "e1e06988-bb7b-4948-8dc5-2dd632a6af47",
       "version": [
         1,
         2,
-        6
+        7
       ]
     },
     {

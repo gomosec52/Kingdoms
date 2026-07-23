@@ -1081,6 +1081,44 @@ function settlementLabel(data, settlement) {
   return `${settlementDisplayName(data, settlement)}\n${creatorPrefixFor(settlement.typeIndex)} ${settlement.creatorName}\nHP ${settlement.hp}/${getMaxHp(settlement)} | Мораль ${settlement.morale}`;
 }
 
+function playerSettlementName(data, playerName) {
+  return getPlayerSettlement(data, playerName)?.name;
+}
+
+/**
+ * Bridge identity to Kingdoms Prefixes via player tags.
+ * Tags are reliable across packs; DPs alone often are not.
+ */
+function syncIdentityTags(player, settlementName, prefix) {
+  const wantSettlement = settlementName ? `kw_s:${settlementName}` : undefined;
+  const wantRole = prefix ? `kw_r:${prefix}` : undefined;
+  try {
+    for (const tag of player.getTags()) {
+      if (tag.startsWith("kw_s:") && tag !== wantSettlement) player.removeTag(tag);
+      if (tag.startsWith("kw_r:") && tag !== wantRole) player.removeTag(tag);
+    }
+    if (wantSettlement && !player.hasTag(wantSettlement)) player.addTag(wantSettlement);
+    if (wantRole && !player.hasTag(wantRole)) player.addTag(wantRole);
+  } catch (_error) {
+    // Ignore tag sync failures; Prefixes can still try DPs / world store.
+  }
+}
+
+function syncIdentityProperties(player, settlementName, prefix) {
+  try {
+    const nextRole = prefix ?? "";
+    const nextSettlement = settlementName ?? "";
+    if (player.getDynamicProperty("kingdoms:role") !== nextRole) {
+      player.setDynamicProperty("kingdoms:role", nextRole);
+    }
+    if (player.getDynamicProperty("kingdoms:settlement") !== nextSettlement) {
+      player.setDynamicProperty("kingdoms:settlement", nextSettlement);
+    }
+  } catch (_error) {
+    // Older runtimes without player dynamic properties still get tags.
+  }
+}
+
 function updatePlayerPrefixDisplays(knownData) {
   const data = knownData ?? loadData();
   const onlineNames = new Set();
@@ -1091,6 +1129,10 @@ function updatePlayerPrefixDisplays(knownData) {
     playerIdByName.set(playerName, player.id);
 
     const prefix = playerDisplayPrefix(data, playerName);
+    const settlementName = playerSettlementName(data, playerName);
+    syncIdentityTags(player, settlementName, prefix);
+    syncIdentityProperties(player, settlementName, prefix);
+
     if (prefix) playerPrefixCache.set(playerName, prefix);
     else playerPrefixCache.delete(playerName);
 
@@ -1248,7 +1290,7 @@ function notifyPlayerAboutAddon(player) {
   if (loadedNoticeShown.has(playerName)) return;
   loadedNoticeShown.add(playerName);
 
-  player.sendMessage("§6[KW MenuFIX2] §fv1.2.6 — textField(label, ph, {defaultValue})");
+  player.sendMessage("§6[KW PrefixBridge] §fv1.2.7 — kw_s/kw_r tags for Prefixes Reloaded");
   player.sendMessage(`§7Флаг — сущность. Кликните предметом по блоку. Нужно ${CREATION_COST} изумрудов.`);
 }
 
