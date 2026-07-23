@@ -165,15 +165,27 @@ world.afterEvents.playerPlaceBlock?.subscribe((event) => {
 });
 
 world.afterEvents.playerInteractWithBlock?.subscribe((event) => {
+  if (event.block.typeId !== LEGACY_FLAG_BLOCK) return;
+  handleFlagInteraction(event.player, event.block);
+});
+
+// Строительство: отдельная подписка, не трогает установку флага.
+world.afterEvents.playerInteractWithBlock?.subscribe((event) => {
   const player = event.player;
+  if (!player) return;
   const playerName = getPlayerName(player);
   const pending = pendingBuildingPlacement.get(playerName);
-  if (pending) {
-    system.run(() => tryPlacePendingBuilding(player, event.block));
-    return;
+  if (!pending) return;
+
+  // Не перехватываем ПКМ, если в руке флаг поселения.
+  try {
+    const held = event.itemStack;
+    if (held?.typeId === FLAG_ITEM) return;
+  } catch (_error) {
+    // ignore
   }
-  if (event.block.typeId !== LEGACY_FLAG_BLOCK) return;
-  handleFlagInteraction(player, event.block);
+
+  system.run(() => tryPlacePendingBuilding(player, event.block));
 });
 
 function handleFlagInteraction(player, flagSource) {
@@ -398,8 +410,13 @@ async function runSettlementCreationFlow(player, context) {
     return;
   }
 
-  const form = new ModalFormData().title("Создание поселения");
-  addTextField(form, `Название поселения (${CREATION_COST} изумрудов)`, "Например: Новгород", `Поселение ${playerName}`);
+  const form = new ModalFormData()
+    .title("Создание поселения")
+    .textField({
+      label: `Название поселения (${CREATION_COST} изумрудов)`,
+      placeholder: "Например: Новгород",
+      defaultValue: `Поселение ${playerName}`
+    });
   const response = await showForm(player, form);
   if (response.canceled) {
     player.sendMessage("§7Создание поселения отменено.");
@@ -569,8 +586,13 @@ async function beginSettlementCreation(player, block) {
     return;
   }
 
-  const form = new ModalFormData().title("Создание поселения");
-  addTextField(form, `Название поселения (${CREATION_COST} изумрудов)`, "Например: Новгород", `Поселение ${playerName}`);
+  const form = new ModalFormData()
+    .title("Создание поселения")
+    .textField({
+      label: `Название поселения (${CREATION_COST} изумрудов)`,
+      placeholder: "Например: Новгород",
+      defaultValue: `Поселение ${playerName}`
+    });
   const response = await showForm(player, form);
   if (response.canceled) {
     removePlacedFlag(block, player);
@@ -831,7 +853,11 @@ async function openAllianceMenu(player, settlementId) {
 
   const nameResponse = await showForm(player, new ModalFormData()
     .title("Название альянса")
-    .textField("Название альянса", "Например: Северная корона", `${settlement.name} и ${target.name}`));
+    .textField({
+      label: "Название альянса",
+      placeholder: "Например: Северная корона",
+      defaultValue: `${settlement.name} и ${target.name}`
+    }));
   if (nameResponse.canceled) return;
 
   const name = cleanName(nameResponse.formValues?.[0]);
@@ -924,6 +950,7 @@ async function confirmDisband(player, settlementId) {
   disbandSettlement(data, settlement.id, "создатель расформировал государство");
   saveData(data);
 }
+
 
 async function openConstructionMenu(player, settlementId) {
   const data = loadData();
@@ -1101,7 +1128,6 @@ function tryPlacePendingBuilding(player, clickedBlock) {
 
   const placedCount = placeBuildingBlueprint(clickedBlock.dimension, origin, def.id);
   if (!placedCount) {
-    // refund best-effort
     for (const entry of def.cost || []) giveItems(player, entry.itemId, entry.amount);
     clearPendingBuilding(playerName, player, "§cНе удалось поставить блоки постройки. Материалы возвращены.");
     return;
@@ -1134,7 +1160,6 @@ function validateBuildingFootprint(data, settlement, origin, def) {
     }
   }
 
-  // Не ставим слишком близко к флагу (3 блока)
   const flag = settlement.flag;
   const centerX = origin.x + Math.floor(def.size.width / 2);
   const centerZ = origin.z + Math.floor(def.size.depth / 2);
@@ -1170,6 +1195,7 @@ function placeBuildingBlueprint(dimension, origin, buildingId) {
   }
   return placed;
 }
+
 
 function damageFlag(data, target, attackerSettlement, player) {
   const damage = Math.max(10, Math.ceil(settlementType(attackerSettlement).hp * 0.035));
@@ -1511,7 +1537,7 @@ function notifyPlayerAboutAddon(player) {
   if (loadedNoticeShown.has(playerName)) return;
   loadedNoticeShown.add(playerName);
 
-  player.sendMessage("§6[Королевства] §fАддон загружен (v1.4.0 CACHEBUST FLAGFIX).");
+  player.sendMessage("§6[Королевства] §fАддон загружен (v1.5.0 BUILDSAFE — флаг как 1.2.0 + строительство).");
   player.sendMessage(`§7Флаг — сущность. Кликните предметом по блоку. Нужно ${CREATION_COST} изумрудов.`);
 }
 
@@ -1736,19 +1762,6 @@ function shortText(value, maxLength) {
   const text = String(value ?? "").replace(/[\n\r§]/g, "").trim();
   if (text.length <= maxLength) return text;
   return `${text.slice(0, Math.max(0, maxLength - 3))}...`;
-}
-
-
-function addTextField(form, label, placeholder, defaultValue) {
-  try {
-    return form.textField(label, placeholder, defaultValue);
-  } catch (_error) {
-    try {
-      return form.textField(label, placeholder, { defaultValue });
-    } catch (_error2) {
-      return form.textField(label, placeholder);
-    }
-  }
 }
 
 async function showForm(player, form) {

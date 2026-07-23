@@ -1,12 +1,12 @@
 {
   "format_version": 2,
   "header": {
-    "name": "Kingdoms Wars FLAGFIX Resources",
-    "description": "v1.4.0 CACHEBUST FLAGFIX resources",
-    "uuid": "6f8b2d9a-14a0-4c49-8b60-905d90003d4e",
+    "name": "Kingdoms Wars BUILDSAFE Resources",
+    "description": "v1.5.0 BUILDSAFE resources",
+    "uuid": "b3369b1c-871c-4939-8cc7-53cef0aa298a",
     "version": [
       1,
-      4,
+      5,
       0
     ],
     "min_engine_version": [
@@ -18,10 +18,10 @@
   "modules": [
     {
       "type": "resources",
-      "uuid": "a4d6b2e1-38c9-4ba2-99ae-2a69f3adf4f5",
+      "uuid": "f644901c-ce1b-49f5-8e46-3ce43a502a6a",
       "version": [
         1,
-        4,
+        5,
         0
       ]
     }

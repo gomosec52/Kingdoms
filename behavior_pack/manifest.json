@@ -1,12 +1,12 @@
 {
   "format_version": 2,
   "header": {
-    "name": "Kingdoms Wars FLAGFIX",
-    "description": "v1.4.0 CACHEBUST FLAGFIX — construction + restored flag placer",
-    "uuid": "38e36956-0bd9-422c-9f45-2d74167b5dee",
+    "name": "Kingdoms Wars BUILDSAFE",
+    "description": "v1.5.0 BUILDSAFE — flag path from 1.2.0 + construction",
+    "uuid": "41ba933a-11b7-47db-83ae-eb0118f08d78",
     "version": [
       1,
-      4,
+      5,
       0
     ],
     "min_engine_version": [
@@ -18,31 +18,31 @@
   "modules": [
     {
       "type": "data",
-      "uuid": "b4a10ae4-7f84-44be-90bb-a03f894adc19",
+      "uuid": "e7a6f40f-4a2b-4c79-830a-c82db9b5fd91",
       "version": [
         1,
-        4,
+        5,
         0
       ]
     },
     {
       "type": "script",
       "language": "javascript",
-      "uuid": "c7734234-e73d-4f55-a8a6-1878cfd8e2a8",
+      "uuid": "6208ac20-bbce-4930-92ce-ca23db143985",
       "entry": "scripts/main.js",
       "version": [
         1,
-        4,
+        5,
         0
       ]
     }
   ],
   "dependencies": [
     {
-      "uuid": "6f8b2d9a-14a0-4c49-8b60-905d90003d4e",
+      "uuid": "b3369b1c-871c-4939-8cc7-53cef0aa298a",
       "version": [
         1,
-        4,
+        5,
         0
       ]
     },
