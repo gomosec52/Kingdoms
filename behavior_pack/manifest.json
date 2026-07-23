@@ -1,13 +1,13 @@
 {
   "format_version": 2,
   "header": {
-    "name": "KW PrefixBridge",
-    "description": "v1.2.7 PrefixBridge — restore kw_s/kw_r tags for Prefixes Reloaded",
-    "uuid": "035f3a70-c0ca-4f75-9390-380c2cc48fb2",
+    "name": "KW Build",
+    "description": "v1.3.0 Build — Строительство / Пекарня / Доп заработок",
+    "uuid": "bca6258c-80ea-4433-90c7-92368b1f15b7",
     "version": [
       1,
-      2,
-      7
+      3,
+      0
     ],
     "min_engine_version": [
       1,
@@ -18,32 +18,32 @@
   "modules": [
     {
       "type": "data",
-      "uuid": "8ba5e9b9-81f6-4540-aeea-bf2fb0cff42c",
+      "uuid": "45df4e96-3d53-4c75-8045-39cf80818ca5",
       "version": [
         1,
-        2,
-        7
+        3,
+        0
       ]
     },
     {
       "type": "script",
       "language": "javascript",
-      "uuid": "c7b5d7ed-3525-444a-bd11-0fe00c85d69b",
+      "uuid": "a96b0502-3f80-48e3-8e21-229fe874a76d",
       "entry": "scripts/main.js",
       "version": [
         1,
-        2,
-        7
+        3,
+        0
       ]
     }
   ],
   "dependencies": [
     {
-      "uuid": "e1e06988-bb7b-4948-8dc5-2dd632a6af47",
+      "uuid": "7cd4bd8b-0ee0-452d-a57f-3644fc654f28",
       "version": [
         1,
-        2,
-        7
+        3,
+        0
       ]
     },
     {

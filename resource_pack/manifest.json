@@ -1,13 +1,13 @@
 {
   "format_version": 2,
   "header": {
-    "name": "KW PrefixBridge Resources",
-    "description": "v1.2.7 PrefixBridge resources",
-    "uuid": "e1e06988-bb7b-4948-8dc5-2dd632a6af47",
+    "name": "KW Build Resources",
+    "description": "v1.3.0 Build resources",
+    "uuid": "7cd4bd8b-0ee0-452d-a57f-3644fc654f28",
     "version": [
       1,
-      2,
-      7
+      3,
+      0
     ],
     "min_engine_version": [
       1,
@@ -18,11 +18,11 @@
   "modules": [
     {
       "type": "resources",
-      "uuid": "a56995e5-a7b6-4835-b127-b97fb7cded31",
+      "uuid": "8818f00b-238d-4e36-b27a-ed230712e2e4",
       "version": [
         1,
-        2,
-        7
+        3,
+        0
       ]
     }
   ]
