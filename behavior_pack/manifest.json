@@ -1,13 +1,13 @@
 {
   "format_version": 2,
   "header": {
-    "name": "KW Flag PARSEFIX",
-    "description": "v1.2.4 PARSEFIX \u2014 menu_category namespace + recipe + icon",
-    "uuid": "cb12b765-f2aa-4a12-8c6d-390e7dfef9b0",
+    "name": "KW MenuFIX",
+    "description": "v1.2.5 MenuFIX — textField 3-arg for settlement create",
+    "uuid": "1913ac30-4fed-489f-8aba-28a0b7846f5f",
     "version": [
       1,
       2,
-      4
+      5
     ],
     "min_engine_version": [
       1,
@@ -18,32 +18,32 @@
   "modules": [
     {
       "type": "data",
-      "uuid": "a2bcebd7-9bb8-4f5f-a1e0-9000cd8d9afb",
+      "uuid": "e9b4e080-b559-46fa-bbb3-31d4de0416e0",
       "version": [
         1,
         2,
-        4
+        5
       ]
     },
     {
       "type": "script",
       "language": "javascript",
-      "uuid": "2c7b4958-8e26-4461-b6f8-83c249105120",
+      "uuid": "cc61c6db-f01d-4928-a86b-2080c78d2cf8",
       "entry": "scripts/main.js",
       "version": [
         1,
         2,
-        4
+        5
       ]
     }
   ],
   "dependencies": [
     {
-      "uuid": "23b68c0b-6599-4348-8427-7bcba4f0258d",
+      "uuid": "11a1a190-8292-4812-a1ec-2323d660849e",
       "version": [
         1,
         2,
-        4
+        5
       ]
     },
     {
