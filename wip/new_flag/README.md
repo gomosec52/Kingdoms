@@ -1,15 +1,15 @@
-# New kingdom flag (WIP)
+# Превью флага
 
-## Открой ЭТОТ файл в Blockbench
+## Как нормально посмотреть модель с текстурами
 
-**`kingdom_flag_atlas.bbmodel`**
+1. Скачай **flag_preview.zip**
+2. Распакуй
+3. Открой **preview.html** в браузере (Chrome/Edge)
 
-Внутри **одна** текстура `flag_atlas` (512×512) — шест, дерево, баннер и иконка уже собраны и привязаны по UV.
+Там модель со всеми текстурами + анимация ветра. Крутится мышью.
 
-Не открывай старый `kingdom_flag_textured.bbmodel` (там 6 текстур — в Bedrock Entity так не работает).
+## Blockbench
+`kingdom_flag_atlas.bbmodel` — одна atlas-текстура (приближённая сборка кубами).
+Точный вид смотри в `preview.html` (исходный glTF без потери материалов).
 
-Если нужен формат Bedrock Entity: `kingdom_flag_atlas_bedrock.bbmodel` (тоже одна atlas-текстура).
-
-## Прочее
-- `model_wind.gltf` — анимация ветра (для glTF viewer)
-- `textures/flag_atlas.png` — atlas отдельно
+Не конвертируй glTF в Bedrock Entity для просмотра — там ломаются несколько материалов.
