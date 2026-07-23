@@ -2,8 +2,8 @@
   "format_version": 2,
   "header": {
     "name": "KW Flag PARSEFIX",
-    "description": "v1.2.4 PARSEFIX \u2014 fixed menu_category group namespace + recipe + icon shortname",
-    "uuid": "13b680dc-b67d-4b74-9dbc-b60026cfb14d",
+    "description": "v1.2.4 PARSEFIX \u2014 menu_category namespace + recipe + icon",
+    "uuid": "cb12b765-f2aa-4a12-8c6d-390e7dfef9b0",
     "version": [
       1,
       2,
@@ -18,7 +18,7 @@
   "modules": [
     {
       "type": "data",
-      "uuid": "532f3cae-5f4a-473c-b14c-d0c6e8dcdad5",
+      "uuid": "a2bcebd7-9bb8-4f5f-a1e0-9000cd8d9afb",
       "version": [
         1,
         2,
@@ -28,7 +28,7 @@
     {
       "type": "script",
       "language": "javascript",
-      "uuid": "5ef186f1-ba6a-4ccd-92bb-e6c0e5b93746",
+      "uuid": "2c7b4958-8e26-4461-b6f8-83c249105120",
       "entry": "scripts/main.js",
       "version": [
         1,
@@ -39,7 +39,7 @@
   ],
   "dependencies": [
     {
-      "uuid": "7a695b4a-0dbd-4311-bd38-3f09689a72d1",
+      "uuid": "23b68c0b-6599-4348-8427-7bcba4f0258d",
       "version": [
         1,
         2,

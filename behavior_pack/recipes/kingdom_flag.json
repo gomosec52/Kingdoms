@@ -21,11 +21,6 @@
         "item": "minecraft:emerald"
       }
     },
-    "unlock": [
-      {
-        "context": "AlwaysUnlocked"
-      }
-    ],
     "result": {
       "item": "kingdoms:flag",
       "count": 1
