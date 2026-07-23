@@ -400,7 +400,11 @@ async function runSettlementCreationFlow(player, context) {
 
   const form = new ModalFormData()
     .title("Создание поселения")
-    .textField(`Название поселения (${CREATION_COST} изумрудов)`, "Например: Новгород", { defaultValue: `Поселение ${playerName}` });
+    .textField({
+      label: `Название поселения (${CREATION_COST} изумрудов)`,
+      placeholder: "Например: Новгород",
+      defaultValue: `Поселение ${playerName}`
+    });
   const response = await showForm(player, form);
   if (response.canceled) {
     player.sendMessage("§7Создание поселения отменено.");
@@ -572,7 +576,11 @@ async function beginSettlementCreation(player, block) {
 
   const form = new ModalFormData()
     .title("Создание поселения")
-    .textField(`Название поселения (${CREATION_COST} изумрудов)`, "Например: Новгород", { defaultValue: `Поселение ${playerName}` });
+    .textField({
+      label: `Название поселения (${CREATION_COST} изумрудов)`,
+      placeholder: "Например: Новгород",
+      defaultValue: `Поселение ${playerName}`
+    });
   const response = await showForm(player, form);
   if (response.canceled) {
     removePlacedFlag(block, player);
@@ -833,7 +841,11 @@ async function openAllianceMenu(player, settlementId) {
 
   const nameResponse = await showForm(player, new ModalFormData()
     .title("Название альянса")
-    .textField("Название альянса", "Например: Северная корона", { defaultValue: `${settlement.name} и ${target.name}` }));
+    .textField({
+      label: "Название альянса",
+      placeholder: "Например: Северная корона",
+      defaultValue: `${settlement.name} и ${target.name}`
+    }));
   if (nameResponse.canceled) return;
 
   const name = cleanName(nameResponse.formValues?.[0]);
@@ -1469,7 +1481,7 @@ function notifyPlayerAboutAddon(player) {
   if (loadedNoticeShown.has(playerName)) return;
   loadedNoticeShown.add(playerName);
 
-  player.sendMessage("§6[Королевства] §fАддон загружен (v1.5.4 ICONFIX).");
+  player.sendMessage("§6[Королевства] §fАддон загружен (v1.5.5 FLAGOK).");
   player.sendMessage(`§7Флаг — сущность. Кликните предметом по блоку. Нужно ${CREATION_COST} изумрудов.`);
 }
 

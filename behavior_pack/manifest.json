@@ -2,12 +2,12 @@
   "format_version": 2,
   "header": {
     "name": "Kingdoms Wars Behavior Pack",
-    "description": "v1.5.4 ICONFIX — flag item icon + construction",
+    "description": "v1.5.5 FLAGOK — icon fix + restore working textField from 1.2.0",
     "uuid": "7c61b36a-2ac2-4f52-b7fa-5cc8421f8c9f",
     "version": [
       1,
       5,
-      4
+      5
     ],
     "min_engine_version": [
       1,
@@ -22,7 +22,7 @@
       "version": [
         1,
         5,
-        4
+        5
       ]
     },
     {
@@ -33,7 +33,7 @@
       "version": [
         1,
         5,
-        4
+        5
       ]
     }
   ],
@@ -43,7 +43,7 @@
       "version": [
         1,
         5,
-        4
+        5
       ]
     },
     {
