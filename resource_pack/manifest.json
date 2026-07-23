@@ -2,12 +2,12 @@
   "format_version": 2,
   "header": {
     "name": "KW Build Resources",
-    "description": "v1.3.0 Build resources",
-    "uuid": "7cd4bd8b-0ee0-452d-a57f-3644fc654f28",
+    "description": "v1.3.1 Build resources",
+    "uuid": "fbf8c23e-7a2d-46ac-b396-649e07d69443",
     "version": [
       1,
       3,
-      0
+      1
     ],
     "min_engine_version": [
       1,
@@ -18,11 +18,11 @@
   "modules": [
     {
       "type": "resources",
-      "uuid": "8818f00b-238d-4e36-b27a-ed230712e2e4",
+      "uuid": "04033155-08de-472d-8059-fe8ccd7d645a",
       "version": [
         1,
         3,
-        0
+        1
       ]
     }
   ]

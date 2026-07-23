@@ -1131,7 +1131,7 @@ async function openBuildingDetails(player, settlementId, buildingId) {
     `Стоимость: ${costText}`,
     "",
     "Материалы списываются только после успешного размещения.",
-    "Поставьте любой блок на территории — здание появится над ним."
+    "Поставьте любой блок на территории — здание появится на этом месте (пол на уровне клика)."
   ].join("\n");
 
   const form = new ActionFormData()
@@ -1221,9 +1221,10 @@ function tryPlacePendingBuilding(player, clickedBlock) {
     return;
   }
 
+  // Origin Y = clicked block (no +1). All buildings must sit on the ground, not float.
   const origin = {
     x: Math.floor(clickedBlock.location.x) - Math.floor(def.size.width / 2),
-    y: Math.floor(clickedBlock.location.y) + 1,
+    y: Math.floor(clickedBlock.location.y),
     z: Math.floor(clickedBlock.location.z) - Math.floor(def.size.depth / 2)
   };
 
@@ -1693,7 +1694,7 @@ function notifyPlayerAboutAddon(player) {
   if (loadedNoticeShown.has(playerName)) return;
   loadedNoticeShown.add(playerName);
 
-  player.sendMessage("§6[KW Build] §fv1.3.0 — Строительство / Пекарня / Доп заработок");
+  player.sendMessage("§6[KW Build] §fv1.3.1 — пекарня на уровне земли (Y без +1)");
   player.sendMessage(`§7Флаг — сущность. Кликните предметом по блоку. Нужно ${CREATION_COST} изумрудов.`);
 }
 
