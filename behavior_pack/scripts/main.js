@@ -91,8 +91,6 @@ const PLAYER_PREFIX_LABEL_TAG = "kingdoms_player_prefix_label";
 const flagInteractionCooldown = new Map();
 const flagPlacementCooldown = new Map();
 const pendingPlacementLocks = new Set();
-const pendingBuildingPlacement = new Map();
-const BUILDING_PLACE_TIMEOUT_TICKS = 60 * 20;
 const playerPrefixCache = new Map();
 const playerIdByName = new Map();
 const chatPrefixNoticeShown = new Set();
@@ -100,11 +98,7 @@ const loadedNoticeShown = new Set();
 let directChatPrefixAvailable = false;
 let dynamicPropertiesRegistered = false;
 
-try {
-  bindFlagSystem(world);
-} catch (error) {
-  console.warn(`[Kingdoms] bindFlagSystem: ${error}`);
-}
+bindFlagSystem(world);
 setFlagPlacementHandler(beginSettlementCreationFromItem);
 setWildFlagSpawnHandler(handleWildFlagEntitySpawn);
 
@@ -156,19 +150,6 @@ world.afterEvents.playerLeave?.subscribe((event) => {
 world.afterEvents.playerPlaceBlock?.subscribe((event) => {
   if (event.block.typeId !== LEGACY_FLAG_BLOCK) return;
   system.run(() => beginSettlementCreation(event.player, event.block));
-});
-
-// Отдельный хук строительства: НЕ смешиваем с установкой флага.
-world.afterEvents.playerPlaceBlock?.subscribe((event) => {
-  try {
-    const player = event.player;
-    if (!player) return;
-    const playerName = getPlayerName(player);
-    if (!pendingBuildingPlacement.has(playerName)) return;
-    system.run(() => tryPlacePendingBuilding(player, event.block));
-  } catch (error) {
-    console.warn(`[Kingdoms] building place hook: ${error}`);
-  }
 });
 
 world.afterEvents.playerInteractWithBlock?.subscribe((event) => {
@@ -450,8 +431,7 @@ async function runSettlementCreationFlow(player, context) {
     allianceId: undefined,
     createdTick: system.currentTick,
     lastTaxTick: -TAX_COOLDOWN_TICKS,
-    lastMoraleDay: nowDay,
-    buildings: []
+    lastMoraleDay: nowDay
   };
 
   try {
@@ -618,8 +598,7 @@ async function beginSettlementCreation(player, block) {
     allianceId: undefined,
     createdTick: system.currentTick,
     lastTaxTick: -TAX_COOLDOWN_TICKS,
-    lastMoraleDay: nowDay,
-    buildings: []
+    lastMoraleDay: nowDay
   };
 
   data.settlements.push(settlement);
@@ -649,7 +628,6 @@ async function openSettlementMenu(player, settlementId) {
     .button("Создать альянс", "textures/ui/kingdoms/icon_alliance")
     .button("Объявить войну", "textures/ui/kingdoms/icon_war")
     .button("Налог", "textures/ui/kingdoms/icon_tax")
-    .button("Строительство", "textures/ui/kingdoms/icon_upgrade")
     .button("Расформировать", "textures/ui/kingdoms/icon_disband");
 
   const response = await showForm(player, form);
@@ -671,8 +649,6 @@ async function openSettlementMenu(player, settlementId) {
     case 6:
       return claimTax(player, settlementId);
     case 7:
-      return openConstructionMenu(player, settlementId);
-    case 8:
       return confirmDisband(player, settlementId);
     default:
       return undefined;
@@ -911,14 +887,11 @@ function claimTax(player, settlementId) {
     return;
   }
 
-  const amount = settlementType(settlement).tax + getExtraIncomeBonus(settlement);
+  const amount = settlementType(settlement).tax;
   giveEmeralds(player, amount);
   settlement.lastTaxTick = system.currentTick;
   saveData(data);
-  const extra = getExtraIncomeBonus(settlement);
-  player.sendMessage(extra > 0
-    ? `§aНалог собран: ${amount} изумруд(ов) §7(+${extra} постройки).`
-    : `§aНалог собран: ${amount} изумруд(ов).`);
+  player.sendMessage(`§aНалог собран: ${amount} изумруд(ов).`);
 }
 
 async function confirmDisband(player, settlementId) {
@@ -936,210 +909,6 @@ async function confirmDisband(player, settlementId) {
   disbandSettlement(data, settlement.id, "создатель расформировал государство");
   saveData(data);
 }
-
-
-const BUILDINGS = {
-  bakery: {
-    id: "bakery",
-    name: "Пекарня",
-    description: "Небольшая пекарня. Даёт +2 к налогу.",
-    taxBonus: 2,
-    maxPerSettlement: 1,
-    size: { width: 5, depth: 5, height: 4 },
-    cost: [
-      { itemId: "minecraft:emerald", amount: 10, label: "изумруды" },
-      { itemId: "minecraft:oak_log", amount: 24, label: "дубовые брёвна" },
-      { itemId: "minecraft:cobblestone", amount: 16, label: "булыжник" },
-      { itemId: "minecraft:oak_planks", amount: 20, label: "дубовые доски" },
-      { itemId: "minecraft:glass", amount: 4, label: "стекло" },
-      { itemId: "minecraft:wheat", amount: 8, label: "пшеница" }
-    ]
-  }
-};
-function getBuildingDef(id) { return BUILDINGS[id]; }
-function listBuildings() { return Object.values(BUILDINGS); }
-function formatBuildingCost(def) { return (def.cost || []).map((e) => e.amount + " " + e.label).join(", "); }
-function countBuildingsOfType(settlement, id) { return (settlement.buildings || []).filter((b) => b.type === id).length; }
-function getExtraIncomeBonus(settlement) {
-  let total = 0;
-  for (const b of settlement.buildings || []) {
-    const def = BUILDINGS[b.type];
-    if (def) total += Number(def.taxBonus || 0);
-  }
-  return total;
-}
-function formatExtraIncomeLine(settlement) {
-  const parts = [];
-  for (const b of settlement.buildings || []) {
-    const def = BUILDINGS[b.type];
-    if (def) parts.push(def.name + " (+" + def.taxBonus + ")");
-  }
-  return parts.length ? ("Доп заработок: " + parts.join(", ")) : "Доп заработок: нет";
-}
-function getBlueprint(buildingId) {
-  if (buildingId !== "bakery") return [];
-  const blocks = [];
-  const put = (x, y, z, typeId) => blocks.push({ x: x, y: y, z: z, typeId: typeId });
-  for (let x = 0; x < 5; x++) for (let z = 0; z < 5; z++) put(x, 0, z, "minecraft:oak_planks");
-  for (let x = 0; x < 5; x++) for (let z = 0; z < 5; z++) {
-    const edge = x === 0 || z === 0 || x === 4 || z === 4;
-    if (!edge || (z === 0 && x === 2)) continue;
-    put(x, 1, z, "minecraft:oak_log");
-  }
-  for (let x = 0; x < 5; x++) for (let z = 0; z < 5; z++) {
-    const edge = x === 0 || z === 0 || x === 4 || z === 4;
-    if (!edge || (z === 0 && x === 2)) continue;
-    put(x, 2, z, ((x === 0 || x === 4) && z === 2) ? "minecraft:glass" : "minecraft:cobblestone");
-  }
-  for (let x = 0; x < 5; x++) for (let z = 0; z < 5; z++) put(x, 3, z, "minecraft:oak_slab");
-  put(1, 1, 3, "minecraft:furnace");
-  put(3, 1, 3, "minecraft:smoker");
-  put(2, 1, 3, "minecraft:crafting_table");
-  put(1, 1, 1, "minecraft:barrel");
-  put(3, 1, 1, "minecraft:hay_block");
-  return blocks;
-}
-
-async function openConstructionMenu(player, settlementId) {
-  const data = loadData();
-  const settlement = getSettlement(data, settlementId);
-  if (!settlement || !requireOwner(player, settlement)) return;
-  const buildings = listBuildings();
-  const form = new ActionFormData()
-    .title(SETTLEMENT_MENU_TITLE)
-    .body(["Постройки дают бонус к налогу.", "После покупки поставьте любой блок на территории.", "", formatExtraIncomeLine(settlement)].join("\n"));
-  for (const def of buildings) {
-    const owned = countBuildingsOfType(settlement, def.id);
-    const limit = def.maxPerSettlement || 1;
-    const status = owned >= limit ? "есть" : ("+" + def.taxBonus);
-    form.button(def.name + " (" + status + ")", "textures/ui/kingdoms/icon_upgrade");
-  }
-  form.button("Отмена размещения", "textures/ui/kingdoms/icon_info");
-  form.button("Назад", "textures/ui/kingdoms/icon_disband");
-  const response = await showForm(player, form);
-  if (response.canceled) return;
-  if (response.selection === buildings.length) {
-    clearPendingBuilding(getPlayerName(player), player, "Режим размещения отменён.");
-    return openConstructionMenu(player, settlementId);
-  }
-  if (response.selection === buildings.length + 1) return openSettlementMenu(player, settlementId);
-  const selected = buildings[response.selection];
-  if (selected) return openBuildingDetails(player, settlementId, selected.id);
-}
-
-async function openBuildingDetails(player, settlementId, buildingId) {
-  const data = loadData();
-  const settlement = getSettlement(data, settlementId);
-  if (!settlement || !requireOwner(player, settlement)) return;
-  const def = getBuildingDef(buildingId);
-  if (!def) return;
-  const owned = countBuildingsOfType(settlement, buildingId);
-  const limit = def.maxPerSettlement || 1;
-  const form = new ActionFormData()
-    .title(SETTLEMENT_MENU_TITLE)
-    .body([def.name, def.description, "Бонус: +" + def.taxBonus, "Уже: " + owned + "/" + limit, "Стоимость: " + formatBuildingCost(def)].join("\n"))
-    .button(owned >= limit ? "Лимит" : "Купить и разместить", "textures/ui/kingdoms/icon_upgrade")
-    .button("Назад", "textures/ui/kingdoms/icon_disband");
-  const response = await showForm(player, form);
-  if (response.canceled) return;
-  if (response.selection !== 0) return openConstructionMenu(player, settlementId);
-  if (owned >= limit) {
-    player.sendMessage("Лимит постройки.");
-    return openConstructionMenu(player, settlementId);
-  }
-  const missing = [];
-  for (const entry of def.cost || []) {
-    const have = countItem(player, entry.itemId);
-    if (have < entry.amount) missing.push(entry.label + " (" + have + "/" + entry.amount + ")");
-  }
-  if (missing.length) {
-    player.sendMessage("Не хватает: " + missing.join(", "));
-    return openConstructionMenu(player, settlementId);
-  }
-  pendingBuildingPlacement.set(getPlayerName(player), { settlementId: settlementId, buildingId: buildingId, startedTick: system.currentTick });
-  player.sendMessage("Режим: " + def.name + ". Поставьте блок на территории (60 сек).");
-}
-
-function clearPendingBuilding(playerName, player, message) {
-  pendingBuildingPlacement.delete(playerName);
-  if (player && message) player.sendMessage(message);
-}
-
-function tryPlacePendingBuilding(player, clickedBlock) {
-  const playerName = getPlayerName(player);
-  const pending = pendingBuildingPlacement.get(playerName);
-  if (!pending) return;
-  if (system.currentTick - pending.startedTick > BUILDING_PLACE_TIMEOUT_TICKS) {
-    clearPendingBuilding(playerName, player, "Время размещения истекло.");
-    return;
-  }
-  const data = loadData();
-  const settlement = getSettlement(data, pending.settlementId);
-  const def = getBuildingDef(pending.buildingId);
-  if (!settlement || !def || !requireOwner(player, settlement)) {
-    clearPendingBuilding(playerName, player, "Размещение отменено.");
-    return;
-  }
-  if (countBuildingsOfType(settlement, def.id) >= (def.maxPerSettlement || 1)) {
-    clearPendingBuilding(playerName, player, "Лимит.");
-    return;
-  }
-  if (getDimensionId(clickedBlock.dimension) !== settlement.dimensionId) {
-    player.sendMessage("Не то измерение.");
-    return;
-  }
-  const origin = {
-    x: Math.floor(clickedBlock.location.x) - Math.floor(def.size.width / 2),
-    y: Math.floor(clickedBlock.location.y) + 1,
-    z: Math.floor(clickedBlock.location.z) - Math.floor(def.size.depth / 2)
-  };
-  for (let dx = 0; dx < def.size.width; dx++) {
-    for (let dz = 0; dz < def.size.depth; dz++) {
-      const at = findSettlementAt(data, { x: origin.x + dx, y: origin.y, z: origin.z + dz }, settlement.dimensionId);
-      if (!at || at.id !== settlement.id) {
-        player.sendMessage("Нужна площадка целиком на территории поселения.");
-        return;
-      }
-    }
-  }
-  if (Math.hypot(origin.x + 2 - settlement.flag.x, origin.z + 2 - settlement.flag.z) < 4) {
-    player.sendMessage("Слишком близко к флагу.");
-    return;
-  }
-  for (const entry of def.cost || []) {
-    if (countItem(player, entry.itemId) < entry.amount) {
-      clearPendingBuilding(playerName, player, "Не хватает материалов.");
-      return;
-    }
-  }
-  for (const entry of def.cost || []) {
-    if (!takeItem(player, entry.itemId, entry.amount)) {
-      clearPendingBuilding(playerName, player, "Ошибка списания.");
-      return;
-    }
-  }
-  let placed = 0;
-  for (const cell of getBlueprint(def.id)) {
-    try {
-      const block = clickedBlock.dimension.getBlock({ x: origin.x + cell.x, y: origin.y + cell.y, z: origin.z + cell.z });
-      if (!block || block.typeId === "minecraft:bedrock") continue;
-      try { block.setPermutation(BlockPermutation.resolve(cell.typeId)); }
-      catch (_e) { try { block.setType(cell.typeId); } catch (_e2) {} }
-      placed++;
-    } catch (_e3) {}
-  }
-  if (!placed) {
-    for (const entry of def.cost || []) giveItems(player, entry.itemId, entry.amount);
-    clearPendingBuilding(playerName, player, "Не удалось поставить. Материалы возвращены.");
-    return;
-  }
-  if (!Array.isArray(settlement.buildings)) settlement.buildings = [];
-  settlement.buildings.push({ type: def.id, x: origin.x, y: origin.y, z: origin.z, dimensionId: settlement.dimensionId, placedTick: system.currentTick });
-  saveData(data);
-  clearPendingBuilding(playerName, player);
-  player.sendMessage(def.name + " построена! +" + def.taxBonus + " к налогу.");
-}
-
 
 function damageFlag(data, target, attackerSettlement, player) {
   const damage = Math.max(10, Math.ceil(settlementType(attackerSettlement).hp * 0.035));
@@ -1301,8 +1070,6 @@ function settlementInfo(data, settlement) {
     `Жители: ${getPopulation(settlement)}`,
     `Радиус: ${getTerritoryRadius(settlement)}`,
     `Налог: ${type.tax} эм./25м`,
-    formatExtraIncomeLine(settlement),
-    `Итого налог: ${type.tax + getExtraIncomeBonus(settlement)} эм.`,
     `Создание: ${CREATION_COST} эм.`,
     `Улучш.: ${nextType ? `${nextType.upgradeCost} эм.` : "нет"}`,
     `Альянс: ${alliance ? shortText(alliance.name, 15) : "нет"}`,
@@ -1481,7 +1248,7 @@ function notifyPlayerAboutAddon(player) {
   if (loadedNoticeShown.has(playerName)) return;
   loadedNoticeShown.add(playerName);
 
-  player.sendMessage("§6[Королевства] §fАддон загружен (v1.5.5 FLAGOK).");
+  player.sendMessage("§6[Королевства] §fАддон загружен (v1.2.2 ONLYICON — без строительства).");
   player.sendMessage(`§7Флаг — сущность. Кликните предметом по блоку. Нужно ${CREATION_COST} изумрудов.`);
 }
 
@@ -1521,7 +1288,6 @@ function loadData() {
     for (const settlement of data.settlements) {
       if (!settlement.members) settlement.members = {};
       if (!Array.isArray(settlement.wars)) settlement.wars = [];
-      if (!Array.isArray(settlement.buildings)) settlement.buildings = [];
       if (typeof settlement.morale !== "number") settlement.morale = 75;
       if (typeof settlement.territoryBonus !== "number") settlement.territoryBonus = 0;
     }
@@ -1869,11 +1635,7 @@ function settlementTag(id) {
 }
 
 function getPlayerName(player) {
-  try {
-    return player?.name ?? "unknown";
-  } catch (_error) {
-    return "unknown";
-  }
+  return player.name;
 }
 
 function getCurrentDay() {

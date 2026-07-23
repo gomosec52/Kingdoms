@@ -2,12 +2,12 @@
   "format_version": 2,
   "header": {
     "name": "Kingdoms Wars Behavior Pack",
-    "description": "v1.5.5 FLAGOK — icon fix + restore working textField from 1.2.0",
+    "description": "v1.2.2 ONLYICON — exact working flag pack + icon fix, NO construction",
     "uuid": "7c61b36a-2ac2-4f52-b7fa-5cc8421f8c9f",
     "version": [
       1,
-      5,
-      5
+      2,
+      2
     ],
     "min_engine_version": [
       1,
@@ -21,8 +21,8 @@
       "uuid": "a5129a9d-2480-4adc-b3fd-1538cb589a46",
       "version": [
         1,
-        5,
-        5
+        2,
+        2
       ]
     },
     {
@@ -32,8 +32,8 @@
       "entry": "scripts/main.js",
       "version": [
         1,
-        5,
-        5
+        2,
+        2
       ]
     }
   ],
@@ -42,8 +42,8 @@
       "uuid": "e8d3a9ca-729a-43a1-b769-1f772a8708d1",
       "version": [
         1,
-        5,
-        5
+        2,
+        2
       ]
     },
     {

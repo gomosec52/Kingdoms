@@ -2,12 +2,12 @@
   "format_version": 2,
   "header": {
     "name": "Kingdoms Wars Resource Pack",
-    "description": "v1.5.5 FLAGOK resources",
+    "description": "v1.2.2 ONLYICON resources",
     "uuid": "e8d3a9ca-729a-43a1-b769-1f772a8708d1",
     "version": [
       1,
-      5,
-      5
+      2,
+      2
     ],
     "min_engine_version": [
       1,
@@ -21,8 +21,8 @@
       "uuid": "6a3b1a63-96db-40d3-a4ce-29fb9c8b98e9",
       "version": [
         1,
-        5,
-        5
+        2,
+        2
       ]
     }
   ]
