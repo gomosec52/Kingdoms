@@ -384,7 +384,7 @@ async function runSettlementCreationFlow(player, context) {
     .textField(
       `Название поселения (${CREATION_COST} изумрудов)`,
       "Например: Новгород",
-      `Поселение ${playerName}`
+      { defaultValue: `Поселение ${playerName}` }
     );
   const response = await showForm(player, form);
   if (response.canceled) {
@@ -559,7 +559,7 @@ async function beginSettlementCreation(player, block) {
     .textField(
       `Название поселения (${CREATION_COST} изумрудов)`,
       "Например: Новгород",
-      `Поселение ${playerName}`
+      { defaultValue: `Поселение ${playerName}` }
     );
   const response = await showForm(player, form);
   if (response.canceled) {
@@ -820,7 +820,7 @@ async function openAllianceMenu(player, settlementId) {
     .textField(
       "Название альянса",
       "Например: Северная корона",
-      `${settlement.name} и ${target.name}`
+      { defaultValue: `${settlement.name} и ${target.name}` }
     ));
   if (nameResponse.canceled) return;
 
@@ -1248,7 +1248,7 @@ function notifyPlayerAboutAddon(player) {
   if (loadedNoticeShown.has(playerName)) return;
   loadedNoticeShown.add(playerName);
 
-  player.sendMessage("§6[KW MenuFIX] §fv1.2.5 — textField 3-arg, меню создания");
+  player.sendMessage("§6[KW MenuFIX2] §fv1.2.6 — textField(label, ph, {defaultValue})");
   player.sendMessage(`§7Флаг — сущность. Кликните предметом по блоку. Нужно ${CREATION_COST} изумрудов.`);
 }
 

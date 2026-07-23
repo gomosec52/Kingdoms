@@ -1,13 +1,13 @@
 {
   "format_version": 2,
   "header": {
-    "name": "KW MenuFIX",
-    "description": "v1.2.5 MenuFIX — textField 3-arg for settlement create",
-    "uuid": "1913ac30-4fed-489f-8aba-28a0b7846f5f",
+    "name": "KW MenuFIX2",
+    "description": "v1.2.6 MenuFIX2 — textField(label, ph, {defaultValue})",
+    "uuid": "a2dab748-eb58-4290-b109-956088907b89",
     "version": [
       1,
       2,
-      5
+      6
     ],
     "min_engine_version": [
       1,
@@ -18,32 +18,32 @@
   "modules": [
     {
       "type": "data",
-      "uuid": "e9b4e080-b559-46fa-bbb3-31d4de0416e0",
+      "uuid": "66e547dc-22b5-49c2-ade5-21138d0f06c8",
       "version": [
         1,
         2,
-        5
+        6
       ]
     },
     {
       "type": "script",
       "language": "javascript",
-      "uuid": "cc61c6db-f01d-4928-a86b-2080c78d2cf8",
+      "uuid": "7a5cc232-c4bc-47f4-a7a2-2d9a198d012b",
       "entry": "scripts/main.js",
       "version": [
         1,
         2,
-        5
+        6
       ]
     }
   ],
   "dependencies": [
     {
-      "uuid": "11a1a190-8292-4812-a1ec-2323d660849e",
+      "uuid": "21f63700-c4d9-4219-846e-c5dc48db82d9",
       "version": [
         1,
         2,
-        5
+        6
       ]
     },
     {
