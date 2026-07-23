@@ -1525,7 +1525,7 @@ function notifyPlayerAboutAddon(player) {
   if (loadedNoticeShown.has(playerName)) return;
   loadedNoticeShown.add(playerName);
 
-  player.sendMessage("§6[Королевства] §fАддон загружен (v1.3.0 — Строительство).");
+  player.sendMessage("§6[Королевства] §fАддон загружен (v1.3.0 FRESH UUID — Строительство).");
   player.sendMessage(`§7Флаг — сущность. Кликните предметом по блоку. Нужно ${CREATION_COST} изумрудов.`);
 }
 
