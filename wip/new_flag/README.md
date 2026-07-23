@@ -1,22 +1,15 @@
-# New kingdom flag model (WIP — not integrated into the pack)
+# New kingdom flag (WIP)
 
-## Open this in Blockbench (all textures already applied)
+## Открой ЭТОТ файл в Blockbench
 
-**File → Open → `kingdom_flag_textured.bbmodel`**
+**`kingdom_flag_atlas.bbmodel`**
 
-This is a Free Model with 6 named textures already assigned to the right parts:
-- `pole_wood` → sticks
-- `crossbar_wood` → wooden bar
-- `banner_upper` / `banner_middle` / `banner_lower` → cloth
-- `banner_icon` → emblem
+Внутри **одна** текстура `flag_atlas` (512×512) — шест, дерево, баннер и иконка уже собраны и привязаны по UV.
 
-No manual “apply texture” needed.
+Не открывай старый `kingdom_flag_textured.bbmodel` (там 6 текстур — в Bedrock Entity так не работает).
 
-## Other files
-- `model.gltf` / `model_wind.gltf` — original glTF (+ wind animation)
-- `model_textured.gltf` — same glTF with renamed materials
-- `textures/*.png` — exported PNGs
-- `BLOCKBENCH_TEXTURES.md` — old manual assign notes
+Если нужен формат Bedrock Entity: `kingdom_flag_atlas_bedrock.bbmodel` (тоже одна atlas-текстура).
 
-## Integration
-Not wired into Kingdoms resource/behavior packs yet.
+## Прочее
+- `model_wind.gltf` — анимация ветра (для glTF viewer)
+- `textures/flag_atlas.png` — atlas отдельно

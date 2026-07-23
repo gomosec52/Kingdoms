@@ -1,0 +1,3 @@
+Открой: kingdom_flag_atlas.bbmodel
+Одна текстура flag_atlas — все части уже с UV.
+Для Bedrock Entity: kingdom_flag_atlas_bedrock.bbmodel
