@@ -2,12 +2,12 @@
   "format_version": 2,
   "header": {
     "name": "Kingdoms Wars Reloaded Resources",
-    "description": "UI + icons including Construction. v1.3.0 FRESH UUID",
-    "uuid": "b3047d87-0143-4005-a83b-6fa7c66c9848",
+    "description": "UI + icons including Construction. v1.3.1 FRESH UUID",
+    "uuid": "a91b5890-c7c8-4c7a-a21f-09eb133b6405",
     "version": [
       1,
       3,
-      0
+      1
     ],
     "min_engine_version": [
       1,
@@ -18,11 +18,11 @@
   "modules": [
     {
       "type": "resources",
-      "uuid": "8f00071e-44b3-4088-970c-6db2c698539c",
+      "uuid": "88292cb8-eeb1-42da-9e96-d17568892469",
       "version": [
         1,
         3,
-        0
+        1
       ]
     }
   ]
