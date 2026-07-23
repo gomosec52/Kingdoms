@@ -1,0 +1,43 @@
+{
+  "note": "see model_wind.gltf for full file; this is animation metadata only",
+  "animation": "banner_wind",
+  "duration_sec": 2.4,
+  "channels": [
+    {
+      "node": "Banner",
+      "path": "rotation",
+      "sampler": 0
+    },
+    {
+      "node": "Top of Banner",
+      "path": "rotation",
+      "sampler": 1
+    },
+    {
+      "node": "Middle part of the Banner ",
+      "path": "rotation",
+      "sampler": 2
+    },
+    {
+      "node": "Middle part of the Banner ",
+      "path": "translation",
+      "sampler": 3
+    },
+    {
+      "node": "Bottom of the Banner ",
+      "path": "rotation",
+      "sampler": 4
+    },
+    {
+      "node": "Bottom of the Banner ",
+      "path": "translation",
+      "sampler": 5
+    }
+  ],
+  "hierarchy_banner": {
+    "Banner": "Banner",
+    "Top": "Top of Banner",
+    "Middle": "Middle part of the Banner ",
+    "Bottom": "Bottom of the Banner "
+  }
+}
