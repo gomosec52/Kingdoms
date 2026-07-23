@@ -1,13 +1,13 @@
 {
   "format_version": 2,
   "header": {
-    "name": "Kingdoms Wars BUILDSAFE Resources",
-    "description": "v1.5.0 BUILDSAFE resources",
-    "uuid": "b3369b1c-871c-4939-8cc7-53cef0aa298a",
+    "name": "Kingdoms Wars NOIMPORT Resources",
+    "description": "v1.5.1 NOIMPORT resources",
+    "uuid": "6ad157b7-5794-4fb8-9eec-add0332554ef",
     "version": [
       1,
       5,
-      0
+      1
     ],
     "min_engine_version": [
       1,
@@ -18,11 +18,11 @@
   "modules": [
     {
       "type": "resources",
-      "uuid": "f644901c-ce1b-49f5-8e46-3ce43a502a6a",
+      "uuid": "b4a49507-bac8-4c7c-b6f1-9c20dce88dec",
       "version": [
         1,
         5,
-        0
+        1
       ]
     }
   ]

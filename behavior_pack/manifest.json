@@ -1,13 +1,13 @@
 {
   "format_version": 2,
   "header": {
-    "name": "Kingdoms Wars BUILDSAFE",
-    "description": "v1.5.0 BUILDSAFE — flag path from 1.2.0 + construction",
-    "uuid": "41ba933a-11b7-47db-83ae-eb0118f08d78",
+    "name": "Kingdoms Wars NOIMPORT",
+    "description": "v1.5.1 NOIMPORT — construction inlined, flag untouched",
+    "uuid": "8014bbbc-f104-4191-bce2-470397573bed",
     "version": [
       1,
       5,
-      0
+      1
     ],
     "min_engine_version": [
       1,
@@ -18,32 +18,32 @@
   "modules": [
     {
       "type": "data",
-      "uuid": "e7a6f40f-4a2b-4c79-830a-c82db9b5fd91",
+      "uuid": "d759feac-4bd1-4c4e-817f-d31124e0d6eb",
       "version": [
         1,
         5,
-        0
+        1
       ]
     },
     {
       "type": "script",
       "language": "javascript",
-      "uuid": "6208ac20-bbce-4930-92ce-ca23db143985",
+      "uuid": "d615ed51-5c4e-4055-a3e9-ba41d15f866d",
       "entry": "scripts/main.js",
       "version": [
         1,
         5,
-        0
+        1
       ]
     }
   ],
   "dependencies": [
     {
-      "uuid": "b3369b1c-871c-4939-8cc7-53cef0aa298a",
+      "uuid": "6ad157b7-5794-4fb8-9eec-add0332554ef",
       "version": [
         1,
         5,
-        0
+        1
       ]
     },
     {

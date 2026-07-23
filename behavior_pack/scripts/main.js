@@ -8,15 +8,6 @@ import {
   PENDING_SETUP_TAG
 } from "./constants.js";
 import { bindFlagSystem, setFlagPlacementHandler, setWildFlagSpawnHandler } from "./flag.js";
-import {
-  countBuildingsOfType,
-  formatBuildingCost,
-  formatExtraIncomeLine,
-  getBlueprint,
-  getBuildingDef,
-  getExtraIncomeBonus,
-  listBuildings
-} from "./buildings.js";
 
 const { BlockPermutation, ItemStack, system, world } = server;
 const STORE_KEY = "kingdoms:data:v1";
@@ -169,25 +160,6 @@ world.afterEvents.playerInteractWithBlock?.subscribe((event) => {
   handleFlagInteraction(event.player, event.block);
 });
 
-// Строительство: отдельная подписка, не трогает установку флага.
-world.afterEvents.playerInteractWithBlock?.subscribe((event) => {
-  const player = event.player;
-  if (!player) return;
-  const playerName = getPlayerName(player);
-  const pending = pendingBuildingPlacement.get(playerName);
-  if (!pending) return;
-
-  // Не перехватываем ПКМ, если в руке флаг поселения.
-  try {
-    const held = event.itemStack;
-    if (held?.typeId === FLAG_ITEM) return;
-  } catch (_error) {
-    // ignore
-  }
-
-  system.run(() => tryPlacePendingBuilding(player, event.block));
-});
-
 function handleFlagInteraction(player, flagSource) {
   const cooldownKey = `${getPlayerName(player)}:${getDimensionId(flagSource.dimension)}:${Math.floor(flagSource.location.x)}:${Math.floor(flagSource.location.y)}:${Math.floor(flagSource.location.z)}`;
   const lastInteractionTick = flagInteractionCooldown.get(cooldownKey) ?? -20;
@@ -248,6 +220,16 @@ world.beforeEvents.playerBreakBlock?.subscribe((event) => {
 world.beforeEvents.playerPlaceBlock?.subscribe((event) => {
   const data = loadData();
   const playerName = getPlayerName(event.player);
+
+  // Режим строительства: перехватываем обычную постановку блока (флаг сюда не проходит).
+  if (pendingBuildingPlacement.has(playerName)) {
+    event.cancel = true;
+    const block = event.block;
+    const player = event.player;
+    system.run(() => tryPlacePendingBuilding(player, block));
+    return;
+  }
+
   const lootZone = findLootZoneAt(data, event.block.location, getDimensionId(event.block.dimension));
   if (lootZone && !hasLootAccess(data, lootZone, playerName)) {
     event.cancel = true;
@@ -952,6 +934,142 @@ async function confirmDisband(player, settlementId) {
 }
 
 
+/**
+ * Каталог построек поселения.
+ * cost — материалы на покупку/размещение.
+ * taxBonus — добавка к налогу каждые 25 мин.
+ * footprint — размер площадки (ширина x глубина), высота по схеме.
+ */
+
+const BUILDINGS = {
+  bakery: {
+    id: "bakery",
+    name: "Пекарня",
+    description: "Небольшая пекарня. Даёт скромный бонус к налогу поселения.",
+    taxBonus: 2,
+    maxPerSettlement: 1,
+    /** Ширина (X) и глубина (Z) относительно точки клика. */
+    size: { width: 5, depth: 5, height: 4 },
+    cost: [
+      { itemId: "minecraft:emerald", amount: 10, label: "изумруды" },
+      { itemId: "minecraft:oak_log", amount: 24, label: "дубовые брёвна" },
+      { itemId: "minecraft:cobblestone", amount: 16, label: "булыжник" },
+      { itemId: "minecraft:oak_planks", amount: 20, label: "дубовые доски" },
+      { itemId: "minecraft:glass", amount: 4, label: "стекло" },
+      { itemId: "minecraft:wheat", amount: 8, label: "пшеница" }
+    ]
+  }
+};
+
+function getBuildingDef(buildingId) {
+  return BUILDINGS[buildingId];
+}
+
+function listBuildings() {
+  return Object.values(BUILDINGS);
+}
+
+function formatBuildingCost(def) {
+  return (def.cost || [])
+    .map((entry) => `${entry.amount} ${entry.label}`)
+    .join(", ");
+}
+
+function countBuildingsOfType(settlement, buildingId) {
+  return (settlement.buildings || []).filter((b) => b.type === buildingId).length;
+}
+
+function getExtraIncomeBonus(settlement) {
+  let total = 0;
+  for (const placed of settlement.buildings || []) {
+    const def = BUILDINGS[placed.type];
+    if (def) total += Number(def.taxBonus || 0);
+  }
+  return total;
+}
+
+function formatExtraIncomeLine(settlement) {
+  const buildings = settlement.buildings || [];
+  if (!buildings.length) return "Доп заработок: нет";
+
+  const parts = [];
+  for (const placed of buildings) {
+    const def = BUILDINGS[placed.type];
+    if (!def) continue;
+    parts.push(`${def.name} (+${def.taxBonus})`);
+  }
+  if (!parts.length) return "Доп заработок: нет";
+  return `Доп заработок: ${parts.join(", ")}`;
+}
+
+/**
+ * Схема пекарни: локальные координаты относительно угла (0,0,0).
+ * y = 0 — пол.
+ */
+function getBakeryBlueprint() {
+  const blocks = [];
+  const W = 5;
+  const D = 5;
+
+  const put = (x, y, z, typeId) => {
+    blocks.push({ x, y, z, typeId });
+  };
+
+  // Пол
+  for (let x = 0; x < W; x += 1) {
+    for (let z = 0; z < D; z += 1) {
+      put(x, 0, z, "minecraft:oak_planks");
+    }
+  }
+
+  // Стены 1 уровня
+  for (let x = 0; x < W; x += 1) {
+    for (let z = 0; z < D; z += 1) {
+      const edge = x === 0 || z === 0 || x === W - 1 || z === D - 1;
+      if (!edge) continue;
+      // Дверной проём спереди по центру
+      if (z === 0 && x === 2) continue;
+      put(x, 1, z, "minecraft:oak_log");
+    }
+  }
+
+  // Окна / второй уровень стен
+  for (let x = 0; x < W; x += 1) {
+    for (let z = 0; z < D; z += 1) {
+      const edge = x === 0 || z === 0 || x === W - 1 || z === D - 1;
+      if (!edge) continue;
+      if (z === 0 && x === 2) continue;
+      if ((x === 0 || x === W - 1) && z === 2) {
+        put(x, 2, z, "minecraft:glass");
+      } else {
+        put(x, 2, z, "minecraft:cobblestone");
+      }
+    }
+  }
+
+  // Крыша (плиты — без ориентации)
+  for (let x = 0; x < W; x += 1) {
+    for (let z = 0; z < D; z += 1) {
+      put(x, 3, z, "minecraft:oak_slab");
+    }
+  }
+
+  // Интерьер
+  put(1, 1, 3, "minecraft:furnace");
+  put(3, 1, 3, "minecraft:smoker");
+  put(2, 1, 3, "minecraft:crafting_table");
+  put(1, 1, 1, "minecraft:barrel");
+  put(3, 1, 1, "minecraft:hay_block");
+
+  return blocks;
+}
+
+function getBlueprint(buildingId) {
+  if (buildingId === "bakery") return getBakeryBlueprint();
+  return [];
+}
+
+
 async function openConstructionMenu(player, settlementId) {
   const data = loadData();
   const settlement = getSettlement(data, settlementId);
@@ -960,7 +1078,7 @@ async function openConstructionMenu(player, settlementId) {
   const buildings = listBuildings();
   const lines = [
     "Покупайте постройки для доп. заработка к налогу.",
-    "После покупки кликните по блоку на СВОЕЙ территории, чтобы разместить здание.",
+    "После покупки ПОСТАВЬ любой блок на своей территории — на его месте появится здание.",
     "",
     formatExtraIncomeLine(settlement)
   ];
@@ -1013,7 +1131,8 @@ async function openBuildingDetails(player, settlementId, buildingId) {
     `Уже построено: ${owned}/${limit}`,
     `Стоимость: ${costText}`,
     "",
-    "Материалы списываются только после успешного размещения."
+    "Материалы списываются только после успешного размещения.",
+    "Поставьте любой блок на территории — здание появится над ним."
   ].join("\n");
 
   const form = new ActionFormData()
@@ -1042,8 +1161,8 @@ async function openBuildingDetails(player, settlementId, buildingId) {
     startedTick: system.currentTick
   });
   player.sendMessage(`§aРежим размещения: §f${def.name}`);
-  player.sendMessage("§7ПКМ по блоку на территории этого поселения. Действует 60 сек.");
-  player.sendMessage("§8Отмена — меню флага → Строительство → Отмена размещения.");
+  player.sendMessage("§7Поставьте любой блок на территории поселения (60 сек).");
+  player.sendMessage("§8Отмена — Строительство → Отмена размещения.");
 }
 
 function getMissingBuildingCost(player, def) {
@@ -1165,7 +1284,6 @@ function validateBuildingFootprint(data, settlement, origin, def) {
   const centerZ = origin.z + Math.floor(def.size.depth / 2);
   const dist = Math.hypot(centerX - flag.x, centerZ - flag.z);
   if (dist < 4) return "Слишком близко к флагу. Отойдите минимум на 4 блока.";
-
   return undefined;
 }
 
@@ -1186,12 +1304,10 @@ function placeBuildingBlueprint(dimension, origin, buildingId) {
       try {
         block.setPermutation(BlockPermutation.resolve(cell.typeId));
       } catch (_permError) {
-        block.setType(cell.typeId);
+        try { block.setType(cell.typeId); } catch (_e2) {}
       }
       placed += 1;
-    } catch (_error) {
-      // skip failed cells
-    }
+    } catch (_error) {}
   }
   return placed;
 }
@@ -1537,7 +1653,7 @@ function notifyPlayerAboutAddon(player) {
   if (loadedNoticeShown.has(playerName)) return;
   loadedNoticeShown.add(playerName);
 
-  player.sendMessage("§6[Королевства] §fАддон загружен (v1.5.0 BUILDSAFE — флаг как 1.2.0 + строительство).");
+  player.sendMessage("§6[Королевства] §fАддон загружен (v1.5.1 NOIMPORT — строительство без buildings.js).");
   player.sendMessage(`§7Флаг — сущность. Кликните предметом по блоку. Нужно ${CREATION_COST} изумрудов.`);
 }
 
