@@ -1,13 +1,13 @@
 {
   "format_version": 2,
   "header": {
-    "name": "Kingdoms Wars Resource Pack",
-    "description": "v1.2.2 ONLYICON resources",
-    "uuid": "e8d3a9ca-729a-43a1-b769-1f772a8708d1",
+    "name": "KW Clean Flag Resources",
+    "description": "v1.2.3 CLEAN resources",
+    "uuid": "14ad5554-5520-4ebe-a0cc-cb646eebb9de",
     "version": [
       1,
       2,
-      2
+      3
     ],
     "min_engine_version": [
       1,
@@ -18,11 +18,11 @@
   "modules": [
     {
       "type": "resources",
-      "uuid": "6a3b1a63-96db-40d3-a4ce-29fb9c8b98e9",
+      "uuid": "be1b3fbb-9dea-43c9-95a6-7c84c0af139d",
       "version": [
         1,
         2,
-        2
+        3
       ]
     }
   ]

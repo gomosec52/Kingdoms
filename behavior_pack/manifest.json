@@ -1,13 +1,13 @@
 {
   "format_version": 2,
   "header": {
-    "name": "Kingdoms Wars Behavior Pack",
-    "description": "v1.2.2 ONLYICON — exact working flag pack + icon fix, NO construction",
-    "uuid": "7c61b36a-2ac2-4f52-b7fa-5cc8421f8c9f",
+    "name": "KW Clean Flag",
+    "description": "v1.2.3 CLEAN \u2014 exact working 1.2.1, fresh UUID, no construction",
+    "uuid": "5a6595b3-0c1b-4897-94b9-4de105574413",
     "version": [
       1,
       2,
-      2
+      3
     ],
     "min_engine_version": [
       1,
@@ -18,32 +18,32 @@
   "modules": [
     {
       "type": "data",
-      "uuid": "a5129a9d-2480-4adc-b3fd-1538cb589a46",
+      "uuid": "a99ae3a5-4842-4667-95c8-59ebf72e4c7a",
       "version": [
         1,
         2,
-        2
+        3
       ]
     },
     {
       "type": "script",
       "language": "javascript",
-      "uuid": "e11f5421-eef6-47cf-85cf-99c4bc723df8",
+      "uuid": "3c17e942-695e-4afb-9c11-3921c6a59f9d",
       "entry": "scripts/main.js",
       "version": [
         1,
         2,
-        2
+        3
       ]
     }
   ],
   "dependencies": [
     {
-      "uuid": "e8d3a9ca-729a-43a1-b769-1f772a8708d1",
+      "uuid": "14ad5554-5520-4ebe-a0cc-cb646eebb9de",
       "version": [
         1,
         2,
-        2
+        3
       ]
     },
     {

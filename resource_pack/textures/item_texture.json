@@ -2,10 +2,10 @@
   "resource_pack_name": "kingdoms_wars",
   "texture_name": "atlas.items",
   "texture_data": {
-    "kingdoms_flag_item": {
+    "kingdoms:flag_item": {
       "textures": "textures/items/kingdom_flag"
     },
-    "kingdoms:flag_item": {
+    "kingdoms_flag_item": {
       "textures": "textures/items/kingdom_flag"
     }
   }
