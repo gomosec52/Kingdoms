@@ -2,12 +2,12 @@
   "format_version": 2,
   "header": {
     "name": "Kingdoms Wars Behavior Pack",
-    "description": "v1.5.3 CODEFIX — fixed textField + construction",
+    "description": "v1.5.4 ICONFIX — flag item icon + construction",
     "uuid": "7c61b36a-2ac2-4f52-b7fa-5cc8421f8c9f",
     "version": [
       1,
       5,
-      3
+      4
     ],
     "min_engine_version": [
       1,
@@ -22,7 +22,7 @@
       "version": [
         1,
         5,
-        3
+        4
       ]
     },
     {
@@ -33,7 +33,7 @@
       "version": [
         1,
         5,
-        3
+        4
       ]
     }
   ],
@@ -43,7 +43,7 @@
       "version": [
         1,
         5,
-        3
+        4
       ]
     },
     {
