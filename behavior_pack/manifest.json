@@ -2,12 +2,12 @@
   "format_version": 2,
   "header": {
     "name": "KW Build",
-    "description": "v1.3.1 Build — building Y at click level (no float)",
-    "uuid": "55796c38-dbeb-411c-aa6d-3475898032cb",
+    "description": "v1.3.2 — button textures fill full size",
+    "uuid": "49723571-10a5-4ac1-a81b-5becf8029638",
     "version": [
       1,
       3,
-      1
+      2
     ],
     "min_engine_version": [
       1,
@@ -18,32 +18,32 @@
   "modules": [
     {
       "type": "data",
-      "uuid": "2271780e-08f1-41e0-8759-cea53142c087",
+      "uuid": "52608b20-48e0-4a1f-893e-dd3267b0f116",
       "version": [
         1,
         3,
-        1
+        2
       ]
     },
     {
       "type": "script",
       "language": "javascript",
-      "uuid": "397bf194-5f14-4fe5-9251-4240135655fd",
+      "uuid": "b64e2f93-51c8-491c-bd9d-0012459a5a31",
       "entry": "scripts/main.js",
       "version": [
         1,
         3,
-        1
+        2
       ]
     }
   ],
   "dependencies": [
     {
-      "uuid": "fbf8c23e-7a2d-46ac-b396-649e07d69443",
+      "uuid": "8b5327b6-ea8d-4dfd-a7c1-27509b74b349",
       "version": [
         1,
         3,
-        1
+        2
       ]
     },
     {
