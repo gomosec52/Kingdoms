@@ -1,20 +1,778 @@
 {
   "namespace": "server_form",
-  "long_form": {
-    "modifications": [
+  "third_party_server_screen@common.base_screen": {
+    "size": [
+      "100%",
+      "100%"
+    ],
+    "$screen_content": "server_form.main_screen_content"
+  },
+  "main_screen_content": {
+    "type": "panel",
+    "size": [
+      "100%",
+      "100%"
+    ],
+    "controls": [
       {
-        "array_name": "bindings",
-        "operation": "insert_back",
-        "value": [
-          {
-            "binding_name": "#title_text"
-          },
-          {
-            "binding_type": "view",
-            "source_property_name": "((#title_text - 'kingdoms:settlement') = #title_text)",
-            "target_property_name": "#visible"
+        "server_form_factory": {
+          "size": [
+            "100%",
+            "100%"
+          ],
+          "type": "factory",
+          "control_ids": {
+            "long_form": "@server_form.long_form",
+            "custom_form": "@server_form.custom_form"
           }
-        ]
+        }
+      }
+    ]
+  },
+  "long_form": {
+    "type": "panel",
+    "controls": [
+      {
+        "kingdoms_form@server_form.kingdoms_long_form_root": {}
+      },
+      {
+        "vanilla_form@common_dialogs.main_panel_no_buttons": {
+          "$title_panel": "common_dialogs.standard_title_label",
+          "$title_size": [
+            "100% - 14px",
+            10
+          ],
+          "size": [
+            225,
+            200
+          ],
+          "$text_name": "#title_text",
+          "$title_text_binding_type": "none",
+          "$child_control": "server_form.long_form_panel",
+          "layer": 2,
+          "bindings": [
+            {
+              "binding_name": "#title_text",
+              "binding_name_override": "#text",
+              "binding_type": "global"
+            },
+            {
+              "binding_type": "view",
+              "source_property_name": "(not (#text = 'kingdoms:settlement') and not (#text = 'hello') and not(#text = 'Progression') and not(#text = 'Life & Bonds') and not(#text = 'Advancements') and not(#text = 'Advancements II') and not(#text = 'Adventure') and not(#text = 'Exploration') and not(#text = 'Magic') and not(#text = 'The End') and not(#text = 'Nature & Growth') and not(#text = 'Nether'))",
+              "target_property_name": "#visible"
+            }
+          ]
+        }
+      },
+      {
+        "quest_menu": {
+          "type": "panel",
+          "size": [
+            400,
+            256
+          ],
+          "offset": [
+            0,
+            5
+          ],
+          "controls": [
+            {
+              "close_button@quest_ui.close_button": {
+                "$close_button_default_texture": "textures/ui/quest_book/close_button",
+                "$close_button_hover_texture": "textures/ui/quest_book/dark_close_button",
+                "$close_button_pressed_texture": "textures/ui/quest_book/dark_close_button",
+                "size": [
+                  12,
+                  12
+                ],
+                "$close_button_offset": [
+                  -60,
+                  50
+                ],
+                "layer": 100
+              }
+            },
+            {
+              "book@quest_ui.custom_bg": {
+                "size": [
+                  405,
+                  261
+                ],
+                "anchor_from": "top_left",
+                "anchor_to": "top_left",
+                "$texture": "textures/ui/quest_book/quest_book_base2",
+                "layer": 99
+              }
+            },
+            {
+              "quest_category@quest_ui.generic_label": {
+                "size": [
+                  93.2,
+                  20.48
+                ],
+                "offset": [
+                  "18%",
+                  "23%"
+                ],
+                "anchor_from": "top_left",
+                "anchor_to": "top_left",
+                "$text": "#title_text",
+                "$color": [
+                  0,
+                  0,
+                  0
+                ],
+                "layer": 100,
+                "$font_size": "default",
+                "$font_scale_factor": 0.85,
+                "$text_bindings": [
+                  {
+                    "binding_name": "#title_text",
+                    "binding_type": "collection",
+                    "binding_collection_name": "form_buttons"
+                  }
+                ],
+                "$background_texture": "textures/ui/quest_book/test"
+              }
+            },
+            {
+              "long_form_panel@quest_ui.long_form_panel_generic": {
+                "size": [
+                  108,
+                  115.2
+                ],
+                "offset": [
+                  "17%",
+                  "35%"
+                ],
+                "layer": 100
+              }
+            },
+            {
+              "custom_bg@quest_ui.custom_bg": {
+                "size": [
+                  180,
+                  230.4
+                ],
+                "offset": [
+                  "-1.5%",
+                  "10%"
+                ],
+                "anchor_to": "top_right",
+                "anchor_from": "top_right"
+              }
+            },
+            {
+              "information_section@quest_ui.information_section": {
+                "size": [
+                  108,
+                  115.2
+                ],
+                "offset": [
+                  "-25%",
+                  "25%"
+                ],
+                "layer": 100
+              }
+            },
+            {
+              "rewards_section@quest_ui.rewards_section": {
+                "size": [
+                  80,
+                  96
+                ],
+                "offset": [
+                  "-2%",
+                  "35%"
+                ],
+                "layer": 100
+              }
+            },
+            {
+              "bookmarks@quest_ui.sections": {
+                "layer": 1
+              }
+            }
+          ],
+          "bindings": [
+            {
+              "binding_name": "#title_text"
+            },
+            {
+              "binding_type": "view",
+              "source_property_name": "((#title_text = 'Progression') or (#title_text = 'Advancements') or (#title_text = 'Advancements II') or (#title_text = 'Adventure') or (#title_text = 'Exploration') or (#title_text = 'Nether') or (#title_text = 'Magic') or (#title_text = 'The End') or (#title_text = 'Nature & Growth') or (#title_text = 'Life & Bonds'))",
+              "target_property_name": "#visible"
+            }
+          ]
+        }
+      },
+      {
+        "quest_bookmarks_1": {
+          "type": "panel",
+          "size": [
+            400,
+            256
+          ],
+          "offset": [
+            0,
+            5
+          ],
+          "controls": [
+            {
+              "bookmarks@quest_ui.sections": {
+                "layer": 1,
+                "$bookmark1": [
+                  -65,
+                  -8
+                ],
+                "$bookmark1B": true,
+                "$bookmark1_default_texture": "textures/ui/quest_book/light_bookmark_1",
+                "$bookmark1_hover_texture": "textures/ui/quest_book/light_dark_bookmark_1"
+              }
+            }
+          ],
+          "bindings": [
+            {
+              "binding_name": "#title_text"
+            },
+            {
+              "binding_type": "view",
+              "source_property_name": "(#title_text = 'Progression')",
+              "target_property_name": "#visible"
+            }
+          ]
+        }
+      },
+      {
+        "quest_bookmarks_2": {
+          "type": "panel",
+          "size": [
+            400,
+            256
+          ],
+          "offset": [
+            0,
+            5
+          ],
+          "controls": [
+            {
+              "bookmarks@quest_ui.sections": {
+                "layer": 1,
+                "$bookmark2": [
+                  -41,
+                  -8
+                ],
+                "$bookmark2B": true,
+                "$bookmark2_default_texture": "textures/ui/quest_book/light_bookmark_2",
+                "$bookmark2_hover_texture": "textures/ui/quest_book/light_dark_bookmark_2"
+              }
+            }
+          ],
+          "bindings": [
+            {
+              "binding_name": "#title_text"
+            },
+            {
+              "binding_type": "view",
+              "source_property_name": "(#title_text = 'Advancements')",
+              "target_property_name": "#visible"
+            }
+          ]
+        }
+      },
+      {
+        "quest_bookmarks_3": {
+          "type": "panel",
+          "size": [
+            400,
+            256
+          ],
+          "offset": [
+            0,
+            5
+          ],
+          "controls": [
+            {
+              "bookmarks@quest_ui.sections": {
+                "layer": 1,
+                "$bookmark3": [
+                  -17,
+                  -8
+                ],
+                "$bookmark3B": true,
+                "$bookmark3_default_texture": "textures/ui/quest_book/light_bookmark_3",
+                "$bookmark3_hover_texture": "textures/ui/quest_book/light_dark_bookmark_3"
+              }
+            }
+          ],
+          "bindings": [
+            {
+              "binding_name": "#title_text"
+            },
+            {
+              "binding_type": "view",
+              "source_property_name": "(#title_text = 'Advancements II')",
+              "target_property_name": "#visible"
+            }
+          ]
+        }
+      },
+      {
+        "quest_bookmarks_4": {
+          "type": "panel",
+          "size": [
+            400,
+            256
+          ],
+          "offset": [
+            0,
+            5
+          ],
+          "controls": [
+            {
+              "bookmarks@quest_ui.sections": {
+                "layer": 1,
+                "$bookmark4": [
+                  7,
+                  -8
+                ],
+                "$bookmark4B": true,
+                "$bookmark4_default_texture": "textures/ui/quest_book/light_bookmark_4",
+                "$bookmark4_hover_texture": "textures/ui/quest_book/light_dark_bookmark_4"
+              }
+            }
+          ],
+          "bindings": [
+            {
+              "binding_name": "#title_text"
+            },
+            {
+              "binding_type": "view",
+              "source_property_name": "(#title_text = 'Adventure')",
+              "target_property_name": "#visible"
+            }
+          ]
+        }
+      },
+      {
+        "quest_bookmarks_5": {
+          "type": "panel",
+          "size": [
+            400,
+            256
+          ],
+          "offset": [
+            0,
+            5
+          ],
+          "controls": [
+            {
+              "bookmarks@quest_ui.sections": {
+                "layer": 1,
+                "$bookmark5": [
+                  31,
+                  -8
+                ],
+                "$bookmark5B": true,
+                "$bookmark5_default_texture": "textures/ui/quest_book/light_bookmark_5",
+                "$bookmark5_hover_texture": "textures/ui/quest_book/light_dark_bookmark_5"
+              }
+            }
+          ],
+          "bindings": [
+            {
+              "binding_name": "#title_text"
+            },
+            {
+              "binding_type": "view",
+              "source_property_name": "(#title_text = 'Exploration')",
+              "target_property_name": "#visible"
+            }
+          ]
+        }
+      },
+      {
+        "quest_bookmarks_6": {
+          "type": "panel",
+          "size": [
+            400,
+            256
+          ],
+          "offset": [
+            0,
+            5
+          ],
+          "controls": [
+            {
+              "bookmarks@quest_ui.sections": {
+                "layer": 1,
+                "$bookmark6": [
+                  -65,
+                  -8
+                ],
+                "$bookmark6B": true,
+                "$bookmark6_default_texture": "textures/ui/quest_book/light_bookmark_6",
+                "$bookmark6_hover_texture": "textures/ui/quest_book/light_dark_bookmark_6"
+              }
+            }
+          ],
+          "bindings": [
+            {
+              "binding_name": "#title_text"
+            },
+            {
+              "binding_type": "view",
+              "source_property_name": "(#title_text = 'Nether')",
+              "target_property_name": "#visible"
+            }
+          ]
+        }
+      },
+      {
+        "quest_bookmarks_7": {
+          "type": "panel",
+          "size": [
+            400,
+            256
+          ],
+          "offset": [
+            0,
+            5
+          ],
+          "controls": [
+            {
+              "bookmarks@quest_ui.sections": {
+                "layer": 1,
+                "$bookmark7": [
+                  -41,
+                  -8
+                ],
+                "$bookmark7B": true,
+                "$bookmark7_default_texture": "textures/ui/quest_book/light_bookmark_7",
+                "$bookmark7_hover_texture": "textures/ui/quest_book/light_dark_bookmark_7"
+              }
+            }
+          ],
+          "bindings": [
+            {
+              "binding_name": "#title_text"
+            },
+            {
+              "binding_type": "view",
+              "source_property_name": "(#title_text = 'Magic')",
+              "target_property_name": "#visible"
+            }
+          ]
+        }
+      },
+      {
+        "quest_bookmarks_8": {
+          "type": "panel",
+          "size": [
+            400,
+            256
+          ],
+          "offset": [
+            0,
+            5
+          ],
+          "controls": [
+            {
+              "bookmarks@quest_ui.sections": {
+                "layer": 1,
+                "$bookmark8": [
+                  -17,
+                  -8
+                ],
+                "$bookmark8B": true,
+                "$bookmark8_default_texture": "textures/ui/quest_book/light_bookmark_8",
+                "$bookmark8_hover_texture": "textures/ui/quest_book/light_dark_bookmark_8"
+              }
+            }
+          ],
+          "bindings": [
+            {
+              "binding_name": "#title_text"
+            },
+            {
+              "binding_type": "view",
+              "source_property_name": "(#title_text = 'The End')",
+              "target_property_name": "#visible"
+            }
+          ]
+        }
+      },
+      {
+        "quest_bookmarks_9": {
+          "type": "panel",
+          "size": [
+            400,
+            256
+          ],
+          "offset": [
+            0,
+            5
+          ],
+          "controls": [
+            {
+              "bookmarks@quest_ui.sections": {
+                "layer": 1,
+                "$bookmark9": [
+                  7,
+                  -8
+                ],
+                "$bookmark9B": true,
+                "$bookmark9_default_texture": "textures/ui/quest_book/light_bookmark_9",
+                "$bookmark9_hover_texture": "textures/ui/quest_book/light_dark_bookmark_9"
+              }
+            }
+          ],
+          "bindings": [
+            {
+              "binding_name": "#title_text"
+            },
+            {
+              "binding_type": "view",
+              "source_property_name": "(#title_text = 'Nature & Growth')",
+              "target_property_name": "#visible"
+            }
+          ]
+        }
+      },
+      {
+        "quest_bookmarks_10": {
+          "type": "panel",
+          "size": [
+            400,
+            256
+          ],
+          "offset": [
+            0,
+            5
+          ],
+          "controls": [
+            {
+              "bookmarks@quest_ui.sections": {
+                "layer": 1,
+                "$bookmark10": [
+                  31,
+                  -8
+                ],
+                "$bookmark10B": true,
+                "$bookmark10_default_texture": "textures/ui/quest_book/light_bookmark_10",
+                "$bookmark10_hover_texture": "textures/ui/quest_book/light_dark_bookmark_10"
+              }
+            }
+          ],
+          "bindings": [
+            {
+              "binding_name": "#title_text"
+            },
+            {
+              "binding_type": "view",
+              "source_property_name": "(#title_text = 'Life & Bonds')",
+              "target_property_name": "#visible"
+            }
+          ]
+        }
+      }
+    ]
+  },
+  "custom_form": {
+    "type": "panel",
+    "size": [
+      "100%",
+      "100%"
+    ],
+    "controls": [
+      {
+        "custom_form_vanilla@common_dialogs.main_panel_no_buttons": {
+          "$title_panel": "common_dialogs.standard_title_label",
+          "$title_size": [
+            "100% - 15px",
+            10
+          ],
+          "$title_max_size": [
+            "100% - 15px",
+            10
+          ],
+          "size": [
+            225,
+            200
+          ],
+          "$text_name": "#title_text",
+          "$title_text_binding_type": "none",
+          "$child_control": "server_form.custom_form_panel",
+          "layer": 2,
+          "bindings": [
+            {
+              "binding_name": "#title_text",
+              "binding_name_override": "#text",
+              "binding_type": "global"
+            },
+            {
+              "binding_type": "view",
+              "source_property_name": "((( #text - 'b_bar_') = #text) and  (( #text - 'slider_') = #text) and  (( #text - 's2lider_') = #text))",
+              "target_property_name": "#visible"
+            }
+          ]
+        }
+      },
+      {
+        "form_hud_custom@form_hud_custom.root_panel_form_custom": {
+          "bindings": [
+            {
+              "binding_name": "#title_text",
+              "binding_name_override": "#text",
+              "binding_type": "global"
+            },
+            {
+              "binding_type": "view",
+              "source_property_name": "( not (( #text - 'slider_') = #text))",
+              "target_property_name": "#visible"
+            }
+          ]
+        }
+      },
+      {
+        "root_panel_form_custom_waila@form_hud_waila_custom.root_panel_form_custom_waila": {
+          "bindings": [
+            {
+              "binding_name": "#title_text",
+              "binding_name_override": "#text",
+              "binding_type": "global"
+            },
+            {
+              "binding_type": "view",
+              "source_property_name": "( not (( #text - 's2lider_') = #text))",
+              "target_property_name": "#visible"
+            }
+          ]
+        }
+      },
+      {
+        "root_panel_form_bossbar_custom@form_hud_bossbar_custom.root_panel_form_bossbar_custom": {
+          "bindings": [
+            {
+              "binding_name": "#title_text",
+              "binding_name_override": "#text",
+              "binding_type": "global"
+            },
+            {
+              "binding_type": "view",
+              "source_property_name": "( not (( #text - 'b_bar_') = #text))",
+              "target_property_name": "#visible"
+            }
+          ]
+        }
+      }
+    ]
+  },
+  "dynamic_button": {
+    "type": "stack_panel",
+    "size": [
+      "100%",
+      32
+    ],
+    "orientation": "horizontal",
+    "controls": [
+      {
+        "panel_name": {
+          "type": "panel",
+          "size": [
+            34,
+            "100%c"
+          ],
+          "bindings": [
+            {
+              "binding_type": "view",
+              "source_control_name": "image",
+              "resolve_sibling_scope": true,
+              "source_property_name": "(not (#texture = ''))",
+              "target_property_name": "#visible"
+            }
+          ],
+          "controls": [
+            {
+              "image": {
+                "type": "image",
+                "layer": 2,
+                "size": [
+                  32,
+                  32
+                ],
+                "offset": [
+                  -2,
+                  0
+                ],
+                "bindings": [
+                  {
+                    "binding_name": "#form_button_texture",
+                    "binding_name_override": "#texture",
+                    "binding_type": "collection",
+                    "binding_collection_name": "form_buttons"
+                  },
+                  {
+                    "binding_name": "#form_button_texture_file_system",
+                    "binding_name_override": "#texture_file_system",
+                    "binding_type": "collection",
+                    "binding_collection_name": "form_buttons"
+                  },
+                  {
+                    "binding_type": "view",
+                    "source_property_name": "(not ((#texture = '') or (#texture = 'loading')))",
+                    "target_property_name": "#visible"
+                  }
+                ]
+              }
+            },
+            {
+              "progress@progress.progress_loading_bars": {
+                "size": [
+                  30,
+                  4
+                ],
+                "offset": [
+                  -2,
+                  16
+                ],
+                "bindings": [
+                  {
+                    "binding_type": "view",
+                    "source_control_name": "image",
+                    "resolve_sibling_scope": true,
+                    "source_property_name": "(#texture = 'loading')",
+                    "target_property_name": "#visible"
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      },
+      {
+        "form_button@common_buttons.light_text_button": {
+          "$pressed_button_name": "button.form_button_click",
+          "anchor_from": "top_left",
+          "anchor_to": "top_left",
+          "size": [
+            "fill",
+            32
+          ],
+          "$button_text": "#form_button_text",
+          "$button_text_binding_type": "collection",
+          "$button_text_grid_collection_name": "form_buttons",
+          "$button_text_max_size": [
+            "100%",
+            20
+          ],
+          "bindings": [
+            {
+              "binding_type": "collection_details",
+              "binding_collection_name": "form_buttons"
+            }
+          ]
+        }
       }
     ]
   },
@@ -514,27 +1272,6 @@
             }
           ]
         }
-      }
-    ]
-  },
-  "main_screen_content": {
-    "modifications": [
-      {
-        "array_name": "controls",
-        "operation": "insert_back",
-        "value": [
-          {
-            "kingdoms_server_form_factory": {
-              "type": "panel",
-              "factory": {
-                "name": "server_form_factory",
-                "control_ids": {
-                  "long_form": "@server_form.kingdoms_long_form_root"
-                }
-              }
-            }
-          }
-        ]
       }
     ]
   }

@@ -2,12 +2,12 @@
   "format_version": 2,
   "header": {
     "name": "KW Build",
-    "description": "v1.3.3 — filled buttons + restored labels",
-    "uuid": "7a5846ca-8e14-4f85-a680-0acdab257906",
+    "description": "v1.3.4 — Bedrock Reimagined server_form compat",
+    "uuid": "5b184e13-ab55-4230-8c4a-d35af28d394c",
     "version": [
       1,
       3,
-      3
+      4
     ],
     "min_engine_version": [
       1,
@@ -18,32 +18,32 @@
   "modules": [
     {
       "type": "data",
-      "uuid": "781bba68-849b-4dc7-9c17-3921718c6fcd",
+      "uuid": "fb7de888-f438-4568-84b0-3b14836cdf0d",
       "version": [
         1,
         3,
-        3
+        4
       ]
     },
     {
       "type": "script",
       "language": "javascript",
-      "uuid": "920ddd6f-ffb6-4295-8ee8-fc7a5f64d32a",
+      "uuid": "c065eba6-9b93-440e-a50d-a6beba0cd375",
       "entry": "scripts/main.js",
       "version": [
         1,
         3,
-        3
+        4
       ]
     }
   ],
   "dependencies": [
     {
-      "uuid": "2eec67f8-e8ef-4953-9b59-f5e8c8cbe56d",
+      "uuid": "804efe98-9334-4427-9074-bddfcfbe30df",
       "version": [
         1,
         3,
-        3
+        4
       ]
     },
     {
