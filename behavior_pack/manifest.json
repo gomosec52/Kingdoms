@@ -2,12 +2,12 @@
   "format_version": 2,
   "header": {
     "name": "KW Build",
-    "description": "v1.3.2 — button textures fill full size",
-    "uuid": "49723571-10a5-4ac1-a81b-5becf8029638",
+    "description": "v1.3.3 — filled buttons + restored labels",
+    "uuid": "7a5846ca-8e14-4f85-a680-0acdab257906",
     "version": [
       1,
       3,
-      2
+      3
     ],
     "min_engine_version": [
       1,
@@ -18,32 +18,32 @@
   "modules": [
     {
       "type": "data",
-      "uuid": "52608b20-48e0-4a1f-893e-dd3267b0f116",
+      "uuid": "781bba68-849b-4dc7-9c17-3921718c6fcd",
       "version": [
         1,
         3,
-        2
+        3
       ]
     },
     {
       "type": "script",
       "language": "javascript",
-      "uuid": "b64e2f93-51c8-491c-bd9d-0012459a5a31",
+      "uuid": "920ddd6f-ffb6-4295-8ee8-fc7a5f64d32a",
       "entry": "scripts/main.js",
       "version": [
         1,
         3,
-        2
+        3
       ]
     }
   ],
   "dependencies": [
     {
-      "uuid": "8b5327b6-ea8d-4dfd-a7c1-27509b74b349",
+      "uuid": "2eec67f8-e8ef-4953-9b59-f5e8c8cbe56d",
       "version": [
         1,
         3,
-        2
+        3
       ]
     },
     {

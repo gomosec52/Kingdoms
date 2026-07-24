@@ -1694,7 +1694,7 @@ function notifyPlayerAboutAddon(player) {
   if (loadedNoticeShown.has(playerName)) return;
   loadedNoticeShown.add(playerName);
 
-  player.sendMessage("§6[KW Build] §fv1.3.2 — кнопки на всю площадь");
+  player.sendMessage("§6[KW Build] §fv1.3.3 — кнопки с текстом");
   player.sendMessage(`§7Флаг — сущность. Кликните предметом по блоку. Нужно ${CREATION_COST} изумрудов.`);
 }
 

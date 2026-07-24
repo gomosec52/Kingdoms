@@ -121,12 +121,16 @@
               }
             },
             {
-              "close_button@server_form.kingdoms_filled_button": {
+              "close_button@common_buttons.light_text_button": {
                 "$pressed_button_name": "button.menu_exit",
                 "$default_button_texture": "textures/ui/kingdoms/button_close_default",
                 "$hover_button_texture": "textures/ui/kingdoms/button_close_hover",
                 "$pressed_button_texture": "textures/ui/kingdoms/button_close_pressed",
                 "$locked_button_texture": "textures/ui/kingdoms/button_close_default",
+                "$default_button_nine_slice_size": 0,
+                "$hover_button_nine_slice_size": 0,
+                "$pressed_button_nine_slice_size": 0,
+                "$locked_button_nine_slice_size": 0,
                 "$button_text": "X",
                 "$button_text_max_size": [
                   14,
@@ -479,12 +483,16 @@
         }
       },
       {
-        "form_button@server_form.kingdoms_filled_button": {
+        "form_button@common_buttons.light_text_button": {
           "$pressed_button_name": "button.form_button_click",
           "$default_button_texture": "textures/ui/kingdoms/button_default",
           "$hover_button_texture": "textures/ui/kingdoms/button_hover",
           "$pressed_button_texture": "textures/ui/kingdoms/button_pressed",
           "$locked_button_texture": "textures/ui/kingdoms/button_default",
+          "$default_button_nine_slice_size": 0,
+          "$hover_button_nine_slice_size": 0,
+          "$pressed_button_nine_slice_size": 0,
+          "$locked_button_nine_slice_size": 0,
           "anchor_from": "top_left",
           "anchor_to": "top_left",
           "size": [
@@ -508,94 +516,6 @@
         }
       }
     ]
-  },
-  "kingdoms_filled_button": {
-    "type": "button",
-    "$default_button_texture|default": "textures/ui/kingdoms/button_default",
-    "$hover_button_texture|default": "textures/ui/kingdoms/button_hover",
-    "$pressed_button_texture|default": "textures/ui/kingdoms/button_pressed",
-    "$locked_button_texture|default": "textures/ui/kingdoms/button_default",
-    "$button_text|default": "",
-    "$button_text_binding_type|default": "none",
-    "$button_text_grid_collection_name|default": "",
-    "$button_text_max_size|default": [
-      "100%",
-      "100%"
-    ],
-    "$pressed_button_name|default": "button.form_button_click",
-    "button_mappings": [
-      {
-        "from_button_id": "button.menu_select",
-        "to_button_id": "$pressed_button_name",
-        "mapping_type": "pressed"
-      },
-      {
-        "from_button_id": "button.menu_ok",
-        "to_button_id": "$pressed_button_name",
-        "mapping_type": "focused"
-      }
-    ],
-    "default_control": "default",
-    "hover_control": "hover",
-    "pressed_control": "pressed",
-    "locked_control": "locked",
-    "controls": [
-      {
-        "default@server_form.kingdoms_button_state": {
-          "texture": "$default_button_texture"
-        }
-      },
-      {
-        "hover@server_form.kingdoms_button_state": {
-          "texture": "$hover_button_texture"
-        }
-      },
-      {
-        "pressed@server_form.kingdoms_button_state": {
-          "texture": "$pressed_button_texture"
-        }
-      },
-      {
-        "locked@server_form.kingdoms_button_state": {
-          "texture": "$locked_button_texture"
-        }
-      },
-      {
-        "button_label": {
-          "type": "label",
-          "anchor_from": "center",
-          "anchor_to": "center",
-          "text": "$button_text",
-          "color": [
-            0.95,
-            0.9,
-            0.78
-          ],
-          "shadow": true,
-          "font_size": "normal",
-          "font_scale_factor": 1.0,
-          "text_alignment": "center",
-          "layer": 3,
-          "size": "$button_text_max_size",
-          "bindings": [
-            {
-              "binding_type": "$button_text_binding_type",
-              "binding_collection_name": "$button_text_grid_collection_name",
-              "binding_condition": "none_always_when_visible"
-            }
-          ]
-        }
-      }
-    ]
-  },
-  "kingdoms_button_state": {
-    "type": "image",
-    "size": [
-      "100%",
-      "100%"
-    ],
-    "nineslice_size": 0,
-    "layer": 1
   },
   "main_screen_content": {
     "modifications": [
