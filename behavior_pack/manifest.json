@@ -2,12 +2,12 @@
   "format_version": 2,
   "header": {
     "name": "KW Build",
-    "description": "v1.6.1 — wood beam moved behind cloth",
+    "description": "v1.7.0 — building licenses, free-form construction",
     "uuid": "35da6754-77fe-403f-98e0-6e6702d1c764",
     "version": [
       1,
       6,
-      1
+      7
     ],
     "min_engine_version": [
       1,
@@ -21,8 +21,8 @@
       "uuid": "85aa1b50-3187-42b5-81e7-a79d75242d9b",
       "version": [
         1,
-        6,
-        1
+        7,
+        0
       ]
     },
     {
@@ -32,8 +32,8 @@
       "entry": "scripts/main.js",
       "version": [
         1,
-        6,
-        1
+        7,
+        0
       ]
     }
   ],
@@ -42,8 +42,8 @@
       "uuid": "0319ea31-7410-4887-be2d-2d52676a4a6d",
       "version": [
         1,
-        6,
-        1
+        7,
+        0
       ]
     },
     {
