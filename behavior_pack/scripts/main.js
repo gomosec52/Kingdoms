@@ -12,8 +12,7 @@ import {
   dismissArmiesForSettlement,
   formatArmyPowerLine,
   formatArmyPageBody,
-  openKnightShop,
-  openSummonArmyMenu,
+  openArmyMenu,
   ensureSettlementArmyData
 } from "./army.js";
 
@@ -669,10 +668,8 @@ async function openSettlementMenu(player, settlementId, page = SETTLEMENT_MENU_P
     .body(page === SETTLEMENT_MENU_PAGE.ARMY ? formatArmyPageBody(settlement) : settlementInfo(data, settlement));
 
   if (page === SETTLEMENT_MENU_PAGE.ARMY) {
-    ensureSettlementArmyData(settlement);
     form
-      .button("Купить рыцаря", "textures/ui/kingdoms/icon_war")
-      .button("Созвать армию", "textures/ui/kingdoms/icon_war")
+      .button("Армия", "textures/ui/kingdoms/icon_war")
       .button("Назад", "textures/ui/kingdoms/icon_disband");
   } else {
     form
@@ -695,9 +692,8 @@ async function openSettlementMenu(player, settlementId, page = SETTLEMENT_MENU_P
   if (Number.isNaN(selection)) return;
 
   if (page === SETTLEMENT_MENU_PAGE.ARMY) {
-    if (selection === 0) return openKnightShop(player, settlementId);
-    if (selection === 1) return openSummonArmyMenu(player, settlementId);
-    if (selection === 2) {
+    if (selection === 0) return openArmyMenu(player, settlementId);
+    if (selection === 1) {
       return openSettlementMenu(player, settlementId, SETTLEMENT_MENU_PAGE.MAIN, false);
     }
     return undefined;
