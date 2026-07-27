@@ -247,16 +247,22 @@ function equipKnightWeapon(knight) {
   deps.system.runTimeout(apply, 1);
 }
 
-function setKnightsMode(state, mode, player) {
+function setKnightsOrder(state, movementMode, combatEnabled, player) {
   for (const knightId of state.knightIds) {
     const knight = deps.world.getEntity(knightId);
     if (!knight?.isValid) continue;
     try {
-      if (mode === ORDER_MODES.HOLD) {
+      if (movementMode === ORDER_MODES.HOLD) {
         knight.triggerEvent("kingdoms:mode_hold");
       } else {
         knight.triggerEvent("kingdoms:mode_follow");
         tameKnight(knight, player);
+      }
+
+      if (combatEnabled) {
+        knight.triggerEvent("kingdoms:mode_combat");
+      } else {
+        knight.triggerEvent("kingdoms:mode_peace");
       }
     } catch (_error) {
       // Ignore event failures on older runtimes.
@@ -398,14 +404,15 @@ function applyArmyOrder(player, orderId) {
   }
 
   state.mode = orderId;
+  const combatEnabled = orderId !== ORDER_MODES.PEACE;
+  const movementMode = orderId === ORDER_MODES.HOLD ? ORDER_MODES.HOLD : ORDER_MODES.FOLLOW;
+  setKnightsOrder(state, movementMode, combatEnabled, player);
+
   if (orderId === ORDER_MODES.HOLD) {
-    setKnightsMode(state, ORDER_MODES.HOLD, player);
     player.sendMessage("§aРыцари стоят на месте.");
   } else if (orderId === ORDER_MODES.PEACE) {
-    setKnightsMode(state, ORDER_MODES.FOLLOW, player);
-    player.sendMessage("§aРыцари не атакуют в ответ.");
+    player.sendMessage("§aРыцари не атакуют.");
   } else {
-    setKnightsMode(state, ORDER_MODES.FOLLOW, player);
     player.sendMessage("§aРыцари следуют за вами.");
   }
 
@@ -642,7 +649,7 @@ function summonArmy(player, settlement, count) {
 
   activeArmies.set(player.id, state);
   state.orderBtnIds = spawnOrderButtons(player, menuRightVector);
-  setKnightsMode(state, ORDER_MODES.FOLLOW, player);
+  setKnightsOrder(state, ORDER_MODES.FOLLOW, true, player);
   updateOrderButtonLabels(player, state);
 }
 
