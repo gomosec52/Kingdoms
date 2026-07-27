@@ -64,6 +64,7 @@ export function bindArmySystem(dependencies) {
   });
 
   deps.system.runInterval(() => tickArmies(), 20);
+  deps.system.runInterval(() => tickOrderButtons(), 4);
 }
 
 function handleOrderButtonTouch(source, target) {
@@ -208,7 +209,7 @@ function getBodyRightVector(player) {
   };
 }
 
-function getFixedMenuPosition(player, index) {
+function getMenuPosition(player, index) {
   const right = getBodyRightVector(player);
   const base = player.location;
   const horizontalDist = 3.2;
@@ -265,6 +266,25 @@ function handleOwnerHurt(player, damagingEntity) {
   markAttackTarget(damagingEntity);
 }
 
+function tickOrderButtons() {
+  for (const [playerId, state] of activeArmies.entries()) {
+    const player = deps.world.getEntity(playerId);
+    if (!player?.isValid) continue;
+
+    for (let i = 0; i < (state.orderBtnIds || []).length; i += 1) {
+      const btn = state.orderBtnIds[i];
+      const entity = deps.world.getEntity(btn.id);
+      if (!entity?.isValid) continue;
+      const pos = getMenuPosition(player, i);
+      try {
+        entity.teleport(pos, { dimension: player.dimension });
+      } catch (_error) {
+        // Ignore teleport failures.
+      }
+    }
+  }
+}
+
 function tickArmies() {
   for (const [playerId, state] of activeArmies.entries()) {
     const player = deps.world.getEntity(playerId);
@@ -306,7 +326,7 @@ function spawnOrderButtons(player) {
 
   for (let i = 0; i < ORDER_BUTTONS.length; i += 1) {
     const def = ORDER_BUTTONS[i];
-    const pos = getFixedMenuPosition(player, i);
+    const pos = getMenuPosition(player, i);
     try {
       const entity = dimension.spawnEntity(ORDER_BTN_ENTITY, pos);
       entity.addTag("kingdoms_order_btn");
@@ -343,15 +363,7 @@ function applyArmyOrder(player, orderId) {
 
   state.mode = orderId;
   if (orderId === ORDER_MODES.HOLD) {
-    const loc = player.location;
-    state.holdPoint = { x: loc.x, y: loc.y, z: loc.z };
     setKnightsMode(state, ORDER_MODES.HOLD, player);
-    for (const knightId of state.knightIds) {
-      const knight = deps.world.getEntity(knightId);
-      if (knight?.isValid) {
-        knight.teleport(state.holdPoint, { dimension: knight.dimension });
-      }
-    }
     player.sendMessage("§aРыцари стоят на месте.");
   } else if (orderId === ORDER_MODES.PEACE) {
     setKnightsMode(state, ORDER_MODES.FOLLOW, player);
@@ -581,8 +593,7 @@ function summonArmy(player, settlement, count) {
     knightType: DEFAULT_KNIGHT_TYPE,
     knightIds,
     orderBtnIds: [],
-    mode: ORDER_MODES.FOLLOW,
-    holdPoint: { x: base.x, y: base.y, z: base.z }
+    mode: ORDER_MODES.FOLLOW
   };
 
   activeArmies.set(player.id, state);
