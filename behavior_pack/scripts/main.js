@@ -1462,9 +1462,36 @@ async function openWarMenu(player, settlementId, sessionToken) {
   const settlement = getSettlement(data, settlementId);
   const playerName = getPlayerName(player);
   if (!settlement || !canDeclareWar(data, playerName, settlement)) {
-    player.sendMessage("§cОбъявлять войну могут создатель и Советник.");
+    player.sendMessage("§cВойной управляют создатель и Советник.");
     return openSettlementMenu(player, settlementId, SETTLEMENT_MENU_PAGE.MAIN, false, sessionToken);
   }
+
+  ensureWarInitiatedAgainst(settlement);
+  const activeInitiatedWars = (settlement.warInitiatedAgainst || [])
+    .map((id) => getSettlement(data, id))
+    .filter(Boolean);
+
+  const form = new ActionFormData()
+    .title(kingdomsMenuTitle(KINGDOMS_MENU_PAGE.MAIN))
+    .body(activeInitiatedWars.length
+      ? `Активные войны, объявленные вами: ${activeInitiatedWars.map((entry) => entry.name).join(", ")}`
+      : "Объявите войну равному поселению, на один тип ниже или выше.")
+    .button("Объявить войну", "textures/ui/kingdoms/icon_war")
+    .button("Прекратить войну", "textures/ui/kingdoms/icon_disband")
+    .button("Назад", "textures/ui/kingdoms/icon_disband");
+
+  const response = await showFormDeferred(player, form);
+  if (response.canceled || response.selection === 2) {
+    return openSettlementMenu(player, settlementId, SETTLEMENT_MENU_PAGE.MAIN, false, sessionToken);
+  }
+  if (response.selection === 0) return declareWarMenu(player, settlementId, sessionToken);
+  return endWarMenu(player, settlementId, sessionToken);
+}
+
+async function declareWarMenu(player, settlementId, sessionToken) {
+  const data = loadData();
+  const settlement = getSettlement(data, settlementId);
+  if (!settlement) return;
 
   const targets = data.settlements.filter((candidate) => {
     if (candidate.id === settlement.id) return false;
@@ -1475,7 +1502,7 @@ async function openWarMenu(player, settlementId, sessionToken) {
 
   if (!targets.length) {
     player.sendMessage("§7Нет подходящих целей: войну можно объявить равному типу поселения, на один тип ниже или на один тип выше.");
-    return openSettlementMenu(player, settlementId, SETTLEMENT_MENU_PAGE.MAIN, false, sessionToken);
+    return openWarMenu(player, settlementId, sessionToken);
   }
 
   const pick = await pickFromActionList(player, "Объявить войну", "Выберите цель:", targets, {
@@ -1483,18 +1510,78 @@ async function openWarMenu(player, settlementId, sessionToken) {
     icon: "textures/ui/kingdoms/icon_war"
   });
   if (pick.canceled) {
-    if (pick.back) return openSettlementMenu(player, settlementId, SETTLEMENT_MENU_PAGE.MAIN, false, sessionToken);
+    if (pick.back) return openWarMenu(player, settlementId, sessionToken);
     return;
   }
 
   const target = pick.item;
   settlement.wars.push(target.id);
   target.wars.push(settlement.id);
+  ensureWarInitiatedAgainst(settlement);
+  if (!settlement.warInitiatedAgainst.includes(target.id)) settlement.warInitiatedAgainst.push(target.id);
   settlement.morale = Math.max(0, settlement.morale - 6);
   target.morale = Math.max(0, target.morale - 6);
   saveData(data);
   world.sendMessage(`§4[Война] §f${settlementDisplayName(data, settlement)} объявило войну ${settlementDisplayName(data, target)}. Победа достигается уничтожением вражеского флага.`);
-  return openSettlementMenu(player, settlementId, SETTLEMENT_MENU_PAGE.MAIN, false, sessionToken);
+  return openWarMenu(player, settlementId, sessionToken);
+}
+
+async function endWarMenu(player, settlementId, sessionToken) {
+  const data = loadData();
+  const settlement = getSettlement(data, settlementId);
+  if (!settlement) return;
+
+  ensureWarInitiatedAgainst(settlement);
+  const targets = (settlement.warInitiatedAgainst || [])
+    .map((id) => getSettlement(data, id))
+    .filter((entry) => entry && isAtWar(settlement, entry.id));
+
+  if (!targets.length) {
+    player.sendMessage("§7Нет войн, которые вы объявляли. Прекратить может только та сторона, которая начала войну.");
+    return openWarMenu(player, settlementId, sessionToken);
+  }
+
+  const pick = await pickFromActionList(player, "Прекратить войну", "С каким поселением прекратить войну?", targets, {
+    getLabel: (candidate) => `${settlementType(candidate).name} "${candidate.name}"`,
+    icon: "textures/ui/kingdoms/icon_disband"
+  });
+  if (pick.canceled) {
+    if (pick.back) return openWarMenu(player, settlementId, sessionToken);
+    return;
+  }
+
+  const target = pick.item;
+  const confirm = await showFormDeferred(player, new MessageFormData()
+    .title("Прекратить войну")
+    .body(`Прекратить войну с ${settlementDisplayName(data, target)}?`)
+    .button1("Да")
+    .button2("Нет"));
+  if (confirm.canceled || confirm.selection !== 0) return endWarMenu(player, settlementId, sessionToken);
+
+  if (!endWarBetween(data, settlement, target.id)) {
+    player.sendMessage("§cНе удалось прекратить войну.");
+    return openWarMenu(player, settlementId, sessionToken);
+  }
+
+  saveData(data);
+  world.sendMessage(`§e[Война] §f${settlementDisplayName(data, settlement)} прекратило войну с ${settlementDisplayName(data, target)}.`);
+  return openWarMenu(player, settlementId, sessionToken);
+}
+
+function ensureWarInitiatedAgainst(settlement) {
+  if (!Array.isArray(settlement.warInitiatedAgainst)) settlement.warInitiatedAgainst = [];
+}
+
+function endWarBetween(data, initiator, targetId) {
+  const target = getSettlement(data, targetId);
+  if (!target || !isAtWar(initiator, targetId)) return false;
+  ensureWarInitiatedAgainst(initiator);
+  if (!initiator.warInitiatedAgainst.includes(targetId)) return false;
+
+  initiator.wars = (initiator.wars || []).filter((id) => id !== targetId);
+  target.wars = (target.wars || []).filter((id) => id !== initiator.id);
+  initiator.warInitiatedAgainst = initiator.warInitiatedAgainst.filter((id) => id !== targetId);
+  return true;
 }
 
 function claimTax(player, settlementId, sessionToken) {
@@ -1937,6 +2024,9 @@ function handleWarVictory(data, winner, loser, attackerPlayer) {
   const loserLabel = settlementDisplayName(data, loser);
 
   winner.wars = (winner.wars || []).filter((id) => id !== loser.id);
+  if (Array.isArray(winner.warInitiatedAgainst)) {
+    winner.warInitiatedAgainst = winner.warInitiatedAgainst.filter((id) => id !== loser.id);
+  }
 
   ensureSettlementChunks(winner, settlementType(winner).radius);
   ensureSettlementChunks(loser, settlementType(loser).radius);
@@ -2030,6 +2120,9 @@ function disbandSettlement(data, settlementId, reason, announce = true) {
 
   for (const other of data.settlements) {
     other.wars = (other.wars || []).filter((id) => id !== settlementId);
+    if (Array.isArray(other.warInitiatedAgainst)) {
+      other.warInitiatedAgainst = other.warInitiatedAgainst.filter((id) => id !== settlementId);
+    }
   }
 
   if (settlement.allianceId) {
@@ -2431,6 +2524,7 @@ function loadData() {
     for (const settlement of data.settlements) {
       if (!settlement.members) settlement.members = {};
       if (!Array.isArray(settlement.wars)) settlement.wars = [];
+      if (!Array.isArray(settlement.warInitiatedAgainst)) settlement.warInitiatedAgainst = [];
       if (!Array.isArray(settlement.buildings)) settlement.buildings = [];
       ensureSettlementArmyData(settlement);
       ensureSettlementTradeData(settlement);
