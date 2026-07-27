@@ -48,6 +48,7 @@ import {
   chunkOverlapAt,
   getTerritoryChunkCount,
   expandTerritoryOnVictory,
+  applyUpgradeTerritory,
   canCaptureChunk,
   captureChunk,
   countCapturedChunks,
@@ -143,13 +144,13 @@ const PROTECTED_INTERACTIONS = [
 ];
 
 const SETTLEMENT_TYPES = [
-  { name: "Деревня", hp: 120, radius: 35, tax: 4, minPlayers: 1, defeatReward: 8, upgradeCost: 0 },
-  { name: "Большая деревня", hp: 180, radius: 55, tax: 8, minPlayers: 2, defeatReward: 14, upgradeCost: 80 },
-  { name: "Городок", hp: 260, radius: 80, tax: 14, minPlayers: 3, defeatReward: 22, upgradeCost: 180 },
-  { name: "Большой город", hp: 380, radius: 115, tax: 22, minPlayers: 4, defeatReward: 34, upgradeCost: 400 },
-  { name: "Замок", hp: 560, radius: 150, tax: 32, minPlayers: 5, defeatReward: 52, upgradeCost: 800 },
-  { name: "Королевство", hp: 780, radius: 220, tax: 44, minPlayers: 7, defeatReward: 80, upgradeCost: 1500 },
-  { name: "Империя", hp: 1100, radius: 300, tax: 64, minPlayers: 10, defeatReward: 128, upgradeCost: 2500 }
+  { name: "Деревня", hp: 500, radius: 35, tax: 4, minPlayers: 1, defeatReward: 8, upgradeCost: 0 },
+  { name: "Большая деревня", hp: 750, radius: 55, tax: 8, minPlayers: 2, defeatReward: 14, upgradeCost: 80 },
+  { name: "Городок", hp: 1100, radius: 80, tax: 14, minPlayers: 3, defeatReward: 22, upgradeCost: 180 },
+  { name: "Большой город", hp: 1600, radius: 115, tax: 22, minPlayers: 4, defeatReward: 34, upgradeCost: 400 },
+  { name: "Замок", hp: 2200, radius: 150, tax: 32, minPlayers: 5, defeatReward: 52, upgradeCost: 800 },
+  { name: "Королевство", hp: 3000, radius: 220, tax: 44, minPlayers: 7, defeatReward: 80, upgradeCost: 1500 },
+  { name: "Империя", hp: 4000, radius: 300, tax: 64, minPlayers: 10, defeatReward: 128, upgradeCost: 2500 }
 ];
 
 const PREFIXES_LIST = PREFIXES;
@@ -165,6 +166,8 @@ const CREATOR_PREFIXES = [
 ];
 
 const PLAYER_PREFIX_LABEL_TAG = "kingdoms_player_prefix_label";
+
+const playerTerritoryState = new Map();
 
 const flagInteractionCooldown = new Map();
 const flagPlacementCooldown = new Map();
@@ -341,6 +344,7 @@ world.afterEvents.playerLeave?.subscribe((event) => {
   }
   if (event.playerId) {
     removePlayerPrefixLabelById(event.playerId);
+    playerTerritoryState.delete(event.playerId);
   }
 });
 
@@ -501,7 +505,7 @@ world.beforeEvents.entityHurt?.subscribe((event) => {
         return;
       }
 
-      damageFlag(freshData, settlement, attackerSettlement, attacker, victim);
+      damageFlag(freshData, settlement, attackerSettlement, attacker, victim, event.damage);
     });
     return;
   }
@@ -537,6 +541,7 @@ system.runInterval(() => updateFlagLabels(), 60);
 system.runInterval(() => updateMoraleForNewDay(), 1200);
 system.runInterval(() => cleanupExpiredLootZones(), 100);
 system.runInterval(() => updatePlayerPrefixDisplays(), 40);
+system.runInterval(() => updatePlayerTerritoryMessages(), 20);
 system.runInterval(() => processPendingTradePayouts(), 40);
 system.runInterval(() => processPendingTradeItemReturns(), 40);
 
@@ -1091,10 +1096,6 @@ async function upgradeSettlement(player, settlementId, sessionToken) {
   }
 
   const overlap = findTerritoryOverlap(data, settlement.flag, settlement.dimensionId, nextType.radius + (settlement.territoryBonus || 0), settlement.id, settlement.allianceId);
-  if (overlap) {
-    player.sendMessage(`§cНельзя улучшить: новая территория пересечётся с ${settlementDisplayName(data, overlap)}.`);
-    return;
-  }
 
   const upgradeCost = buildingCostCopper(nextType.upgradeCost);
   if (!takeCopperValueWithNotice(player, upgradeCost)) {
@@ -1106,7 +1107,12 @@ async function upgradeSettlement(player, settlementId, sessionToken) {
   settlement.creatorPrefix = creatorPrefixFor(settlement.typeIndex);
   settlement.hp = getMaxHp(settlement);
   settlement.morale = Math.min(100, settlement.morale + 10);
-  settlement.chunks = chunksInRadius(settlement.flag, settlementType(settlement).radius);
+  const expansion = applyUpgradeTerritory(data, settlement, settlementType(settlement).radius);
+  if (overlap && expansion.addedAdjacent > 0) {
+    player.sendMessage(`§eТерритория пересекалась с ${settlementDisplayName(data, overlap)} — добавлено ${expansion.addedAdjacent} соседних свободных чанков.`);
+  } else if (overlap && expansion.addedAdjacent === 0) {
+    player.sendMessage(`§eТерритория пересекалась с ${settlementDisplayName(data, overlap)} — свободных соседних чанков не найдено.`);
+  }
   if (settlement.typeIndex >= 1) {
     giveItemStack(player, new ItemStack("kingdoms:chunk_capture_flag", 1));
     const maxChunks = getMaxCapturedChunks(settlement);
@@ -2082,13 +2088,16 @@ function captureSettlementSnapshot(settlement) {
   };
 }
 
-function damageFlag(data, target, attackerSettlement, player, flagEntity) {
+function damageFlag(data, target, attackerSettlement, player, flagEntity, rawDamage) {
   if (!getSettlement(data, target.id)) {
     removeAllSettlementFlags(flagEntity, captureSettlementSnapshot(target));
     return;
   }
 
-  const damage = Math.max(10, Math.ceil(settlementType(attackerSettlement).hp * 0.035));
+  const parsedDamage = Number(rawDamage);
+  const damage = Number.isFinite(parsedDamage) && parsedDamage > 0
+    ? Math.max(1, Math.round(parsedDamage))
+    : Math.max(10, Math.ceil(settlementType(attackerSettlement).hp * 0.035));
   target.hp = Math.max(0, target.hp - damage);
   target.morale = Math.max(0, target.morale - 2);
 
@@ -2784,6 +2793,54 @@ function getTerritoryRadius(settlement) {
 
 function getPopulation(settlement) {
   return 1 + Object.keys(settlement.members || {}).length;
+}
+
+function settlementTerritoryLabel(settlement) {
+  return `${settlementType(settlement).name} "${settlement.name}"`;
+}
+
+function updatePlayerTerritoryMessages() {
+  const data = loadData();
+
+  for (const player of world.getPlayers()) {
+    if (!player?.isValid) continue;
+
+    const dimensionId = getDimensionId(player.dimension);
+    const settlement = findSettlementAt(data, player.location, dimensionId);
+    const currentId = settlement?.id ?? null;
+    const previousId = playerTerritoryState.get(player.id);
+
+    if (previousId === undefined) {
+      playerTerritoryState.set(player.id, currentId);
+      if (settlement) notifyTerritoryEnter(player, settlement);
+      continue;
+    }
+
+    if (currentId === previousId) continue;
+
+    const previousSettlement = previousId ? getSettlement(data, previousId) : undefined;
+    if (previousSettlement) notifyTerritoryExit(player, previousSettlement);
+    if (settlement) notifyTerritoryEnter(player, settlement);
+    playerTerritoryState.set(player.id, currentId);
+  }
+}
+
+function notifyTerritoryEnter(player, settlement) {
+  const label = settlementTerritoryLabel(settlement);
+  if (isMember(settlement, getPlayerName(player))) {
+    player.sendMessage(`§aВы вошли в ${label}.`);
+    return;
+  }
+  player.sendMessage(`§eВы вошли в ${label}.`);
+}
+
+function notifyTerritoryExit(player, settlement) {
+  const label = settlementTerritoryLabel(settlement);
+  if (isMember(settlement, getPlayerName(player))) {
+    player.sendMessage(`§7Вы покинули ${label}.`);
+    return;
+  }
+  player.sendMessage(`§7Вы покинули ${label}.`);
 }
 
 function cleanName(value) {

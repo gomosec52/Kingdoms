@@ -174,6 +174,56 @@ export function expandTerritoryOnVictory(data, winner, loser) {
   return additions.size;
 }
 
+export function applyUpgradeTerritory(data, settlement, newRadius) {
+  ensureSettlementChunks(settlement, 0);
+  const idealNew = chunksInRadius(settlement.flag, newRadius);
+  const nextChunks = new Set(settlement.chunks || []);
+  let blocked = 0;
+
+  for (const key of idealNew) {
+    const { cx, cz } = parseChunkKey(key);
+    if (findSettlementOwningChunk(data, settlement.dimensionId, cx, cz, settlement.id)) {
+      blocked += 1;
+      continue;
+    }
+    nextChunks.add(key);
+  }
+
+  let addedAdjacent = 0;
+  if (blocked > 0) {
+    let frontier = [...nextChunks];
+    const tried = new Set(nextChunks);
+
+    while (addedAdjacent < blocked) {
+      let found = false;
+      const nextFrontier = [];
+
+      for (const key of frontier) {
+        const { cx, cz } = parseChunkKey(key);
+        for (const neighbor of chunkNeighbors(cx, cz)) {
+          const nKey = chunkKey(neighbor.cx, neighbor.cz);
+          if (tried.has(nKey)) continue;
+          tried.add(nKey);
+          if (findSettlementOwningChunk(data, settlement.dimensionId, neighbor.cx, neighbor.cz, settlement.id)) continue;
+
+          nextChunks.add(nKey);
+          nextFrontier.push(nKey);
+          addedAdjacent += 1;
+          found = true;
+          if (addedAdjacent >= blocked) break;
+        }
+        if (addedAdjacent >= blocked) break;
+      }
+
+      if (!found) break;
+      frontier = nextFrontier;
+    }
+  }
+
+  settlement.chunks = [...nextChunks];
+  return { blocked, addedAdjacent };
+}
+
 export function canCaptureChunk(data, settlement, cx, cz) {
   if (!canCaptureChunksType(settlement)) {
     return "§cЗахват чанков доступен после улучшения поселения.";
