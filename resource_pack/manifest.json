@@ -2,11 +2,11 @@
   "format_version": 2,
   "header": {
     "name": "KW Build Resources",
-    "description": "v1.7.0 — building licenses, free-form construction",
+    "description": "v1.8.0 — menu page switch with arrow animation",
     "uuid": "0319ea31-7410-4887-be2d-2d52676a4a6d",
     "version": [
       1,
-      7,
+      8,
       0
     ],
     "min_engine_version": [
@@ -21,8 +21,8 @@
       "uuid": "c0ec327f-dd03-4e53-8b0f-7a0008b0946a",
       "version": [
         1,
-        6,
-        1
+        7,
+        0
       ]
     }
   ]

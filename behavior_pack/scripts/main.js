@@ -13,6 +13,15 @@ const { BlockPermutation, ItemStack, system, world } = server;
 const STORE_KEY = "kingdoms:data:v1";
 const STORE_LIMIT = 32767;
 const SETTLEMENT_MENU_TITLE = "kingdoms:settlement";
+const SETTLEMENT_MENU_PAGE = {
+  MAIN: "main",
+  ARMY: "army"
+};
+
+function settlementMenuTitle(page = SETTLEMENT_MENU_PAGE.MAIN, animate = false) {
+  const animSuffix = animate ? "|anim=1" : "";
+  return `${SETTLEMENT_MENU_TITLE}|page=${page}${animSuffix}`;
+}
 const CREATION_COST = 15;
 const DAY_TICKS = 24000;
 const TAX_COOLDOWN_TICKS = 25 * 60 * 20;
@@ -611,7 +620,7 @@ async function beginSettlementCreation(player, block) {
   world.sendMessage(`§6[Королевства] §f${playerName} основал(а) ${settlementDisplayName(data, settlement)} за ${CREATION_COST} изумрудов.`);
 }
 
-async function openSettlementMenu(player, settlementId) {
+async function openSettlementMenu(player, settlementId, page = SETTLEMENT_MENU_PAGE.MAIN, animate = false) {
   const data = loadData();
   const settlement = getSettlement(data, settlementId);
   if (!settlement) {
@@ -622,20 +631,43 @@ async function openSettlementMenu(player, settlementId) {
   const nextType = SETTLEMENT_TYPES[settlement.typeIndex + 1];
   const upgradeLabel = nextType ? `Улучшить до: ${nextType.name} (${nextType.upgradeCost} изумрудов)` : "Максимум развития";
   const form = new ActionFormData()
-    .title(SETTLEMENT_MENU_TITLE)
-    .body(settlementInfo(data, settlement))
-    .button(upgradeLabel, "textures/ui/kingdoms/icon_upgrade")
-    .button("Жители", "textures/ui/kingdoms/icon_residents")
-    .button("Префиксы", "textures/ui/kingdoms/icon_prefixes")
-    .button("О префиксах", "textures/ui/kingdoms/icon_info")
-    .button("Создать альянс", "textures/ui/kingdoms/icon_alliance")
-    .button("Объявить войну", "textures/ui/kingdoms/icon_war")
-    .button("Налог", "textures/ui/kingdoms/icon_tax")
-    .button("Строительство", "textures/ui/kingdoms/icon_build")
-    .button("Расформировать", "textures/ui/kingdoms/icon_disband");
+    .title(settlementMenuTitle(page, animate))
+    .body(settlementInfo(data, settlement));
+
+  if (page === SETTLEMENT_MENU_PAGE.ARMY) {
+    form
+      .button("Армия", "textures/ui/kingdoms/icon_war")
+      .button(" ", "textures/ui/kingdoms/page_prev");
+  } else {
+    form
+      .button(upgradeLabel, "textures/ui/kingdoms/icon_upgrade")
+      .button("Жители", "textures/ui/kingdoms/icon_residents")
+      .button("Префиксы", "textures/ui/kingdoms/icon_prefixes")
+      .button("О префиксах", "textures/ui/kingdoms/icon_info")
+      .button("Создать альянс", "textures/ui/kingdoms/icon_alliance")
+      .button("Объявить войну", "textures/ui/kingdoms/icon_war")
+      .button("Налог", "textures/ui/kingdoms/icon_tax")
+      .button("Строительство", "textures/ui/kingdoms/icon_build")
+      .button("Расформировать", "textures/ui/kingdoms/icon_disband")
+      .button(" ", "textures/ui/kingdoms/page_next");
+  }
 
   const response = await showForm(player, form);
   if (response.canceled) return;
+
+  if (page === SETTLEMENT_MENU_PAGE.ARMY) {
+    if (response.selection === 1) {
+      return openSettlementMenu(player, settlementId, SETTLEMENT_MENU_PAGE.MAIN, true);
+    }
+    if (response.selection === 0) {
+      return openArmyMenu(player, settlementId);
+    }
+    return undefined;
+  }
+
+  if (response.selection === 9) {
+    return openSettlementMenu(player, settlementId, SETTLEMENT_MENU_PAGE.ARMY, true);
+  }
 
   switch (response.selection) {
     case 0:
@@ -659,6 +691,20 @@ async function openSettlementMenu(player, settlementId) {
     default:
       return undefined;
   }
+}
+
+async function openArmyMenu(player, settlementId) {
+  const data = loadData();
+  const settlement = getSettlement(data, settlementId);
+  if (!settlement || !requireOwner(player, settlement)) return;
+
+  const response = await showForm(player, new ActionFormData()
+    .title(settlementMenuTitle(SETTLEMENT_MENU_PAGE.ARMY))
+    .body("Раздел армии в разработке.\n\nЗдесь появятся найм, снаряжение и походы.")
+    .button("Назад", "textures/ui/kingdoms/icon_disband"));
+
+  if (response.canceled) return;
+  return openSettlementMenu(player, settlementId, SETTLEMENT_MENU_PAGE.ARMY, false);
 }
 
 async function upgradeSettlement(player, settlementId) {
