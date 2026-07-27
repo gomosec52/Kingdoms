@@ -10,6 +10,7 @@ export const KINGDOMS_MENU_PAGE = {
   RESIDENTS: "residents",
   DIPLOMACY: "diplomacy",
   CREATE: "create",
+  CONSTRUCTION: "construction",
   PICK: "pick"
 };
 

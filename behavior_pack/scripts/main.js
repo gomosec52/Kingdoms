@@ -432,7 +432,7 @@ world.beforeEvents.entityHurt?.subscribe((event) => {
       return;
     }
 
-    damageFlag(data, settlement, attackerSettlement, attacker);
+    damageFlag(data, settlement, attackerSettlement, attacker, victim);
     return;
   }
 
@@ -865,9 +865,7 @@ async function openSettlementMenu(player, settlementId, page = SETTLEMENT_MENU_P
   }
 
   const nextType = SETTLEMENT_TYPES[settlement.typeIndex + 1];
-  const upgradeLabel = nextType
-    ? `Улучшить до\n${nextType.name}\n(${formatCopperValue(buildingCostCopper(nextType.upgradeCost))})`
-    : "Максимум\nразвития";
+  const upgradeLabel = formatUpgradeButtonLabel(nextType);
   const form = new ActionFormData()
     .title(settlementMenuTitle(page, animate))
     .body(page === SETTLEMENT_MENU_PAGE.EXTRA ? formatExtraPageBody(settlement) : settlementInfo(data, settlement));
@@ -1607,7 +1605,7 @@ async function openConstructionMenu(player, settlementId, sessionToken) {
   ];
 
   const form = new ActionFormData()
-    .title(SETTLEMENT_MENU_TITLE)
+    .title(kingdomsMenuTitle(KINGDOMS_MENU_PAGE.CONSTRUCTION))
     .body(lines.join("\n"));
 
   for (const def of buildings) {
@@ -1665,7 +1663,7 @@ async function openBuildingDetails(player, settlementId, buildingId, sessionToke
 
   const canBuy = owned < limit && canPurchaseBuilding(settlement, def);
   const form = new ActionFormData()
-    .title(SETTLEMENT_MENU_TITLE)
+    .title(kingdomsMenuTitle(KINGDOMS_MENU_PAGE.CONSTRUCTION))
     .body(body)
     .button(canBuy ? "Купить" : "Недоступно", "textures/ui/kingdoms/icon_build")
     .button("Назад", "textures/ui/kingdoms/icon_disband");
@@ -1733,42 +1731,70 @@ function takeBuildingCost(player, def) {
   return takeMixedCost(player, def.cost || []);
 }
 
-function damageFlag(data, target, attackerSettlement, player) {
+function formatUpgradeButtonLabel(nextType) {
+  if (!nextType) return "Максимум развития";
+  const cost = formatCopperValue(buildingCostCopper(nextType.upgradeCost));
+  const name = nextType.name;
+  if (name.length > 15) {
+    const mid = Math.ceil(name.length / 2);
+    let splitAt = name.lastIndexOf(" ", mid + 3);
+    if (splitAt <= 0) splitAt = mid;
+    const line1 = name.slice(0, splitAt).trim();
+    const line2 = name.slice(splitAt).trim();
+    return `Улучшить до\n${line1}\n${line2}\n(${cost})`;
+  }
+  return `Улучшить до\n${name}\n(${cost})`;
+}
+
+function damageFlag(data, target, attackerSettlement, player, flagEntity) {
+  if (!getSettlement(data, target.id)) {
+    removeOrphanFlagEntity(flagEntity);
+    return;
+  }
+
   const damage = Math.max(10, Math.ceil(settlementType(attackerSettlement).hp * 0.035));
   target.hp = Math.max(0, target.hp - damage);
   target.morale = Math.max(0, target.morale - 2);
 
   if (target.hp <= 0) {
-    handleWarVictory(data, attackerSettlement.id, target.id);
-    saveData(data);
+    handleWarVictory(data, attackerSettlement, target, player, flagEntity);
+    if (!saveData(data)) {
+      player.sendMessage("§cНе удалось сохранить результат войны: слишком много данных мира.");
+    }
     return;
   }
 
   saveData(data);
-  updateFlagLabelFor(target);
+  updateFlagLabelFor(target, data);
   player.sendMessage(`§cФлаг повреждён на ${damage}. Осталось HP: ${target.hp}/${getMaxHp(target)}.`);
 }
 
-function handleWarVictory(data, winnerId, loserId) {
-  const winner = getSettlement(data, winnerId);
-  const loser = getSettlement(data, loserId);
-  if (!winner || !loser) return;
+function handleWarVictory(data, winner, loser, attackerPlayer, flagEntity) {
+  if (!winner || !loser || !getSettlement(data, loser.id)) {
+    removeOrphanFlagEntity(flagEntity);
+    return;
+  }
 
-  winner.wars = winner.wars.filter((id) => id !== loser.id);
+  const winnerLabel = settlementDisplayName(data, winner);
+  const loserLabel = settlementDisplayName(data, loser);
+  const attackerName = attackerPlayer?.isValid ? getPlayerName(attackerPlayer) : winner.creatorName;
+
+  winner.wars = (winner.wars || []).filter((id) => id !== loser.id);
+
   const expansion = Math.max(5, Math.round(getTerritoryRadius(loser) / 5));
   const proposedRadius = getTerritoryRadius(winner) + expansion;
   const overlap = findTerritoryOverlap(data, winner.flag, winner.dimensionId, proposedRadius, winner.id, winner.allianceId, loser.id);
 
   if (overlap) {
-    const owner = world.getPlayers().find((online) => getPlayerName(online) === winner.creatorName);
+    const owner = world.getPlayers().find((online) => samePlayerName(getPlayerName(online), winner.creatorName));
     if (owner) giveCopperValue(owner, buildingCostCopper(settlementType(loser).defeatReward));
     world.sendMessage(`§6[Королевства] §fТерритория победителя не расширилась из-за границ ${settlementDisplayName(data, overlap)}. Создатель получает награду монетами.`);
   } else {
     winner.territoryBonus = (winner.territoryBonus || 0) + expansion;
-    world.sendMessage(`§6[Королевства] §fТерритория ${settlementDisplayName(data, winner)} расширилась на ${expansion} блок(ов).`);
+    world.sendMessage(`§6[Королевства] §fТерритория ${winnerLabel} расширилась на ${expansion} блок(ов).`);
   }
 
-  winner.morale = Math.min(100, winner.morale + 12);
+  winner.morale = Math.min(100, (winner.morale ?? 75) + 12);
   data.lootZones.push({
     name: loser.name,
     dimensionId: loser.dimensionId,
@@ -1778,8 +1804,34 @@ function handleWarVictory(data, winnerId, loserId) {
     winnerAllianceId: winner.allianceId,
     expiresTick: system.currentTick + LOOT_WINDOW_TICKS
   });
+
+  world.sendMessage(`§4[Война] §f${attackerName} уничтожил(а) флаг ${loserLabel}!`);
+  world.sendMessage(`§4[Война] §f${winnerLabel} победило. Поселение ${loser.name} распалось. Победители могут мародёрить бывшую территорию 5 минут.`);
+
+  removeFlagEntity(flagEntity, loser);
   disbandSettlement(data, loser.id, `проиграло войну против ${winner.name}`, false);
-  world.sendMessage(`§4[Война] §f${settlementDisplayName(data, winner)} победило. Поселение ${loser.name} распалось. Победители могут мародёрить бывшую территорию 5 минут.`);
+  updateFlagLabelFor(winner, data);
+
+  if (attackerPlayer?.isValid) {
+    attackerPlayer.sendMessage(`§aВы уничтожили флаг ${loserLabel}. ${winnerLabel} победило!`);
+  }
+}
+
+function removeFlagEntity(flagEntity, settlement) {
+  try {
+    if (flagEntity?.isValid) flagEntity.remove();
+  } catch (_error) {
+    // Ignore direct removal failures.
+  }
+  if (settlement) removeFlagBlock(settlement);
+}
+
+function removeOrphanFlagEntity(flagEntity) {
+  try {
+    if (flagEntity?.isValid) flagEntity.remove();
+  } catch (_error) {
+    // Ignore orphan cleanup failures.
+  }
 }
 
 function cleanupSettlementKnights(settlement) {
@@ -1799,14 +1851,16 @@ function disbandSettlement(data, settlementId, reason, announce = true) {
   const settlement = getSettlement(data, settlementId);
   if (!settlement) return;
 
+  data.settlements = data.settlements.filter((entry) => entry.id !== settlementId);
+
   for (const other of data.settlements) {
-    other.wars = (other.wars || []).filter((id) => id !== settlement.id);
+    other.wars = (other.wars || []).filter((id) => id !== settlementId);
   }
 
   if (settlement.allianceId) {
     const alliance = data.alliances.find((entry) => entry.id === settlement.allianceId);
     if (alliance) {
-      alliance.members = alliance.members.filter((id) => id !== settlement.id);
+      alliance.members = alliance.members.filter((id) => id !== settlementId);
       if (alliance.members.length < 2) {
         for (const memberId of alliance.members) {
           const member = getSettlement(data, memberId);
@@ -1817,12 +1871,21 @@ function disbandSettlement(data, settlementId, reason, announce = true) {
     }
   }
 
-  removeFlagBlock(settlement);
-  removeFlagLabel(settlement);
-  dismissArmiesForSettlement(settlement.id);
-  cleanupSettlementKnights(settlement);
-  data.settlements = data.settlements.filter((entry) => entry.id !== settlement.id);
-  updatePlayerPrefixDisplays(data);
+  try {
+    removeFlagBlock(settlement);
+    removeFlagLabel(settlement);
+    dismissArmiesForSettlement(settlementId);
+    cleanupSettlementKnights(settlement);
+  } catch (_error) {
+    // Best-effort cleanup after settlement data is already removed.
+  }
+
+  try {
+    updatePlayerPrefixDisplays(data);
+  } catch (_error) {
+    // Prefix refresh should not block disband.
+  }
+
   if (announce) world.sendMessage(`§6[Королевства] §f${settlement.name} распалось: ${reason}.`);
 }
 
@@ -2216,9 +2279,10 @@ function saveData(data) {
   const serialized = JSON.stringify(data);
   if (serialized.length > STORE_LIMIT) {
     world.sendMessage("§c[Королевства] Слишком много данных для одного мира. Удалите часть старых поселений или перенесите хранилище в несколько ключей.");
-    return;
+    return false;
   }
   world.setDynamicProperty(STORE_KEY, serialized);
+  return true;
 }
 
 function emptyData() {

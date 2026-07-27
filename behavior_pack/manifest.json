@@ -2,12 +2,12 @@
   "format_version": 2,
   "header": {
     "name": "KW Build",
-    "description": "v1.11.3 — trade item labels, coin block, creation form fix",
+    "description": "v1.11.4 — construction menu fix, war victory fix, button text",
     "uuid": "35da6754-77fe-403f-98e0-6e6702d1c764",
     "version": [
       1,
       11,
-      3
+      4
     ],
     "min_engine_version": [
       1,
