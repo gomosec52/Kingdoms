@@ -2,12 +2,12 @@
   "format_version": 2,
   "header": {
     "name": "KW Build Resources",
-    "description": "v1.4.0 — flag cubes + raw 512 atlas",
-    "uuid": "aa3a8596-7874-4870-af67-e6503513b7db",
+    "description": "v1.4.1 — custom atlas assembled from flag.zip textures",
+    "uuid": "9c501d3e-efea-4079-b104-5d0b644868fc",
     "version": [
       1,
       4,
-      0
+      1
     ],
     "min_engine_version": [
       1,
@@ -18,11 +18,11 @@
   "modules": [
     {
       "type": "resources",
-      "uuid": "ebb3e9e7-d5ba-4a90-880f-833052ece16b",
+      "uuid": "ea21f04f-bcac-4819-8913-2ef70544a36a",
       "version": [
         1,
         4,
-        0
+        1
       ]
     }
   ]
