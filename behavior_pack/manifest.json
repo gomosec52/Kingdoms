@@ -2,12 +2,12 @@
   "format_version": 2,
   "header": {
     "name": "KW Build",
-    "description": "v1.4.2 — manual cube flag styled like reference screenshot",
-    "uuid": "1d2b6e8b-3545-46bd-b28a-7383f533f9ce",
+    "description": "v1.4.3 — single cloth banner with integrated emblem",
+    "uuid": "05f0b353-3065-46f7-8476-f270e4cbea40",
     "version": [
       1,
       4,
-      2
+      3
     ],
     "min_engine_version": [
       1,
@@ -18,32 +18,32 @@
   "modules": [
     {
       "type": "data",
-      "uuid": "f9a92467-d4e5-4af8-a13d-c77e194dfc7e",
+      "uuid": "5ef8668c-30b5-4a1a-98e9-3ae7b6f42f94",
       "version": [
         1,
         4,
-        2
+        3
       ]
     },
     {
       "type": "script",
       "language": "javascript",
-      "uuid": "15ec5e41-0884-402b-b042-4605f5c5d358",
+      "uuid": "7f4af872-a444-4a36-bd01-105401495b4d",
       "entry": "scripts/main.js",
       "version": [
         1,
         4,
-        2
+        3
       ]
     }
   ],
   "dependencies": [
     {
-      "uuid": "7b74e14a-aa26-4921-8f17-99643f426e31",
+      "uuid": "a6f53a8c-a9b5-461c-9aa0-be4d79b64cb6",
       "version": [
         1,
         4,
-        2
+        3
       ]
     },
     {
