@@ -170,7 +170,8 @@ export function shouldBlockSpawnPlace(data, player, location, dimensionId) {
   return true;
 }
 
-export function shouldBlockSpawnPvp(data, location, dimensionId) {
+export function shouldBlockSpawnPvp(data, player, location, dimensionId) {
+  if (player?.hasTag?.("kingdoms_admin")) return false;
   const guard = findSpawnProtectionAt(data, location, dimensionId);
   if (!guard || guard.blockPvp === false) return false;
   return true;

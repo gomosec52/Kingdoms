@@ -25,13 +25,19 @@ export function ensureSettlementTradeData(settlement) {
       partners: {},
       traderStats: {},
       inbox: [],
+      outbox: [],
       pendingPayouts: []
     };
   }
   if (!Array.isArray(settlement.trade.inbox)) settlement.trade.inbox = [];
+  if (!Array.isArray(settlement.trade.outbox)) settlement.trade.outbox = [];
   if (!Array.isArray(settlement.trade.pendingPayouts)) settlement.trade.pendingPayouts = [];
   if (!settlement.trade.partners || typeof settlement.trade.partners !== "object") settlement.trade.partners = {};
   if (!settlement.trade.traderStats || typeof settlement.trade.traderStats !== "object") settlement.trade.traderStats = {};
+}
+
+function ensureWorldPayouts(data) {
+  if (!Array.isArray(data.pendingPlayerPayouts)) data.pendingPlayerPayouts = [];
 }
 
 function rollTradeDay(settlement) {
@@ -61,6 +67,7 @@ export function formatTradeInfo(data, settlement) {
     `Сейчас монет: ${formatCopperValue(settlement.trade.balanceCopper)}`,
     `Оборот за всё время: ${formatCopperValue(settlement.trade.totalTurnoverCopper)}`,
     `Выручка сегодня: ${formatCopperValue(settlement.trade.todayTurnoverCopper)}`,
+    `Исходящих предложений: ${settlement.trade.outbox.length}`,
     "",
     "Торгуем с:",
     partnerLines.length ? partnerLines.join("\n") : "пока никем",
@@ -80,19 +87,16 @@ function nextTradeOfferId(data) {
 function getInventoryItems(player) {
   const inventory = player.getComponent("minecraft:inventory")?.container ?? player.getComponent("inventory")?.container;
   if (!inventory) return [];
-  const items = [];
+  const totals = new Map();
   for (let slot = 0; slot < inventory.size; slot += 1) {
     const item = inventory.getItem(slot);
     if (!item) continue;
     if (isTradeBlockedItem(item.typeId)) continue;
-    items.push({
-      slot,
-      typeId: item.typeId,
-      amount: item.amount,
-      name: getItemDisplayNameRu(item.typeId)
-    });
+    const existing = totals.get(item.typeId) || { typeId: item.typeId, amount: 0, name: getItemDisplayNameRu(item.typeId) };
+    existing.amount += item.amount;
+    totals.set(item.typeId, existing);
   }
-  return items;
+  return [...totals.values()];
 }
 
 function takeItemFromInventory(player, typeId, amount) {
@@ -128,21 +132,17 @@ function canFitItem(player, typeId, amount) {
 }
 
 function giveStoredItem(player, typeId, amount) {
-  if (canFitItem(player, typeId, amount)) {
-    let remaining = amount;
-    while (remaining > 0) {
-      const stackAmount = Math.min(64, remaining);
-      const stack = new ItemStack(typeId, stackAmount);
-      const inventory = player.getComponent("minecraft:inventory")?.container ?? player.getComponent("inventory")?.container;
-      const leftover = inventory?.addItem(stack);
-      if (leftover) {
-        player.dimension.spawnItem(leftover, player.location);
-      }
-      remaining -= stackAmount;
-    }
-    return true;
+  if (!canFitItem(player, typeId, amount)) return false;
+  let remaining = amount;
+  while (remaining > 0) {
+    const stackAmount = Math.min(64, remaining);
+    const stack = new ItemStack(typeId, stackAmount);
+    const inventory = player.getComponent("minecraft:inventory")?.container ?? player.getComponent("inventory")?.container;
+    const leftover = inventory?.addItem(stack);
+    if (leftover) player.dimension.spawnItem(leftover, player.location);
+    remaining -= stackAmount;
   }
-  return false;
+  return true;
 }
 
 function recordTradeStats(settlement, partnerSettlementId, traderName, copperAmount) {
@@ -156,14 +156,47 @@ function recordTradeStats(settlement, partnerSettlementId, traderName, copperAmo
   settlement.trade.traderStats[traderName] = (settlement.trade.traderStats[traderName] || 0) + copperAmount;
 }
 
-function queuePayout(settlement, playerName, copperAmount) {
+function queueSettlementPayout(settlement, playerName, copperAmount) {
   ensureSettlementTradeData(settlement);
   settlement.trade.pendingPayouts.push({ playerName, copperAmount, createdTick: deps.system.currentTick });
+}
+
+function queuePlayerPayout(data, playerName, copperAmount) {
+  ensureWorldPayouts(data);
+  data.pendingPlayerPayouts.push({ playerName, copperAmount, createdTick: deps.system.currentTick });
+}
+
+function estimateCoinStacks(copperAmount) {
+  let remaining = Math.max(0, Math.floor(copperAmount));
+  const gold = Math.floor(remaining / (COPPER_PER_SILVER * COPPER_PER_SILVER));
+  remaining -= gold * COPPER_PER_SILVER * COPPER_PER_SILVER;
+  const silver = Math.floor(remaining / COPPER_PER_SILVER);
+  remaining -= silver * COPPER_PER_SILVER;
+  return gold + silver + (remaining > 0 ? 1 : 0);
+}
+
+function canFitCoins(player, copperAmount) {
+  if (copperAmount <= 0) return true;
+  const inventory = player.getComponent("minecraft:inventory")?.container ?? player.getComponent("inventory")?.container;
+  if (!inventory) return false;
+  let freeSlots = 0;
+  for (let slot = 0; slot < inventory.size; slot += 1) {
+    if (!inventory.getItem(slot)) freeSlots += 1;
+  }
+  return freeSlots >= estimateCoinStacks(copperAmount);
+}
+
+function tryGiveCoins(player, copperAmount) {
+  if (!canFitCoins(player, copperAmount)) return false;
+  giveCopperValue(player, copperAmount);
+  return true;
 }
 
 export function processPendingTradePayouts() {
   const data = deps.loadData();
   let changed = false;
+  ensureWorldPayouts(data);
+
   for (const settlement of data.settlements) {
     ensureSettlementTradeData(settlement);
     const remaining = [];
@@ -173,27 +206,54 @@ export function processPendingTradePayouts() {
         remaining.push(payout);
         continue;
       }
-      if (countCopperValue(player) >= 0 && giveStoredCoins(player, payout.copperAmount)) {
+      if (tryGiveCoins(player, payout.copperAmount)) {
         player.sendMessage(`§aПолучены монеты от торговли: ${formatCopperValue(payout.copperAmount)}.`);
         changed = true;
       } else {
-        player.sendMessage("§cОсвободите инвентарь, чтобы получить монеты от торговли.");
+        player.sendMessage("§cОсвободите место в инвентаре, чтобы получить монеты от торговли.");
         remaining.push(payout);
       }
     }
     settlement.trade.pendingPayouts = remaining;
   }
+
+  const playerRemaining = [];
+  for (const payout of data.pendingPlayerPayouts) {
+    const player = deps.world.getPlayers().find((online) => deps.samePlayerName(deps.getPlayerName(online), payout.playerName));
+    if (!player) {
+      playerRemaining.push(payout);
+      continue;
+    }
+    if (tryGiveCoins(player, payout.copperAmount)) {
+      player.sendMessage(`§aПолучены монеты от торговли: ${formatCopperValue(payout.copperAmount)}.`);
+      changed = true;
+    } else {
+      player.sendMessage("§cОсвободите место в инвентаре, чтобы получить монеты от торговли.");
+      playerRemaining.push(payout);
+    }
+  }
+  data.pendingPlayerPayouts = playerRemaining;
+
   if (changed) deps.saveData(data);
 }
 
-function giveStoredCoins(player, copperAmount) {
-  if (!canFitCoins(player, copperAmount)) return false;
-  giveCopperValue(player, copperAmount);
-  return true;
+function removeOfferFromWorld(data, offerId) {
+  for (const settlement of data.settlements) {
+    ensureSettlementTradeData(settlement);
+    settlement.trade.inbox = settlement.trade.inbox.filter((entry) => entry.id !== offerId);
+    settlement.trade.outbox = settlement.trade.outbox.filter((entry) => entry.id !== offerId);
+  }
 }
 
-function canFitCoins(player, copperAmount) {
-  return canFitItem(player, "kingdoms:coin_copper", 1) || canFitItem(player, "kingdoms:coin_silver", 1) || canFitItem(player, "kingdoms:coin_gold", 1) || copperAmount === 0;
+function findOfferById(data, offerId) {
+  for (const settlement of data.settlements) {
+    ensureSettlementTradeData(settlement);
+    const inboxOffer = settlement.trade.inbox.find((entry) => entry.id === offerId);
+    if (inboxOffer) return inboxOffer;
+    const outboxOffer = settlement.trade.outbox.find((entry) => entry.id === offerId);
+    if (outboxOffer) return outboxOffer;
+  }
+  return undefined;
 }
 
 function parseCoinPrice(formValues) {
@@ -227,6 +287,7 @@ export async function openTradeHub(player, settlementId, sessionToken) {
     .body(body)
     .button("Торговля", "textures/ui/icon_best3")
     .button("Почта", "textures/ui/icon_map")
+    .button("Исходящие", "textures/ui/icon_import")
     .button("Монеты", "textures/ui/kingdoms/icon_tax")
     .button("Назад", "textures/ui/kingdoms/icon_disband");
 
@@ -234,8 +295,56 @@ export async function openTradeHub(player, settlementId, sessionToken) {
   if (response.canceled) return;
   if (response.selection === 0) return openCreateTradeOffer(player, settlementId, sessionToken);
   if (response.selection === 1) return openTradeInbox(player, settlementId, sessionToken);
-  if (response.selection === 2) return openTradeWithdraw(player, settlementId, sessionToken);
+  if (response.selection === 2) return openTradeOutbox(player, settlementId, sessionToken);
+  if (response.selection === 3) return openTradeWithdraw(player, settlementId, sessionToken);
   return deps.openSettlementMenu(player, settlementId, deps.SETTLEMENT_MENU_PAGE.EXTRA, false, sessionToken);
+}
+
+async function openTradeOutbox(player, settlementId, sessionToken) {
+  const data = deps.loadData();
+  const settlement = deps.getSettlement(data, settlementId);
+  ensureSettlementTradeData(settlement);
+  if (!settlement.trade.outbox.length) {
+    player.sendMessage("§7Исходящих предложений нет.");
+    return openTradeHub(player, settlementId, sessionToken);
+  }
+
+  const pick = await deps.pickFromActionList(player, "Исходящие", "Выберите предложение для отмены:", settlement.trade.outbox, {
+    getLabel: (offer) => {
+      const target = deps.getSettlement(data, offer.toSettlementId);
+      const itemName = getItemDisplayNameRu(offer.itemTypeId);
+      return formatItemButtonLabel(`${target?.name ?? "?"}: ${offer.itemAmount} × ${itemName}`, 24);
+    },
+    menuPage: deps.KINGDOMS_MENU_PAGE.TRADE_SELL,
+    noIcon: true
+  });
+  if (pick.canceled) {
+    if (pick.back) return openTradeHub(player, settlementId, sessionToken);
+    return;
+  }
+
+  const offer = pick.item;
+  const confirm = await deps.showFormDeferred(player, new deps.ActionFormData()
+    .title(deps.kingdomsMenuTitle(deps.KINGDOMS_MENU_PAGE.TRADE_SELL))
+    .body(`Отменить предложение: ${offer.itemAmount} × ${getItemDisplayNameRu(offer.itemTypeId)}?`)
+    .button("Отменить", "textures/ui/check")
+    .button("Назад", "textures/ui/cancel"));
+  if (confirm.canceled || confirm.selection !== 0) return openTradeOutbox(player, settlementId, sessionToken);
+
+  removeOfferFromWorld(data, offer.id);
+  if (!giveStoredItem(player, offer.itemTypeId, offer.itemAmount)) {
+    settlement.trade.pendingItemReturns = settlement.trade.pendingItemReturns || [];
+    settlement.trade.pendingItemReturns.push({
+      playerName: deps.getPlayerName(player),
+      itemTypeId: offer.itemTypeId,
+      itemAmount: offer.itemAmount
+    });
+    player.sendMessage("§eПредложение отменено. Освободите инвентарь, чтобы забрать предметы.");
+  } else {
+    player.sendMessage(`§aПредложение отменено. Возвращено: ${offer.itemAmount} × ${getItemDisplayNameRu(offer.itemTypeId)}.`);
+  }
+  deps.saveData(data);
+  return openTradeOutbox(player, settlementId, sessionToken);
 }
 
 async function openCreateTradeOffer(player, settlementId, sessionToken) {
@@ -247,16 +356,8 @@ async function openCreateTradeOffer(player, settlementId, sessionToken) {
     return openTradeHub(player, settlementId, sessionToken);
   }
 
-  const uniqueItems = [];
-  const seen = new Set();
-  for (const entry of items) {
-    if (seen.has(entry.typeId)) continue;
-    seen.add(entry.typeId);
-    uniqueItems.push(entry);
-  }
-
-  const itemPick = await deps.pickFromActionList(player, "Торговля", "Выберите предмет:", uniqueItems, {
-    getLabel: (entry) => formatItemButtonLabel(entry.name),
+  const itemPick = await deps.pickFromActionList(player, "Торговля", "Выберите предмет:", items, {
+    getLabel: (entry) => formatItemButtonLabel(`${entry.name} (${entry.amount})`),
     menuPage: deps.KINGDOMS_MENU_PAGE.TRADE_SELL,
     noIcon: true
   });
@@ -313,6 +414,7 @@ async function openCreateTradeOffer(player, settlementId, sessionToken) {
 
   const target = targetPick.item;
   ensureSettlementTradeData(target);
+  ensureSettlementTradeData(settlement);
   const offer = {
     id: nextTradeOfferId(data),
     fromSettlementId: settlement.id,
@@ -325,6 +427,7 @@ async function openCreateTradeOffer(player, settlementId, sessionToken) {
     createdTick: deps.system.currentTick
   };
   target.trade.inbox.push(offer);
+  settlement.trade.outbox.push({ ...offer });
   deps.saveData(data);
   player.sendMessage(`§aТорговое предложение отправлено в ${target.name}: ${quantity} x ${selectedItem.name} за ${formatCopperValue(totalCopper)}.`);
   deps.world.sendMessage(`§6[Торговля] §f${settlement.name} предложило сделку поселению ${target.name}.`);
@@ -378,15 +481,25 @@ async function openTradeInbox(player, settlementId, sessionToken) {
     return openTradeInbox(player, settlementId, sessionToken);
   }
 
-  settlement.trade.inbox = settlement.trade.inbox.filter((entry) => entry.id !== offer.id);
+  removeOfferFromWorld(data, offer.id);
 
   const senderSettlement = deps.getSettlement(data, offer.fromSettlementId);
+  const senderOnline = deps.world.getPlayers().find((online) => deps.samePlayerName(deps.getPlayerName(online), offer.fromPlayerName));
+
   if (senderSettlement) {
     recordTradeStats(senderSettlement, settlement.id, offer.fromPlayerName, offer.totalCopper);
-    const senderOnline = deps.world.getPlayers().find((online) => deps.samePlayerName(deps.getPlayerName(online), offer.fromPlayerName));
     if (senderOnline) {
       senderOnline.sendMessage(`§aСделка принята! На торговом счёте ${senderSettlement.name}: +${formatCopperValue(offer.totalCopper)}.`);
     }
+  } else if (senderOnline) {
+    if (tryGiveCoins(senderOnline, offer.totalCopper)) {
+      senderOnline.sendMessage(`§aСделка принята! Получено: ${formatCopperValue(offer.totalCopper)}.`);
+    } else {
+      queuePlayerPayout(data, offer.fromPlayerName, offer.totalCopper);
+      senderOnline.sendMessage("§cОсвободите место в инвентаре, чтобы получить монеты от торговли.");
+    }
+  } else {
+    queuePlayerPayout(data, offer.fromPlayerName, offer.totalCopper);
   }
 
   deps.saveData(data);
@@ -416,7 +529,7 @@ async function openTradeWithdraw(player, settlementId, sessionToken) {
     .button("Нет", "textures/ui/cancel"));
   if (response.canceled || response.selection !== 0) return openTradeHub(player, settlementId, sessionToken);
 
-  if (!giveStoredCoins(player, amount)) {
+  if (!tryGiveCoins(player, amount)) {
     player.sendMessage("§cОсвободите инвентарь, чтобы забрать монеты.");
     return openTradeHub(player, settlementId, sessionToken);
   }
@@ -425,4 +538,30 @@ async function openTradeWithdraw(player, settlementId, sessionToken) {
   deps.saveData(data);
   player.sendMessage(`§aЗабрано с торгового счёта: ${formatCopperValue(amount)}.`);
   return openTradeHub(player, settlementId, sessionToken);
+}
+
+export function processPendingTradeItemReturns() {
+  const data = deps.loadData();
+  let changed = false;
+  for (const settlement of data.settlements) {
+    ensureSettlementTradeData(settlement);
+    if (!Array.isArray(settlement.trade.pendingItemReturns) || !settlement.trade.pendingItemReturns.length) continue;
+    const remaining = [];
+    for (const entry of settlement.trade.pendingItemReturns) {
+      const player = deps.world.getPlayers().find((online) => deps.samePlayerName(deps.getPlayerName(online), entry.playerName));
+      if (!player) {
+        remaining.push(entry);
+        continue;
+      }
+      if (giveStoredItem(player, entry.itemTypeId, entry.itemAmount)) {
+        player.sendMessage(`§aВозвращены предметы: ${entry.itemAmount} × ${getItemDisplayNameRu(entry.itemTypeId)}.`);
+        changed = true;
+      } else {
+        player.sendMessage("§cОсвободите инвентарь, чтобы получить возвращённые предметы.");
+        remaining.push(entry);
+      }
+    }
+    settlement.trade.pendingItemReturns = remaining;
+  }
+  if (changed) deps.saveData(data);
 }

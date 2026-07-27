@@ -1,0 +1,37 @@
+{
+  "format_version": "1.20.80",
+  "minecraft:entity": {
+    "description": {
+      "identifier": "kingdoms:chunk_marker",
+      "is_spawnable": false,
+      "is_summonable": true,
+      "is_experimental": false
+    },
+    "components": {
+      "minecraft:type_family": {
+        "family": [
+          "kingdoms_chunk_marker"
+        ]
+      },
+      "minecraft:collision_box": {
+        "width": 0.4,
+        "height": 1.2
+      },
+      "minecraft:health": {
+        "value": 5,
+        "max": 5
+      },
+      "minecraft:movement": {
+        "value": 0
+      },
+      "minecraft:physics": {
+        "has_collision": true,
+        "has_gravity": true
+      },
+      "minecraft:pushable": {
+        "is_pushable": false,
+        "is_pushable_by_piston": false
+      }
+    }
+  }
+}

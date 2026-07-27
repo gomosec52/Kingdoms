@@ -151,6 +151,10 @@ export function canClaimTax(data, playerName, settlement) {
   return isSettlementOwner(playerName, settlement) || getPlayerRole(data, playerName, settlement) === "Советник";
 }
 
+export function canCaptureChunks(data, playerName, settlement) {
+  return isSettlementOwner(playerName, settlement) || getPlayerRole(data, playerName, settlement) === "Советник";
+}
+
 function samePlayerName(first, second) {
   return String(first ?? "").trim().toLowerCase() === String(second ?? "").trim().toLowerCase();
 }

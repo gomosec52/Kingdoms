@@ -138,6 +138,15 @@ export function takeCopperValue(player, copperAmount) {
   return true;
 }
 
+export function takeCopperValueWithNotice(player, copperAmount) {
+  const total = countCopperValue(player);
+  if (total < copperAmount) return false;
+  const change = total - copperAmount;
+  if (!takeCopperValue(player, copperAmount)) return false;
+  if (change > 0) player.sendMessage(`§7Сдача: ${formatCopperValue(change)}`);
+  return true;
+}
+
 export function hasCopperValue(player, copperAmount) {
   return countCopperValue(player) >= copperAmount;
 }

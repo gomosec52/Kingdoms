@@ -1,4 +1,5 @@
 item.kingdoms:flag.name=Флаг поселения
+item.kingdoms:chunk_capture_flag.name=Флаг захвата чанка
 block.kingdoms.flag.name=Флаг поселения
 item.kingdoms:coin_copper.name=Медная монета
 item.kingdoms:coin_silver.name=Серебряная монета

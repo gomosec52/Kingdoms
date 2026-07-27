@@ -30,11 +30,31 @@ import {
   hasCopperValue,
   replaceEmeraldCosts,
   takeCopperValue,
+  takeCopperValueWithNotice,
   takeMixedCost,
   getMissingCoinCost,
   describeCostShortage,
   reportCostShortage
 } from "./economy.js";
+import {
+  chunkFromLocation,
+  chunkKey,
+  chunksInRadius,
+  parseChunkKey,
+  ownsChunk,
+  ensureSettlementChunks,
+  findSettlementAtLocation,
+  findSettlementOwningChunk,
+  chunkOverlapAt,
+  getTerritoryChunkCount,
+  expandTerritoryOnVictory,
+  canCaptureChunk,
+  captureChunk,
+  countCapturedChunks,
+  getAllSettlementChunkKeys,
+  MAX_EMPIRE_CAPTURED_CHUNKS,
+  EMPIRE_TYPE_INDEX
+} from "./territory.js";
 import {
   bindArmySystem,
   dismissArmiesForSettlement,
@@ -62,7 +82,8 @@ import {
   canBuyKnights,
   canCommandArmy,
   getMaxSummonCount,
-  isSettlementOwner
+  isSettlementOwner,
+  canCaptureChunks
 } from "./permissions.js";
 import { bindTradeSystem, ensureSettlementTradeData, openTradeHub } from "./trade.js";
 import {
@@ -154,11 +175,14 @@ const chatPrefixNoticeShown = new Set();
 const loadedNoticeShown = new Set();
 const formBusyPlayers = new Set();
 const settlementMenuSessions = new Map();
-const pendingAllianceOffers = new Map();
+const pendingResidentInvites = new Map();
+const activeFlagPlacements = new Set();
 let directChatPrefixAvailable = false;
 let dynamicPropertiesRegistered = false;
 
 import { bindFlagSystem, setFlagPlacementHandler, setWildFlagSpawnHandler } from "./flag.js";
+import { bindChunkCaptureSystem } from "./chunk_flag.js";
+import { processPendingTradePayouts, processPendingTradeItemReturns } from "./trade.js";
 
 bindArmySystem({
   world,
@@ -236,6 +260,18 @@ bindSpawnGuardSystem({
 bindFlagSystem(world);
 setFlagPlacementHandler(beginSettlementCreationFromItem);
 setWildFlagSpawnHandler(handleWildFlagEntitySpawn);
+bindChunkCaptureSystem(world, {
+  loadData,
+  saveData,
+  getSettlement,
+  getPlayerSettlement,
+  getPlayerName,
+  samePlayerName,
+  canCaptureChunks,
+  giveItemStack,
+  getDimensionId,
+  blockPosition
+});
 
 world.beforeEvents?.worldInitialize?.subscribe((event) => {
   registerDynamicProperties(event.propertyRegistry);
@@ -452,7 +488,7 @@ world.beforeEvents.entityHurt?.subscribe((event) => {
   const data = loadData();
   const victimLoc = victim.location;
   const dimensionId = getDimensionId(victim.dimension);
-  if (shouldBlockSpawnPvp(data, victimLoc, dimensionId)) {
+  if (shouldBlockSpawnPvp(data, event.player, victimLoc, dimensionId)) {
     event.cancel = true;
     attacker.sendMessage("§cPvP запрещено в зоне защиты спавна.");
     return;
@@ -460,11 +496,14 @@ world.beforeEvents.entityHurt?.subscribe((event) => {
 
   const victimSettlement = getPlayerSettlement(data, getPlayerName(victim));
   const attackerSettlement = getPlayerSettlement(data, getPlayerName(attacker));
-  if (!victimSettlement && !attackerSettlement) return;
+  const victimTerritory = findSettlementAt(data, victimLoc, dimensionId);
+  const attackerTerritory = findSettlementAt(data, attacker.location, dimensionId);
+
+  if (!victimTerritory && !attackerTerritory) return;
 
   if (!victimSettlement || !attackerSettlement || !isAtWar(victimSettlement, attackerSettlement.id)) {
     event.cancel = true;
-    attacker.sendMessage("§cНельзя наносить урон игрокам без войны между поселениями.");
+    attacker.sendMessage("§cНа чужой территории можно драться только во время войны между поселениями.");
   }
 });
 
@@ -474,6 +513,8 @@ system.runInterval(() => updateFlagLabels(), 60);
 system.runInterval(() => updateMoraleForNewDay(), 1200);
 system.runInterval(() => cleanupExpiredLootZones(), 100);
 system.runInterval(() => updatePlayerPrefixDisplays(), 40);
+system.runInterval(() => processPendingTradePayouts(), 40);
+system.runInterval(() => processPendingTradeItemReturns(), 40);
 
 async function beginSettlementCreationFromItem(player, clickedBlock, blockFace, origin = "script") {
   if (!player || !clickedBlock) return;
@@ -483,42 +524,41 @@ async function beginSettlementCreationFromItem(player, clickedBlock, blockFace, 
   const spawnLocation = getFlagPlacementLocation(clickedBlock, blockFace);
   const territoryCenter = blockPosition(spawnLocation);
   const lockKey = placementLockKey(dimensionId, territoryCenter);
-  if (!lockPlacement(lockKey)) return;
+  if (!lockPlacement(lockKey)) {
+    player.sendMessage("§cПодождите, флаг уже устанавливается.");
+    return;
+  }
 
   const validationError = validateNewSettlement(player, territoryCenter, dimensionId);
   if (validationError) {
     player.sendMessage(validationError);
+    removeOrphanFlagsAt(territoryCenter, dimensionId);
     return;
   }
 
   let flagEntity = findPendingFlagEntityAt(territoryCenter, dimensionId);
-  let flagItemConsumed = Boolean(flagEntity);
-
   if (!flagEntity) {
-    const dimension = safeDimension(dimensionId);
-    if (!dimension) {
-      player.sendMessage("§cНе удалось получить измерение мира.");
-      return;
-    }
-
-    try {
-      flagEntity = dimension.spawnEntity(FLAG_ENTITY, getFlagEntityLocation(territoryCenter));
-      flagEntity.addTag(PENDING_SETUP_TAG);
-      flagItemConsumed = false;
-      player.sendMessage(`§aФлаг-сущность установлена (${origin}).`);
-    } catch (error) {
-      player.sendMessage(`§cНе удалось создать флаг-сущность: ${error}`);
-      return;
-    }
-  } else {
-    player.sendMessage(`§7Флаг-сущность найдена (${origin}).`);
+    system.runTimeout(() => {
+      const retryEntity = findPendingFlagEntityAt(territoryCenter, dimensionId);
+      if (!retryEntity) {
+        player.sendMessage("§cНе удалось найти флаг. Попробуйте поставить ещё раз.");
+        return;
+      }
+      runSettlementCreationFlow(player, {
+        territoryCenter,
+        dimensionId,
+        flagEntity: retryEntity,
+        flagItemConsumed: true
+      });
+    }, 2);
+    return;
   }
 
   await runSettlementCreationFlow(player, {
     territoryCenter,
     dimensionId,
     flagEntity,
-    flagItemConsumed
+    flagItemConsumed: true
   });
 }
 
@@ -527,14 +567,32 @@ async function handleWildFlagEntitySpawn(entity, knownPlayer) {
 
   const territoryCenter = blockPosition(entity.location);
   const dimensionId = getDimensionId(entity.dimension);
-  const lockKey = placementLockKey(dimensionId, territoryCenter);
-  if (!lockPlacement(lockKey)) return;
+  const placementKey = placementLockKey(dimensionId, territoryCenter);
+  if (activeFlagPlacements.has(placementKey)) {
+    removeDuplicateFlagEntity(entity, territoryCenter, dimensionId);
+    return;
+  }
 
   const player = knownPlayer ?? findNearestPlayer(entity, 12);
   if (!player) {
     entity.addTag(PENDING_SETUP_TAG);
     return;
   }
+
+  const validationError = validateNewSettlement(player, territoryCenter, dimensionId);
+  if (validationError) {
+    player.sendMessage(validationError);
+    cleanupInvalidFlagPlacement(entity, player);
+    return;
+  }
+
+  if (!lockPlacement(placementKey)) {
+    removeDuplicateFlagEntity(entity, territoryCenter, dimensionId);
+    return;
+  }
+
+  activeFlagPlacements.add(placementKey);
+  system.runTimeout(() => activeFlagPlacements.delete(placementKey), 40);
 
   if (!entity.hasTag(PENDING_SETUP_TAG)) entity.addTag(PENDING_SETUP_TAG);
   player.sendMessage("§aФлаг-сущность появилась. Открываю меню создания поселения...");
@@ -573,7 +631,7 @@ async function runSettlementCreationFlow(player, context) {
     return;
   }
 
-  if (!takeCopperValue(player, CREATION_COST)) {
+  if (!takeCopperValueWithNotice(player, CREATION_COST)) {
     player.sendMessage(`§cНе хватает монет. Нужно ${formatCopperValue(CREATION_COST)}.`);
     cleanupFailedPlacement(player, flagEntity, flagItemConsumed);
     return;
@@ -618,6 +676,7 @@ async function runSettlementCreationFlow(player, context) {
   }
 
   data.settlements.push(settlement);
+  ensureSettlementChunks(settlement, settlementType(settlement).radius);
   saveData(data);
   updateFlagLabelFor(settlement, data);
   updatePlayerPrefixDisplays(data);
@@ -682,6 +741,38 @@ function cleanupFailedPlacement(player, flagEntity, restoreFlagItem) {
     // Ignore cleanup failures.
   }
   if (restoreFlagItem) giveItemStack(player, new ItemStack(FLAG_ITEM, 1));
+}
+
+function cleanupInvalidFlagPlacement(flagEntity, player) {
+  try {
+    if (flagEntity?.isValid) flagEntity.remove();
+  } catch (_error) {
+    // Ignore cleanup failures.
+  }
+  giveItemStack(player, new ItemStack(FLAG_ITEM, 1));
+}
+
+function removeDuplicateFlagEntity(entity, territoryCenter, dimensionId) {
+  const primary = findPendingFlagEntityAt(territoryCenter, dimensionId);
+  if (primary?.isValid && primary.id !== entity.id) {
+    try { entity.remove(); } catch (_error) { /* ignore */ }
+  }
+}
+
+function removeOrphanFlagsAt(territoryCenter, dimensionId) {
+  const dimension = safeDimension(dimensionId);
+  if (!dimension) return;
+  try {
+    for (const flag of dimension.getEntities({
+      type: FLAG_ENTITY,
+      location: getFlagEntityLocation(territoryCenter),
+      maxDistance: 2
+    })) {
+      if (!isRegisteredFlagEntity(flag)) flag.remove();
+    }
+  } catch (_error) {
+    // Ignore cleanup failures.
+  }
 }
 
 function formatExtraPageBody(settlement) {
@@ -762,6 +853,12 @@ function validateNewSettlement(player, territoryCenter, dimensionId) {
     return `§cСлишком близко к территории: ${settlementDisplayName(data, overlap)}.`;
   }
 
+  const { cx, cz } = chunkFromLocation(territoryCenter);
+  const chunkOwner = findSettlementOwningChunk(data, dimensionId, cx, cz);
+  if (chunkOwner) {
+    return `§cЭтот чанк уже занят: ${settlementDisplayName(data, chunkOwner)}.`;
+  }
+
   return undefined;
 }
 
@@ -819,7 +916,7 @@ async function beginSettlementCreation(player, block) {
     return;
   }
 
-  if (!takeCopperValue(player, CREATION_COST)) {
+  if (!takeCopperValueWithNotice(player, CREATION_COST)) {
     removePlacedFlag(block, player);
     player.sendMessage(`§cНе хватает монет. Нужно ${formatCopperValue(CREATION_COST)}.`);
     return;
@@ -847,6 +944,7 @@ async function beginSettlementCreation(player, block) {
   };
 
   data.settlements.push(settlement);
+  ensureSettlementChunks(settlement, settlementType(settlement).radius);
   saveData(data);
   updateFlagLabelFor(settlement);
   updatePlayerPrefixDisplays(data);
@@ -967,7 +1065,7 @@ async function upgradeSettlement(player, settlementId, sessionToken) {
   }
 
   const upgradeCost = buildingCostCopper(nextType.upgradeCost);
-  if (!takeCopperValue(player, upgradeCost)) {
+  if (!takeCopperValueWithNotice(player, upgradeCost)) {
     player.sendMessage(`§cДля улучшения до "${nextType.name}" нужно ${formatCopperValue(upgradeCost)}.`);
     return;
   }
@@ -976,6 +1074,11 @@ async function upgradeSettlement(player, settlementId, sessionToken) {
   settlement.creatorPrefix = creatorPrefixFor(settlement.typeIndex);
   settlement.hp = getMaxHp(settlement);
   settlement.morale = Math.min(100, settlement.morale + 10);
+  settlement.chunks = chunksInRadius(settlement.flag, settlementType(settlement).radius);
+  if (settlement.typeIndex >= EMPIRE_TYPE_INDEX) {
+    giveItemStack(player, new ItemStack("kingdoms:chunk_capture_flag", 1));
+    player.sendMessage("§aИмперия! Вы получили §fФлаг захвата чанка§a — ставьте его на соседний свободный чанк.");
+  }
   saveData(data);
   updateFlagLabelFor(settlement);
   updatePlayerPrefixDisplays(data);
@@ -1012,15 +1115,19 @@ async function addResident(player, settlementId, sessionToken) {
   if (!settlement || !canManageResidents(data, getPlayerName(player), settlement)) return;
 
   const candidates = world.getPlayers()
-    .map((candidate) => getPlayerName(candidate))
-    .filter((name) => name !== settlement.creatorName && !settlement.members[name]);
+    .filter((candidate) => {
+      const name = getPlayerName(candidate);
+      return name !== settlement.creatorName
+        && !settlement.members[name]
+        && !getPlayerSettlement(data, name);
+    });
   if (!candidates.length) {
-    player.sendMessage("§7Нет онлайн-игроков, которых можно добавить.");
+    player.sendMessage("§7Нет онлайн-игроков, которых можно пригласить.");
     return openResidentsMenu(player, settlementId, sessionToken);
   }
 
   const pick = await pickFromActionList(player, "Добавить жителя", "Выберите игрока:", candidates, {
-    getLabel: (name) => name,
+    getLabel: (candidate) => getPlayerName(candidate),
     menuPage: KINGDOMS_MENU_PAGE.PICK
   });
   if (pick.canceled) {
@@ -1028,11 +1135,33 @@ async function addResident(player, settlementId, sessionToken) {
     return;
   }
 
-  const name = pick.item;
-  settlement.members[name] = { prefix: PREFIXES_LIST[0].name, joinedTick: system.currentTick };
-  saveData(data);
-  updatePlayerPrefixDisplays(data);
-  world.sendMessage(`§6[Королевства] §f${name} теперь житель ${settlementDisplayName(data, settlement)}.`);
+  const targetPlayer = pick.item;
+  const targetName = getPlayerName(targetPlayer);
+  player.sendMessage(`§7Приглашение отправлено игроку ${targetName}.`);
+
+  const accepted = await showFormDeferred(targetPlayer, new ActionFormData()
+    .title("Приглашение в поселение")
+    .body(`${getPlayerName(player)} приглашает вас в ${settlementDisplayName(data, settlement)}.\n\nВступить?`)
+    .button("Вступить", "textures/ui/check")
+    .button("Нет", "textures/ui/cancel"));
+  if (accepted.canceled || accepted.selection !== 0) {
+    player.sendMessage(`§7${targetName} отклонил(а) приглашение.`);
+    targetPlayer.sendMessage(`§7Вы отклонили приглашение в ${settlement.name}.`);
+    return openResidentsMenu(player, settlementId, sessionToken);
+  }
+
+  const freshData = loadData();
+  const freshSettlement = getSettlement(freshData, settlementId);
+  if (!freshSettlement || getPlayerSettlement(freshData, targetName)) {
+    player.sendMessage(`§c${targetName} больше не может вступить (уже в другом поселении).`);
+    return openResidentsMenu(player, settlementId, sessionToken);
+  }
+
+  freshSettlement.members[targetName] = { prefix: PREFIXES_LIST[0].name, joinedTick: system.currentTick };
+  saveData(freshData);
+  updatePlayerPrefixDisplays(freshData);
+  world.sendMessage(`§6[Королевства] §f${targetName} теперь житель ${settlementDisplayName(freshData, freshSettlement)}.`);
+  targetPlayer.sendMessage(`§aВы вступили в ${settlementDisplayName(freshData, freshSettlement)}.`);
   return openResidentsMenu(player, settlementId, sessionToken);
 }
 
@@ -1809,17 +1938,16 @@ function handleWarVictory(data, winner, loser, attackerPlayer) {
 
   winner.wars = (winner.wars || []).filter((id) => id !== loser.id);
 
-  const expansion = Math.max(5, Math.round(getTerritoryRadius(loser) / 5));
-  const proposedRadius = getTerritoryRadius(winner) + expansion;
-  const overlap = findTerritoryOverlap(data, winner.flag, winner.dimensionId, proposedRadius, winner.id, winner.allianceId, loser.id);
+  ensureSettlementChunks(winner, settlementType(winner).radius);
+  ensureSettlementChunks(loser, settlementType(loser).radius);
+  const addedChunks = expandTerritoryOnVictory(data, winner, loser);
 
-  if (overlap) {
+  if (addedChunks <= 0) {
     const owner = world.getPlayers().find((online) => samePlayerName(getPlayerName(online), winner.creatorName));
     if (owner) giveCopperValue(owner, buildingCostCopper(settlementType(loser).defeatReward));
-    world.sendMessage(`§6[Королевства] §fТерритория победителя не расширилась из-за границ ${settlementDisplayName(data, overlap)}. Создатель получает награду монетами.`);
+    world.sendMessage(`§6[Королевства] §fТерритория победителя не расширилась — нет свободных соседних чанков. Создатель получает награду монетами.`);
   } else {
-    winner.territoryBonus = (winner.territoryBonus || 0) + expansion;
-    world.sendMessage(`§6[Королевства] §fТерритория ${winnerLabel} расширилась на ${expansion} блок(ов).`);
+    world.sendMessage(`§6[Королевства] §fТерритория ${winnerLabel} расширилась на ${addedChunks} чанк(ов).`);
   }
 
   winner.morale = Math.min(100, (winner.morale ?? 75) + 12);
@@ -2035,7 +2163,7 @@ function settlementInfo(data, settlement) {
     `HP: ${settlement.hp}/${getMaxHp(settlement)}`,
     `Мораль: ${settlement.morale}/100`,
     `Жители: ${getPopulation(settlement)}`,
-    `Радиус: ${getTerritoryRadius(settlement)}`,
+    `Чанков: ${getTerritoryChunkCount(settlement)} (захвачено: ${countCapturedChunks(settlement)}/${MAX_EMPIRE_CAPTURED_CHUNKS})`,
     `Налог: ${formatCopperValue(buildingCostCopper(type.tax))}/25м`,
     formatExtraIncomeLine(settlement),
     formatArmyPowerLine(settlement),
@@ -2308,7 +2436,10 @@ function loadData() {
       ensureSettlementTradeData(settlement);
       if (typeof settlement.morale !== "number") settlement.morale = 75;
       if (typeof settlement.territoryBonus !== "number") settlement.territoryBonus = 0;
+      ensureSettlementChunks(settlement, settlementType(settlement).radius);
+      if (!Array.isArray(settlement.capturedChunks)) settlement.capturedChunks = [];
     }
+    if (!Array.isArray(data.pendingPlayerPayouts)) data.pendingPlayerPayouts = [];
     if (typeof data.nextTradeOfferIdValue !== "number") data.nextTradeOfferIdValue = 1;
     return data;
   } catch (error) {
@@ -2403,17 +2534,7 @@ function spawnOrUpdateFlagEntity(settlement, data, existingEntity) {
 }
 
 function findSettlementAt(data, location, dimensionId) {
-  let closest;
-  let closestDistance = Number.MAX_SAFE_INTEGER;
-  for (const settlement of data.settlements) {
-    if (settlement.dimensionId !== dimensionId) continue;
-    const distance = distance2D(settlement.flag, location);
-    if (distance <= getTerritoryRadius(settlement) && distance < closestDistance) {
-      closest = settlement;
-      closestDistance = distance;
-    }
-  }
-  return closest;
+  return findSettlementAtLocation(data, location, dimensionId);
 }
 
 function findLootZoneAt(data, location, dimensionId) {
@@ -2421,11 +2542,16 @@ function findLootZoneAt(data, location, dimensionId) {
 }
 
 function findTerritoryOverlap(data, center, dimensionId, radius, ignoreSettlementId, alliedAllianceId, ignoredLoserId) {
+  const proposed = chunksInRadius(center, radius);
   for (const settlement of data.settlements) {
     if (settlement.id === ignoreSettlementId || settlement.id === ignoredLoserId) continue;
     if (settlement.dimensionId !== dimensionId) continue;
     if (alliedAllianceId && settlement.allianceId === alliedAllianceId) continue;
-    if (distance2D(center, settlement.flag) < radius + getTerritoryRadius(settlement)) return settlement;
+    ensureSettlementChunks(settlement, settlementType(settlement).radius);
+    for (const key of proposed) {
+      const { cx, cz } = parseChunkKey(key);
+      if (ownsChunk(settlement, cx, cz)) return settlement;
+    }
   }
   return undefined;
 }
@@ -2488,7 +2614,9 @@ function getMaxHp(settlement) {
 }
 
 function getTerritoryRadius(settlement) {
-  return settlementType(settlement).radius + (settlement.territoryBonus || 0);
+  ensureSettlementChunks(settlement, settlementType(settlement).radius);
+  const chunkCount = getTerritoryChunkCount(settlement);
+  return Math.max(settlementType(settlement).radius + (settlement.territoryBonus || 0), Math.ceil(Math.sqrt(chunkCount) * 12));
 }
 
 function getPopulation(settlement) {
