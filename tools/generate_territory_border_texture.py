@@ -17,8 +17,9 @@ TRANSPARENT = (0, 0, 0, 0)
 def main() -> int:
     img = Image.new("RGBA", (16, 16), TRANSPARENT)
     pixels = img.load()
+    # Single 1px horizontal stripe (middle row), fully opaque red.
     for x in range(16):
-        pixels[x, 8] = RED
+        pixels[x, 7] = RED
     OUT.parent.mkdir(parents=True, exist_ok=True)
     img.save(OUT, format="PNG", optimize=True)
     print(f"Wrote {OUT}")

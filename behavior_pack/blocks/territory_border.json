@@ -9,7 +9,7 @@
     },
     "components": {
       "minecraft:display_name": "Граница территории",
-      "minecraft:geometry": "minecraft:geometry.full_block",
+      "minecraft:geometry": "geometry.kingdoms_territory_border",
       "minecraft:material_instances": {
         "*": {
           "texture": "kingdoms_territory_border",
