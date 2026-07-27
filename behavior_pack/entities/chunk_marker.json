@@ -18,19 +18,15 @@
         "allow_name_tag_renaming": false
       },
       "minecraft:collision_box": {
-        "width": 0.4,
-        "height": 1.2
-      },
-      "minecraft:health": {
-        "value": 5,
-        "max": 5
+        "width": 0.2,
+        "height": 0.2
       },
       "minecraft:movement": {
         "value": 0
       },
       "minecraft:physics": {
-        "has_collision": true,
-        "has_gravity": true
+        "has_collision": false,
+        "has_gravity": false
       },
       "minecraft:pushable": {
         "is_pushable": false,
@@ -40,7 +36,7 @@
         "triggers": [
           {
             "cause": "all",
-            "deals_damage": true
+            "deals_damage": false
           }
         ]
       }

@@ -2,12 +2,12 @@
   "format_version": 2,
   "header": {
     "name": "KW Build",
-    "description": "v1.12.11 — war cooldown fix, border axis stripe",
+    "description": "v1.12.12 — flag hit cooldown, alliance wars, chunk marker fix",
     "uuid": "35da6754-77fe-403f-98e0-6e6702d1c764",
     "version": [
       1,
       12,
-      11
+      12
     ],
     "min_engine_version": [
       1,
@@ -22,7 +22,7 @@
       "version": [
         1,
         12,
-        11
+        12
       ]
     },
     {
@@ -33,7 +33,7 @@
       "version": [
         1,
         12,
-        11
+        12
       ]
     }
   ],
@@ -43,7 +43,7 @@
       "version": [
         1,
         12,
-        11
+        12
       ]
     },
     {

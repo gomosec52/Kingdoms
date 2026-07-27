@@ -230,17 +230,6 @@ export function bindChunkCaptureSystem(world, dependencies) {
 
     system.run(() => handleChunkMarkerSpawn(event.entity));
   });
-
-  world.afterEvents?.entityDie?.subscribe((event) => {
-    if (event.deadEntity?.typeId !== CHUNK_MARKER_ENTITY) return;
-
-    const dimension = event.deadEntity.dimension;
-    try {
-      dimension.spawnItem(new ItemStack(CHUNK_CAPTURE_FLAG_ITEM, 1), event.deadEntity.location);
-    } catch (_error) {
-      // Ignore drop failures.
-    }
-  });
 }
 
 function handleChunkCaptureUse(player, clickedBlock) {

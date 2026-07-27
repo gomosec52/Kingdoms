@@ -12,6 +12,7 @@ export const MAX_SETTLEMENT_TYPE_INDEX = SETTLEMENT_TYPE_NAMES.length - 1;
 export const WAR_DECLARE_COOLDOWN_TICKS = 24 * 60 * 60 * 20;
 export const WEAK_WAR_COOLDOWN_TICKS = 48 * 60 * 60 * 20;
 export const WEAK_VICTORY_TYPE_GAP = 2;
+export const FLAG_DAMAGE_COOLDOWN_TICKS = 10 * 20;
 
 export function canTargetSettlementType(attackerTypeIndex, targetTypeIndex) {
   if (targetTypeIndex < 0 || targetTypeIndex > MAX_SETTLEMENT_TYPE_INDEX) return false;
@@ -82,7 +83,57 @@ export function formatCooldownTicks(ticks) {
   const hours = Math.floor(seconds / 3600);
   const minutes = Math.max(1, Math.ceil((seconds % 3600) / 60));
   if (hours > 0) return `${hours} ч. ${minutes} мин.`;
-  return `${minutes} мин.`;
+  if (seconds >= 60) return `${minutes} мин.`;
+  return `${Math.max(1, seconds)} сек.`;
+}
+
+export function getAllianceSettlements(data, settlement) {
+  if (!settlement) return [];
+  if (!settlement.allianceId) return [settlement];
+  return data.settlements.filter((entry) => entry.allianceId === settlement.allianceId);
+}
+
+export function areSettlementsAtWar(data, first, second) {
+  if (!first || !second || first.id === second.id) return false;
+  if (first.allianceId && first.allianceId === second.allianceId) return false;
+
+  const firstSide = getAllianceSettlements(data, first);
+  const secondSide = getAllianceSettlements(data, second);
+
+  for (const left of firstSide) {
+    for (const right of secondSide) {
+      if ((left.wars || []).includes(right.id) || (right.wars || []).includes(left.id)) return true;
+    }
+  }
+  return false;
+}
+
+export function linkAllianceWar(data, attackerSideLeader, target) {
+  const attackers = getAllianceSettlements(data, attackerSideLeader);
+  for (const member of attackers) {
+    if (!Array.isArray(member.wars)) member.wars = [];
+    if (!member.wars.includes(target.id)) member.wars.push(target.id);
+  }
+  if (!Array.isArray(target.wars)) target.wars = [];
+  for (const member of attackers) {
+    if (!target.wars.includes(member.id)) target.wars.push(member.id);
+  }
+}
+
+export function unlinkAllianceWar(data, attackerSideLeader, targetId) {
+  const attackers = getAllianceSettlements(data, attackerSideLeader);
+  const target = getSettlementById(data, targetId);
+  if (!target) return;
+
+  const attackerIds = new Set(attackers.map((entry) => entry.id));
+  for (const member of attackers) {
+    member.wars = (member.wars || []).filter((id) => id !== target.id);
+  }
+  target.wars = (target.wars || []).filter((id) => !attackerIds.has(id));
+}
+
+function getSettlementById(data, settlementId) {
+  return data.settlements.find((entry) => entry.id === settlementId);
 }
 
 export function ensureWarCooldownData(settlement) {

@@ -172,6 +172,7 @@ const playerTerritoryState = new Map();
 
 const flagInteractionCooldown = new Map();
 const flagPlacementCooldown = new Map();
+const flagDamageCooldown = new Map();
 const pendingPlacementLocks = new Set();
 const playerPrefixCache = new Map();
 const playerIdentityCache = new Map();
@@ -198,7 +199,12 @@ import {
   getWeakWarCooldownRemaining,
   recordWarDeclaration,
   recordWeakVictoryCooldown,
-  SETTLEMENT_TYPE_NAMES
+  SETTLEMENT_TYPE_NAMES,
+  FLAG_DAMAGE_COOLDOWN_TICKS,
+  areSettlementsAtWar,
+  getAllianceSettlements,
+  linkAllianceWar,
+  unlinkAllianceWar
 } from "./war.js";
 import { processPendingTradePayouts, processPendingTradeItemReturns } from "./trade.js";
 
@@ -359,6 +365,22 @@ world.afterEvents.playerInteractWithBlock?.subscribe((event) => {
   handleFlagInteraction(event.player, event.block);
 });
 
+function getFlagDamageCooldownRemaining(player, settlementId) {
+  const key = `${player.id}:${settlementId}`;
+  const lastHitTick = flagDamageCooldown.get(key) ?? -FLAG_DAMAGE_COOLDOWN_TICKS;
+  return Math.max(0, lastHitTick + FLAG_DAMAGE_COOLDOWN_TICKS - system.currentTick);
+}
+
+function tryApplyFlagDamage(data, settlement, attackerSettlement, player, flagEntity, rawDamage) {
+  const remaining = getFlagDamageCooldownRemaining(player, settlement.id);
+  if (remaining > 0) {
+    player.sendMessage(`§cПодождите ${formatCooldownTicks(remaining)} перед следующим ударом по флагу.`);
+    return;
+  }
+  flagDamageCooldown.set(`${player.id}:${settlement.id}`, system.currentTick);
+  damageFlag(data, settlement, attackerSettlement, player, flagEntity, rawDamage);
+}
+
 function handleFlagInteraction(player, flagSource) {
   if (!player?.isValid) return;
   const cooldownKey = `${player.id}:${getPlayerName(player)}:${getDimensionId(flagSource.dimension)}:${Math.floor(flagSource.location.x)}:${Math.floor(flagSource.location.y)}:${Math.floor(flagSource.location.z)}`;
@@ -400,7 +422,7 @@ world.beforeEvents.playerBreakBlock?.subscribe((event) => {
     if (!settlement) return;
 
     const attackerSettlement = getPlayerSettlement(data, playerName);
-    const isEnemyAtWar = attackerSettlement && isAtWar(settlement, attackerSettlement.id);
+    const isEnemyAtWar = attackerSettlement && areSettlementsAtWar(data, settlement, attackerSettlement);
     event.cancel = true;
 
     if (!isEnemyAtWar) {
@@ -408,7 +430,7 @@ world.beforeEvents.playerBreakBlock?.subscribe((event) => {
       return;
     }
 
-    damageFlag(data, settlement, attackerSettlement, event.player);
+    tryApplyFlagDamage(data, settlement, attackerSettlement, event.player);
     return;
   }
 
@@ -500,13 +522,13 @@ world.beforeEvents.entityHurt?.subscribe((event) => {
       }
 
       const attackerSettlement = getPlayerSettlement(freshData, getPlayerName(attacker));
-      const isEnemyAtWar = attackerSettlement && isAtWar(settlement, attackerSettlement.id);
+      const isEnemyAtWar = attackerSettlement && areSettlementsAtWar(freshData, settlement, attackerSettlement);
       if (!isEnemyAtWar) {
         attacker.sendMessage("§cФлаг можно бить только врагу во время объявленной войны.");
         return;
       }
 
-      damageFlag(freshData, settlement, attackerSettlement, attacker, victim, event.damage);
+      tryApplyFlagDamage(freshData, settlement, attackerSettlement, attacker, victim, event.damage);
     });
     return;
   }
@@ -529,7 +551,7 @@ world.beforeEvents.entityHurt?.subscribe((event) => {
 
   if (!victimTerritory && !attackerTerritory) return;
 
-  if (!victimSettlement || !attackerSettlement || !isAtWar(victimSettlement, attackerSettlement.id)) {
+  if (!victimSettlement || !attackerSettlement || !areSettlementsAtWar(data, victimSettlement, attackerSettlement)) {
     event.cancel = true;
     attacker.sendMessage("§cНа чужой территории можно драться только во время войны между поселениями.");
   }
@@ -1524,9 +1546,10 @@ async function openWarMenu(player, settlementId, sessionToken) {
 
   ensureWarInitiatedAgainst(settlement);
   ensureWarCooldownData(settlement);
-  const activeInitiatedWars = (settlement.warInitiatedAgainst || [])
-    .map((id) => getSettlement(data, id))
-    .filter(Boolean);
+  const activeInitiatedWars = getAllianceSettlements(data, settlement)
+    .flatMap((ally) => (ally.warInitiatedAgainst || []).map((id) => getSettlement(data, id)))
+    .filter(Boolean)
+    .filter((entry, index, list) => list.findIndex((other) => other.id === entry.id) === index);
   const currentTick = system.currentTick;
   const globalCooldown = getWarDeclareCooldownRemaining(settlement, currentTick);
   const allowedTypes = getAllowedTargetTypeNames(settlement.typeIndex);
@@ -1580,7 +1603,7 @@ async function declareWarMenu(player, settlementId, sessionToken) {
   const targets = data.settlements.filter((candidate) => {
     if (candidate.id === settlement.id) return false;
     if (areAllied(data, candidate.id, settlement.id)) return false;
-    if (isAtWar(settlement, candidate.id)) return false;
+    if (areSettlementsAtWar(data, settlement, candidate)) return false;
     return canTargetSettlementType(settlement.typeIndex, candidate.typeIndex);
   });
 
@@ -1616,8 +1639,7 @@ async function declareWarMenu(player, settlementId, sessionToken) {
     return declareWarMenu(player, settlementId, sessionToken);
   }
 
-  settlement.wars.push(target.id);
-  target.wars.push(settlement.id);
+  linkAllianceWar(data, settlement, target);
   ensureWarInitiatedAgainst(settlement);
   if (!settlement.warInitiatedAgainst.includes(target.id)) settlement.warInitiatedAgainst.push(target.id);
   recordWarDeclaration(settlement, system.currentTick);
@@ -1680,8 +1702,7 @@ function endWarBetween(data, initiator, targetId) {
   ensureWarInitiatedAgainst(initiator);
   if (!initiator.warInitiatedAgainst.includes(targetId)) return false;
 
-  initiator.wars = (initiator.wars || []).filter((id) => id !== targetId);
-  target.wars = (target.wars || []).filter((id) => id !== initiator.id);
+  unlinkAllianceWar(data, initiator, targetId);
   initiator.warInitiatedAgainst = initiator.warInitiatedAgainst.filter((id) => id !== targetId);
   return true;
 }
@@ -2157,6 +2178,7 @@ function handleWarVictory(data, winner, loser, attackerPlayer) {
   const loserLabel = settlementDisplayName(data, loser);
 
   winner.wars = (winner.wars || []).filter((id) => id !== loser.id);
+  unlinkAllianceWar(data, winner, loser.id);
   if (Array.isArray(winner.warInitiatedAgainst)) {
     winner.warInitiatedAgainst = winner.warInitiatedAgainst.filter((id) => id !== loser.id);
   }
