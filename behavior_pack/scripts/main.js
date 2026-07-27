@@ -637,7 +637,7 @@ async function openSettlementMenu(player, settlementId, page = SETTLEMENT_MENU_P
   if (page === SETTLEMENT_MENU_PAGE.ARMY) {
     form
       .button("Армия", "textures/ui/kingdoms/icon_war")
-      .button(" ", "textures/ui/kingdoms/page_prev");
+      .button("§c«", "textures/ui/kingdoms/page_prev");
   } else {
     form
       .button(upgradeLabel, "textures/ui/kingdoms/icon_upgrade")
@@ -649,7 +649,7 @@ async function openSettlementMenu(player, settlementId, page = SETTLEMENT_MENU_P
       .button("Налог", "textures/ui/kingdoms/icon_tax")
       .button("Строительство", "textures/ui/kingdoms/icon_build")
       .button("Расформировать", "textures/ui/kingdoms/icon_disband")
-      .button(" ", "textures/ui/kingdoms/page_next");
+      .button("§c»", "textures/ui/kingdoms/page_next");
   }
 
   const response = await showForm(player, form);
