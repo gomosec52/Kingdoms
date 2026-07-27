@@ -175,6 +175,16 @@ export function captureChunk(settlement, cx, cz) {
   if (!settlement.capturedChunks.includes(key)) settlement.capturedChunks.push(key);
 }
 
+export function isCapturedChunk(settlement, cx, cz) {
+  return (settlement.capturedChunks || []).includes(chunkKey(cx, cz));
+}
+
+/** Allows placing a marker on an already captured chunk (e.g. after the flag was broken). */
+export function canPlaceChunkMarker(data, settlement, cx, cz) {
+  if (isCapturedChunk(settlement, cx, cz)) return undefined;
+  return canCaptureChunk(data, settlement, cx, cz);
+}
+
 export function releaseChunk(settlement, cx, cz) {
   const key = chunkKey(cx, cz);
   if (Array.isArray(settlement.capturedChunks)) {

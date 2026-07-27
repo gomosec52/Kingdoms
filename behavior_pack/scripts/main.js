@@ -181,7 +181,8 @@ let directChatPrefixAvailable = false;
 let dynamicPropertiesRegistered = false;
 
 import { bindFlagSystem, setFlagPlacementHandler, setWildFlagSpawnHandler } from "./flag.js";
-import { bindChunkCaptureSystem } from "./chunk_flag.js";
+import { bindChunkCaptureSystem, cleanupChunkMarkersForSettlement } from "./chunk_flag.js";
+import { bindTerritoryBorderSystem, clearSettlementBorders, refreshSettlementBorders, scheduleRefreshAllSettlementBorders, scheduleRefreshSettlementBorders } from "./territory_border.js";
 import { processPendingTradePayouts, processPendingTradeItemReturns } from "./trade.js";
 
 bindArmySystem({
@@ -271,7 +272,15 @@ bindChunkCaptureSystem(world, {
   giveItemStack,
   getDimensionId,
   blockPosition,
-  findNearestPlayer
+  findNearestPlayer,
+  safeDimension,
+  refreshSettlementBorders
+});
+bindTerritoryBorderSystem(world, {
+  safeDimension,
+  saveData,
+  loadData,
+  getSettlement
 });
 
 world.beforeEvents?.worldInitialize?.subscribe((event) => {
@@ -509,6 +518,7 @@ world.beforeEvents.entityHurt?.subscribe((event) => {
 });
 
 system.run(() => updatePlayerPrefixDisplays());
+system.runTimeout(() => scheduleRefreshAllSettlementBorders(loadData()), 60);
 
 system.runInterval(() => updateFlagLabels(), 60);
 system.runInterval(() => updateMoraleForNewDay(), 1200);
@@ -681,6 +691,7 @@ async function runSettlementCreationFlow(player, context) {
   saveData(data);
   updateFlagLabelFor(settlement, data);
   updatePlayerPrefixDisplays(data);
+  scheduleRefreshSettlementBorders(data, settlement);
   world.sendMessage(`§6[Королевства] §f${playerName} основал(а) ${settlementDisplayName(data, settlement)} за ${formatCopperValue(CREATION_COST)}.`);
 }
 
@@ -1090,6 +1101,7 @@ async function upgradeSettlement(player, settlementId, sessionToken) {
   saveData(data);
   updateFlagLabelFor(settlement);
   updatePlayerPrefixDisplays(data);
+  scheduleRefreshSettlementBorders(data, settlement);
   world.sendMessage(`§6[Королевства] §f${settlementDisplayName(data, settlement)} улучшено за ${formatCopperValue(upgradeCost)}. Мораль выросла.`);
 }
 
@@ -2091,6 +2103,7 @@ function handleWarVictory(data, winner, loser, attackerPlayer) {
 
   disbandSettlement(data, loser.id, `проиграло войну против ${winner.name}`, false);
   updateFlagLabelFor(winner, data);
+  scheduleRefreshSettlementBorders(data, winner);
 
   if (attackerPlayer?.isValid) {
     attackerPlayer.sendMessage(`§a${winnerLabel} победило. Флаг ${loserLabel} уничтожен.`);
@@ -2151,6 +2164,9 @@ function cleanupSettlementKnights(settlement) {
 function disbandSettlement(data, settlementId, reason, announce = true) {
   const settlement = getSettlement(data, settlementId);
   if (!settlement) return;
+
+  clearSettlementBorders(settlement);
+  cleanupChunkMarkersForSettlement(settlement);
 
   data.settlements = data.settlements.filter((entry) => entry.id !== settlementId);
 
@@ -2530,6 +2546,7 @@ function loadData() {
       if (!Array.isArray(settlement.wars)) settlement.wars = [];
       if (!Array.isArray(settlement.warInitiatedAgainst)) settlement.warInitiatedAgainst = [];
       if (!Array.isArray(settlement.buildings)) settlement.buildings = [];
+      if (!Array.isArray(settlement.borderBlocks)) settlement.borderBlocks = [];
       ensureSettlementArmyData(settlement);
       ensureSettlementTradeData(settlement);
       if (typeof settlement.morale !== "number") settlement.morale = 75;

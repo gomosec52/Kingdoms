@@ -2,9 +2,10 @@ import { system, ItemStack } from "@minecraft/server";
 import {
   chunkFromLocation,
   chunkKey,
-  canCaptureChunk,
+  canPlaceChunkMarker,
   captureChunk,
   countCapturedChunks,
+  isCapturedChunk,
   MAX_EMPIRE_CAPTURED_CHUNKS
 } from "./territory.js";
 
@@ -96,7 +97,7 @@ function validateChunkCapture(player, clickedBlock) {
   }
 
   const { cx, cz } = chunkFromLocation(clickedBlock.location);
-  const error = canCaptureChunk(data, settlement, cx, cz);
+  const error = canPlaceChunkMarker(data, settlement, cx, cz);
   if (error) return { error, data, settlement, cx, cz };
 
   return { data, settlement, cx, cz, dimensionId };
@@ -105,7 +106,7 @@ function validateChunkCapture(player, clickedBlock) {
 function finalizeChunkCapture(player, clickedBlock, settlement, cx, cz, existingMarker) {
   const data = deps.loadData();
   const freshSettlement = deps.getSettlement(data, settlement.id) ?? settlement;
-  const recheck = canCaptureChunk(data, freshSettlement, cx, cz);
+  const recheck = canPlaceChunkMarker(data, freshSettlement, cx, cz);
   if (recheck) {
     if (existingMarker?.isValid) existingMarker.remove();
     restoreChunkCaptureFlag(player);
@@ -113,7 +114,8 @@ function finalizeChunkCapture(player, clickedBlock, settlement, cx, cz, existing
     return;
   }
 
-  captureChunk(freshSettlement, cx, cz);
+  const newlyCaptured = !isCapturedChunk(freshSettlement, cx, cz);
+  if (newlyCaptured) captureChunk(freshSettlement, cx, cz);
   const marker = existingMarker?.isValid
     ? existingMarker
     : spawnChunkMarker(clickedBlock, cx, cz, freshSettlement.id);
@@ -136,7 +138,14 @@ function finalizeChunkCapture(player, clickedBlock, settlement, cx, cz, existing
   }
 
   deps.saveData(data);
-  player.sendMessage(`§aЧанк [${cx}, ${cz}] захвачен! (${countCapturedChunks(freshSettlement)}/${MAX_EMPIRE_CAPTURED_CHUNKS})`);
+  if (newlyCaptured && typeof deps.refreshSettlementBorders === "function") {
+    deps.refreshSettlementBorders(data, freshSettlement);
+  }
+  player.sendMessage(
+    newlyCaptured
+      ? `§aЧанк [${cx}, ${cz}] захвачен! (${countCapturedChunks(freshSettlement)}/${MAX_EMPIRE_CAPTURED_CHUNKS})`
+      : `§aФлаг чанка [${cx}, ${cz}] установлен заново.`
+  );
 }
 
 function handleChunkMarkerSpawn(entity) {
@@ -181,6 +190,19 @@ function handleChunkMarkerSpawn(entity) {
   finalizeChunkCapture(player, clickedBlock, result.settlement, result.cx, result.cz, entity);
 }
 
+export function cleanupChunkMarkersForSettlement(settlement) {
+  const dimension = deps?.safeDimension?.(settlement?.dimensionId);
+  if (!dimension) return;
+
+  try {
+    for (const entity of dimension.getEntities({ type: CHUNK_MARKER_ENTITY, tags: [`kingdoms_id_${settlement.id}`] })) {
+      entity.remove();
+    }
+  } catch (_error) {
+    // Ignore marker cleanup failures.
+  }
+}
+
 export function bindChunkCaptureSystem(world, dependencies) {
   deps = dependencies;
 
@@ -197,6 +219,7 @@ export function bindChunkCaptureSystem(world, dependencies) {
 
   world.afterEvents?.entityDie?.subscribe((event) => {
     if (event.deadEntity?.typeId !== CHUNK_MARKER_ENTITY) return;
+
     const dimension = event.deadEntity.dimension;
     try {
       dimension.spawnItem(new ItemStack(CHUNK_CAPTURE_FLAG_ITEM, 1), event.deadEntity.location);

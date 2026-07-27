@@ -9,6 +9,9 @@
     },
     "kingdoms_spawn_guard": {
       "textures": "textures/blocks/spawn_guard"
+    },
+    "kingdoms_territory_border": {
+      "textures": "textures/blocks/territory_border"
     }
   }
 }

@@ -2,5 +2,8 @@
   "format_version": "1.21.40",
   "kingdoms:spawn_guard": {
     "sound": "stone"
+  },
+  "kingdoms:territory_border": {
+    "sound": "stone"
   }
 }
