@@ -2,12 +2,12 @@
   "format_version": 2,
   "header": {
     "name": "KW Build",
-    "description": "v1.5.5 — model.geo_e209 + proven flag_atlas binding",
-    "uuid": "bfde9885-67f8-4337-aa19-2c23b78f8a41",
+    "description": "v1.5.6 — direct model.geo_0418 with centered mesh",
+    "uuid": "b7c03b4e-2b1b-49ff-8bfa-bc731695cedc",
     "version": [
       1,
       5,
-      5
+      6
     ],
     "min_engine_version": [
       1,
@@ -18,32 +18,32 @@
   "modules": [
     {
       "type": "data",
-      "uuid": "0e8965fc-53d0-42ab-96e3-729f3ec1da8a",
+      "uuid": "92d13a02-ea54-4615-a775-f5bc91866571",
       "version": [
         1,
         5,
-        5
+        6
       ]
     },
     {
       "type": "script",
       "language": "javascript",
-      "uuid": "51080ef7-b93b-4149-861e-686ea9e43a89",
+      "uuid": "60825a77-01b2-46a6-9dba-9c736b1df8dd",
       "entry": "scripts/main.js",
       "version": [
         1,
         5,
-        5
+        6
       ]
     }
   ],
   "dependencies": [
     {
-      "uuid": "ed4d85f4-f744-4d0a-bf8a-28dc01eb5e4f",
+      "uuid": "86f206ee-66c7-4b6f-ba67-09858097da69",
       "version": [
         1,
         5,
-        5
+        6
       ]
     },
     {
