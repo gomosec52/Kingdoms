@@ -2,12 +2,12 @@
   "format_version": 2,
   "header": {
     "name": "KW Build",
-    "description": "v1.4.3 — single cloth banner with integrated emblem",
-    "uuid": "05f0b353-3065-46f7-8476-f270e4cbea40",
+    "description": "v1.4.6 — nearest-neighbor atlas, no blur artifacts",
+    "uuid": "3d064aae-123e-4f05-bfcc-033bdbb63547",
     "version": [
       1,
       4,
-      3
+      6
     ],
     "min_engine_version": [
       1,
@@ -18,32 +18,32 @@
   "modules": [
     {
       "type": "data",
-      "uuid": "5ef8668c-30b5-4a1a-98e9-3ae7b6f42f94",
+      "uuid": "189343b9-4a2b-4704-9a82-ea41caa88205",
       "version": [
         1,
         4,
-        3
+        6
       ]
     },
     {
       "type": "script",
       "language": "javascript",
-      "uuid": "7f4af872-a444-4a36-bd01-105401495b4d",
+      "uuid": "bb9eb869-38b3-4715-a027-a83a510b5ff2",
       "entry": "scripts/main.js",
       "version": [
         1,
         4,
-        3
+        6
       ]
     }
   ],
   "dependencies": [
     {
-      "uuid": "a6f53a8c-a9b5-461c-9aa0-be4d79b64cb6",
+      "uuid": "5a52f70b-037d-45ab-a088-b2e71b5223c5",
       "version": [
         1,
         4,
-        3
+        6
       ]
     },
     {
