@@ -6,6 +6,7 @@ export const KNIGHTS_PER_BARRACKS = 5;
 export const KNIGHT_PURCHASE_BATCH = 5;
 export const ARMY_DISMISS_COOLDOWN_TICKS = 15 * 60 * 20;
 export const POWER_PER_RESIDENT = 15;
+export const DEFAULT_KNIGHT_TYPE = "plate_knight";
 export const ORDER_MENU_LERP = 0.22;
 export const ORDER_MENU_TICKS = 1;
 

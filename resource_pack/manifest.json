@@ -2,7 +2,7 @@
   "format_version": 2,
   "header": {
     "name": "KW Build Resources",
-    "description": "v1.9.9 — fix Далее → Армия page navigation",
+    "description": "v1.9.10 — fix Дalее menu (restore DEFAULT_KNIGHT_TYPE)",
     "uuid": "0319ea31-7410-4887-be2d-2d52676a4a6d",
     "version": [
       1,
@@ -22,7 +22,7 @@
       "version": [
         1,
         9,
-        8
+        9
       ]
     }
   ]
