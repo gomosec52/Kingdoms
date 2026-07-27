@@ -2,12 +2,12 @@
   "format_version": 2,
   "header": {
     "name": "KW Build",
-    "description": "v1.4.8 — reference-matched frame and wider cloth",
-    "uuid": "e147aa2a-8a21-45e7-9966-7ab6ea6b3eaa",
+    "description": "v1.5.1 — exact glTF conversion with correct Bedrock scale",
+    "uuid": "e984dac2-be00-4356-85d1-fb3eb23766f3",
     "version": [
       1,
-      4,
-      8
+      5,
+      1
     ],
     "min_engine_version": [
       1,
@@ -18,32 +18,32 @@
   "modules": [
     {
       "type": "data",
-      "uuid": "a8bc480d-8ba3-432c-8847-2d981873796b",
+      "uuid": "9407841d-2b85-4ead-8ff3-52cc26d42d69",
       "version": [
         1,
-        4,
-        8
+        5,
+        1
       ]
     },
     {
       "type": "script",
       "language": "javascript",
-      "uuid": "8bd516a4-e3b6-413a-858b-a332913336e2",
+      "uuid": "6a2488ef-aaed-471c-83c5-7ca8b1e50549",
       "entry": "scripts/main.js",
       "version": [
         1,
-        4,
-        8
+        5,
+        1
       ]
     }
   ],
   "dependencies": [
     {
-      "uuid": "e0f3f9ed-9aa5-426d-9295-cbb779741162",
+      "uuid": "c5e3928f-865b-465b-a5f0-24667ceefa01",
       "version": [
         1,
-        4,
-        8
+        5,
+        1
       ]
     },
     {
