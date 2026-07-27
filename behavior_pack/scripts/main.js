@@ -14,7 +14,9 @@ import {
   shouldBlockSpawnBreak,
   shouldBlockSpawnPlace,
   shouldBlockSpawnPvp,
-  shouldBlockSpawnSettlement
+  shouldBlockSpawnSettlement,
+  shouldBlockSpawnInteract,
+  wouldSettlementRadiusOverlapSpawnGuard
 } from "./spawn_guard.js";
 import {
   CREATION_COST_COPPER,
@@ -39,6 +41,26 @@ import {
   openArmyMenu,
   ensureSettlementArmyData
 } from "./army.js";
+import {
+  PREFIXES,
+  getPrefixInfoBody,
+  getPlayerRole,
+  canAssignPrefix,
+  getAssignablePrefixes,
+  canManageResidents,
+  canManagePrefixes,
+  canAccessConstruction,
+  canAccessTrade,
+  canAccessDiplomacy,
+  canDeclareWar,
+  canDisbandSettlement,
+  canDisbandAlliance,
+  canUpgradeSettlement,
+  canClaimTax,
+  canBuyKnights,
+  isSettlementOwner
+} from "./permissions.js";
+import { bindTradeSystem, ensureSettlementTradeData, openTradeHub } from "./trade.js";
 
 const { BlockPermutation, EquipmentSlot, ItemStack, system, world } = server;
 const STORE_KEY = "kingdoms:data:v1";
@@ -46,7 +68,7 @@ const STORE_LIMIT = 32767;
 const SETTLEMENT_MENU_TITLE = "kingdoms:settlement";
 const SETTLEMENT_MENU_PAGE = {
   MAIN: "main",
-  ARMY: "army"
+  EXTRA: "extra"
 };
 
 function settlementMenuTitle(page = SETTLEMENT_MENU_PAGE.MAIN, animate = false) {
@@ -105,16 +127,7 @@ const SETTLEMENT_TYPES = [
   { name: "Империя", hp: 1100, radius: 300, tax: 64, minPlayers: 10, defeatReward: 128, upgradeCost: 2500 }
 ];
 
-const PREFIXES = [
-  { name: "Крестьянин", description: "Добывает еду, дерево и базовые ресурсы для поселения." },
-  { name: "Ремесленник", description: "Создаёт инструменты, блоки, оружие и помогает развивать инфраструктуру." },
-  { name: "Стражник", description: "Охраняет ворота, флаг, склады и жителей на территории поселения." },
-  { name: "Купец", description: "Ведёт торговлю, доставляет ресурсы и помогает поселению богатеть." },
-  { name: "Дружинник", description: "Сражается в походах и защищает союзников во время войны." },
-  { name: "Рыцарь", description: "Элитный воин поселения, отвечает за атаки, оборону и честь государства." },
-  { name: "Дворянин", description: "Помогает управлять жителями, дипломатией и внутренним порядком." },
-  { name: "Советник", description: "Даёт стратегические решения владельцу и координирует развитие." }
-];
+const PREFIXES_LIST = PREFIXES;
 
 const CREATOR_PREFIXES = [
   "Староста",
@@ -154,6 +167,7 @@ bindArmySystem({
   saveData,
   getSettlement,
   showForm,
+  showFormDeferred,
   getPlayerName,
   playerDisplayPrefix,
   countBuildingsOfType,
@@ -171,7 +185,30 @@ bindArmySystem({
   buildingCostCopper,
   getMissingCoinCost,
   takeMixedCost,
-  countInventoryItem
+  countInventoryItem,
+  canBuyKnights,
+  canCommandArmy,
+  getMaxSummonCount
+});
+
+bindTradeSystem({
+  world,
+  system,
+  ActionFormData,
+  ModalFormData,
+  MessageFormData,
+  loadData,
+  saveData,
+  getSettlement,
+  getPlayerName,
+  samePlayerName,
+  showForm,
+  showFormDeferred,
+  pickFromActionList,
+  assertSettlementMenuSession,
+  openSettlementMenu,
+  SETTLEMENT_MENU_PAGE,
+  getCurrentDay
 });
 
 bindSpawnGuardSystem({
@@ -341,9 +378,15 @@ world.beforeEvents.playerPlaceBlock?.subscribe((event) => {
 
 world.beforeEvents.playerInteractWithBlock?.subscribe((event) => {
   const blockId = event.block.typeId;
+  const data = loadData();
+  const dimensionId = getDimensionId(event.block.dimension);
+  if (PROTECTED_INTERACTIONS.includes(blockId) && shouldBlockSpawnInteract(data, event.player, event.block.location, dimensionId)) {
+    event.cancel = true;
+    event.player.sendMessage("§cЗона защиты спавна: взаимодействовать с этим нельзя.");
+    return;
+  }
   if (!PROTECTED_INTERACTIONS.includes(blockId)) return;
 
-  const data = loadData();
   const playerName = getPlayerName(event.player);
   const lootZone = findLootZoneAt(data, event.block.location, getDimensionId(event.block.dimension));
   if (lootZone && !hasLootAccess(data, lootZone, playerName)) {
@@ -508,6 +551,8 @@ async function runSettlementCreationFlow(player, context) {
       "Например: Новгород",
       { defaultValue: `Поселение ${playerName}` }
     );
+  const warning = getTerritoryPlacementWarning(loadData(), territoryCenter, dimensionId);
+  if (warning) player.sendMessage(warning);
   const response = await showForm(player, form);
   if (response.canceled) {
     player.sendMessage("§7Создание поселения отменено.");
@@ -633,6 +678,44 @@ function cleanupFailedPlacement(player, flagEntity, restoreFlagItem) {
   if (restoreFlagItem) giveItemStack(player, new ItemStack(FLAG_ITEM, 1));
 }
 
+function formatExtraPageBody(settlement) {
+  return [
+    formatArmyPowerLine(settlement),
+    "",
+    "Дополнительные разделы:",
+    "• Армия — рыцари и приказы",
+    "• Торговля — сделки между поселениями"
+  ].join("\n");
+}
+
+function getMaxAchievableTypeIndex(data, center, dimensionId) {
+  let maxIndex = 0;
+  for (let typeIndex = SETTLEMENT_TYPES.length - 1; typeIndex >= 0; typeIndex -= 1) {
+    const radius = SETTLEMENT_TYPES[typeIndex].radius;
+    const overlap = findTerritoryOverlap(data, center, dimensionId, radius, undefined, undefined);
+    const spawnOverlap = wouldSettlementRadiusOverlapSpawnGuard(data, center, dimensionId, radius);
+    if (!overlap && !spawnOverlap) {
+      maxIndex = typeIndex;
+      break;
+    }
+  }
+  return maxIndex;
+}
+
+function getTerritoryPlacementWarning(data, center, dimensionId) {
+  const maxIndex = getMaxAchievableTypeIndex(data, center, dimensionId);
+  const maxType = SETTLEMENT_TYPES[maxIndex];
+  const absoluteMax = SETTLEMENT_TYPES[SETTLEMENT_TYPES.length - 1];
+  if (maxIndex >= SETTLEMENT_TYPES.length - 1) return undefined;
+
+  const empireRadius = absoluteMax.radius;
+  if (wouldSettlementRadiusOverlapSpawnGuard(data, center, dimensionId, empireRadius)) {
+    return `§eВ этом месте нельзя разместить флаг: радиус Империи (${empireRadius}) коснётся зоны защиты спавна. Отойдите подальше.`;
+  }
+
+  return `§eВ этом месте вы можете максимум улучшиться до ${maxType.name}. До ${absoluteMax.name} не получится, т.к. мешает чужая территория. Посмотрите на карту в приложении и выберите место подальше.`;
+}
+
 function validateNewSettlement(player, territoryCenter, dimensionId) {
   const data = loadData();
   const playerName = getPlayerName(player);
@@ -648,6 +731,12 @@ function validateNewSettlement(player, territoryCenter, dimensionId) {
   if (shouldBlockSpawnSettlement(data, territoryCenter, dimensionId)) {
     const guard = findSpawnProtectionAt(data, territoryCenter, dimensionId);
     return `§cРядом со спавном нельзя основывать поселения${guard ? ` (радиус ${guard.radius})` : ""}.`;
+  }
+
+  const empireRadius = SETTLEMENT_TYPES[SETTLEMENT_TYPES.length - 1].radius;
+  const spawnEmpireOverlap = wouldSettlementRadiusOverlapSpawnGuard(data, territoryCenter, dimensionId, empireRadius);
+  if (spawnEmpireOverlap) {
+    return `§cЗдесь нельзя разместить флаг: радиус Империи (${empireRadius}) коснётся зоны защиты спавна (радиус ${spawnEmpireOverlap.radius}). Отойдите подальше.`;
   }
 
   const overlap = findTerritoryOverlap(data, territoryCenter, dimensionId, SETTLEMENT_TYPES[0].radius, undefined, undefined);
@@ -682,6 +771,14 @@ async function beginSettlementCreation(player, block) {
     return;
   }
 
+  const empireRadius = SETTLEMENT_TYPES[SETTLEMENT_TYPES.length - 1].radius;
+  const spawnEmpireOverlap = wouldSettlementRadiusOverlapSpawnGuard(data, block.location, dimensionId, empireRadius);
+  if (spawnEmpireOverlap) {
+    removePlacedFlag(block, player);
+    player.sendMessage(`§cЗдесь нельзя разместить флаг: радиус Империи (${empireRadius}) коснётся зоны защиты спавна (радиус ${spawnEmpireOverlap.radius}). Отойдите подальше.`);
+    return;
+  }
+
   const overlap = findTerritoryOverlap(data, block.location, dimensionId, SETTLEMENT_TYPES[0].radius, undefined, undefined);
   if (overlap) {
     removePlacedFlag(block, player);
@@ -696,6 +793,8 @@ async function beginSettlementCreation(player, block) {
       "Например: Новгород",
       { defaultValue: `Поселение ${playerName}` }
     );
+  const warning = getTerritoryPlacementWarning(data, block.location, dimensionId);
+  if (warning) player.sendMessage(warning);
   const response = await showForm(player, form);
   if (response.canceled) {
     removePlacedFlag(block, player);
@@ -772,11 +871,12 @@ async function openSettlementMenu(player, settlementId, page = SETTLEMENT_MENU_P
     : "Максимум развития";
   const form = new ActionFormData()
     .title(settlementMenuTitle(page, animate))
-    .body(page === SETTLEMENT_MENU_PAGE.ARMY ? formatArmyPageBody(settlement) : settlementInfo(data, settlement));
+    .body(page === SETTLEMENT_MENU_PAGE.EXTRA ? formatExtraPageBody(settlement) : settlementInfo(data, settlement));
 
-  if (page === SETTLEMENT_MENU_PAGE.ARMY) {
+  if (page === SETTLEMENT_MENU_PAGE.EXTRA) {
     form
       .button("Армия", "textures/ui/kingdoms/icon_war")
+      .button("Торговля", "textures/ui/kingdoms/icon_tax")
       .button("Назад", "textures/ui/kingdoms/icon_disband");
   } else {
     form
@@ -784,7 +884,7 @@ async function openSettlementMenu(player, settlementId, page = SETTLEMENT_MENU_P
       .button("Жители", "textures/ui/kingdoms/icon_residents")
       .button("Префиксы", "textures/ui/kingdoms/icon_prefixes")
       .button("О префиксах", "textures/ui/kingdoms/icon_info")
-      .button("Создать альянс", "textures/ui/kingdoms/icon_alliance")
+      .button("Дипломатия", "textures/ui/kingdoms/icon_alliance")
       .button("Объявить войну", "textures/ui/kingdoms/icon_war")
       .button("Налог", "textures/ui/kingdoms/icon_tax")
       .button("Строительство", "textures/ui/kingdoms/icon_build")
@@ -799,16 +899,17 @@ async function openSettlementMenu(player, settlementId, page = SETTLEMENT_MENU_P
   const selection = Number(response.selection);
   if (Number.isNaN(selection)) return;
 
-  if (page === SETTLEMENT_MENU_PAGE.ARMY) {
-    if (selection === 0) return openArmyMenu(player, settlementId, sessionToken);
-    if (selection === 1) {
+  if (page === SETTLEMENT_MENU_PAGE.EXTRA) {
+    if (selection === 0) return deferMenu(player, () => openArmyMenu(player, settlementId, sessionToken));
+    if (selection === 1) return deferMenu(player, () => openTradeHub(player, settlementId, sessionToken));
+    if (selection === 2) {
       return openSettlementMenu(player, settlementId, SETTLEMENT_MENU_PAGE.MAIN, false, sessionToken);
     }
     return undefined;
   }
 
   if (selection === 9) {
-    return openSettlementMenu(player, settlementId, SETTLEMENT_MENU_PAGE.ARMY, false, sessionToken);
+    return openSettlementMenu(player, settlementId, SETTLEMENT_MENU_PAGE.EXTRA, false, sessionToken);
   }
 
   switch (selection) {
@@ -821,7 +922,7 @@ async function openSettlementMenu(player, settlementId, page = SETTLEMENT_MENU_P
     case 3:
       return deferMenu(player, () => openPrefixInfo(player, settlementId, sessionToken));
     case 4:
-      return deferMenu(player, () => openAllianceMenu(player, settlementId, sessionToken));
+      return deferMenu(player, () => openDiplomacyMenu(player, settlementId, sessionToken));
     case 5:
       return deferMenu(player, () => openWarMenu(player, settlementId, sessionToken));
     case 6:
@@ -839,7 +940,11 @@ async function upgradeSettlement(player, settlementId, sessionToken) {
   if (!assertSettlementMenuSession(player, settlementId, sessionToken)) return;
   const data = loadData();
   const settlement = getSettlement(data, settlementId);
-  if (!settlement || !requireOwner(player, settlement)) return;
+  const playerName = getPlayerName(player);
+  if (!settlement || !canUpgradeSettlement(data, playerName, settlement)) {
+    player.sendMessage("§cУлучшать поселение могут создатель и Советник.");
+    return;
+  }
 
   const nextType = SETTLEMENT_TYPES[settlement.typeIndex + 1];
   if (!nextType) {
@@ -873,7 +978,11 @@ async function openResidentsMenu(player, settlementId, sessionToken) {
   if (!assertSettlementMenuSession(player, settlementId, sessionToken)) return;
   const data = loadData();
   const settlement = getSettlement(data, settlementId);
-  if (!settlement || !requireOwner(player, settlement)) return;
+  const playerName = getPlayerName(player);
+  if (!settlement || !canManageResidents(data, playerName, settlement)) {
+    player.sendMessage("§cЖителями управляют создатель и Советник.");
+    return;
+  }
 
   const response = await showForm(player, new ActionFormData()
     .title("Жители")
@@ -891,7 +1000,7 @@ async function addResident(player, settlementId, sessionToken) {
   if (!assertSettlementMenuSession(player, settlementId, sessionToken)) return;
   const data = loadData();
   const settlement = getSettlement(data, settlementId);
-  if (!settlement || !requireOwner(player, settlement)) return;
+  if (!settlement || !canManageResidents(data, getPlayerName(player), settlement)) return;
 
   const candidates = world.getPlayers()
     .map((candidate) => getPlayerName(candidate))
@@ -910,7 +1019,7 @@ async function addResident(player, settlementId, sessionToken) {
   }
 
   const name = pick.item;
-  settlement.members[name] = { prefix: PREFIXES[0].name, joinedTick: system.currentTick };
+  settlement.members[name] = { prefix: PREFIXES_LIST[0].name, joinedTick: system.currentTick };
   saveData(data);
   updatePlayerPrefixDisplays(data);
   world.sendMessage(`§6[Королевства] §f${name} теперь житель ${settlementDisplayName(data, settlement)}.`);
@@ -921,7 +1030,7 @@ async function removeResident(player, settlementId, sessionToken) {
   if (!assertSettlementMenuSession(player, settlementId, sessionToken)) return;
   const data = loadData();
   const settlement = getSettlement(data, settlementId);
-  if (!settlement || !requireOwner(player, settlement)) return;
+  if (!settlement || !canManageResidents(data, getPlayerName(player), settlement)) return;
 
   const members = Object.keys(settlement.members);
   if (!members.length) {
@@ -949,7 +1058,11 @@ async function openPrefixesMenu(player, settlementId, sessionToken) {
   if (!assertSettlementMenuSession(player, settlementId, sessionToken)) return;
   const data = loadData();
   const settlement = getSettlement(data, settlementId);
-  if (!settlement || !requireOwner(player, settlement)) return;
+  const playerName = getPlayerName(player);
+  if (!settlement || !canManagePrefixes(data, playerName, settlement)) {
+    player.sendMessage("§cПрефиксы назначают создатель, Советник и Дворянин.");
+    return;
+  }
 
   const members = Object.keys(settlement.members);
   if (!members.length) {
@@ -967,11 +1080,15 @@ async function openPrefixesMenu(player, settlementId, sessionToken) {
   }
   const memberName = memberPick.item;
 
+  const assignable = getAssignablePrefixes(getPlayerRole(data, playerName, settlement), isSettlementOwner(playerName, settlement))
+    .map((name) => PREFIXES_LIST.find((entry) => entry.name === name))
+    .filter(Boolean);
+
   const prefixPick = await pickFromActionList(
     player,
     `Префикс для ${memberName}`,
     "Выберите статус:",
-    PREFIXES,
+    assignable.length ? assignable : PREFIXES_LIST,
     {
       getLabel: (prefix) => prefix.name,
       icon: "textures/ui/kingdoms/icon_prefixes"
@@ -980,6 +1097,11 @@ async function openPrefixesMenu(player, settlementId, sessionToken) {
   if (prefixPick.canceled) {
     if (prefixPick.back) return openPrefixesMenu(player, settlementId, sessionToken);
     return;
+  }
+
+  if (!canAssignPrefix(getPlayerRole(data, playerName, settlement), isSettlementOwner(playerName, settlement), prefixPick.item.name)) {
+    player.sendMessage("§cВы не можете назначить этот префикс.");
+    return openPrefixesMenu(player, settlementId, sessionToken);
   }
 
   settlement.members[memberName].prefix = prefixPick.item.name;
@@ -991,16 +1113,125 @@ async function openPrefixesMenu(player, settlementId, sessionToken) {
 
 async function openPrefixInfo(player, settlementId, sessionToken) {
   if (!assertSettlementMenuSession(player, settlementId, sessionToken)) return;
-  const body = PREFIXES.map((prefix) => `§6${prefix.name}§r — ${prefix.description}`).join("\n\n");
+  const body = getPrefixInfoBody();
   await showForm(player, new ActionFormData().title("О префиксах").body(body).button("Назад"));
   return openSettlementMenu(player, settlementId, SETTLEMENT_MENU_PAGE.MAIN, false, sessionToken);
+}
+
+async function openDiplomacyMenu(player, settlementId, sessionToken) {
+  if (!assertSettlementMenuSession(player, settlementId, sessionToken)) return;
+  const data = loadData();
+  const settlement = getSettlement(data, settlementId);
+  const playerName = getPlayerName(player);
+  if (!settlement || !canAccessDiplomacy(data, playerName, settlement)) {
+    player.sendMessage("§cДипломатией управляют создатель и Советник.");
+    return openSettlementMenu(player, settlementId, SETTLEMENT_MENU_PAGE.MAIN, false, sessionToken);
+  }
+
+  const ownAlliance = getAlliance(data, settlement.allianceId);
+  const allianceLines = ownAlliance
+    ? ownAlliance.members.map((memberId) => {
+      const member = getSettlement(data, memberId);
+      return member ? `• ${member.name} (${member.creatorName})` : undefined;
+    }).filter(Boolean)
+    : [];
+
+  const body = [
+    ownAlliance ? `Ваш альянс: ${ownAlliance.name}` : "Вы не состоите в альянсе.",
+    "",
+    "Альянсы мира:",
+    ...data.alliances.map((alliance) => {
+      const members = alliance.members.map((id) => getSettlement(data, id)?.name).filter(Boolean).join(", ");
+      return `• ${alliance.name}: ${members || "нет данных"}`;
+    })
+  ].join("\n");
+
+  const form = new ActionFormData()
+    .title("Дипломатия")
+    .body(data.alliances.length ? body : `${body}\n\nПока нет созданных альянсов.`)
+    .button("Создать альянс", "textures/ui/kingdoms/icon_alliance")
+    .button(ownAlliance ? "Расформировать альянс" : "Расформировать альянс", "textures/ui/kingdoms/icon_disband")
+    .button("Список альянсов", "textures/ui/kingdoms/icon_info")
+    .button("Назад", "textures/ui/kingdoms/icon_disband");
+
+  const response = await showFormDeferred(player, form);
+  if (response.canceled) return;
+  if (response.selection === 0) return openAllianceMenu(player, settlementId, sessionToken);
+  if (response.selection === 1) return dissolveAllianceMenu(player, settlementId, sessionToken);
+  if (response.selection === 2) return listAlliancesMenu(player, settlementId, sessionToken);
+  return openSettlementMenu(player, settlementId, SETTLEMENT_MENU_PAGE.MAIN, false, sessionToken);
+}
+
+async function listAlliancesMenu(player, settlementId, sessionToken) {
+  const data = loadData();
+  if (!data.alliances.length) {
+    player.sendMessage("§7На сервере пока нет альянсов.");
+    return openDiplomacyMenu(player, settlementId, sessionToken);
+  }
+
+  const pick = await pickFromActionList(player, "Альянсы", "Выберите альянс:", data.alliances, {
+    getLabel: (alliance) => {
+      const members = alliance.members.map((id) => getSettlement(data, id)?.name).filter(Boolean).join(", ");
+      return `${alliance.name} (${members})`;
+    },
+    icon: "textures/ui/kingdoms/icon_alliance"
+  });
+  if (pick.canceled) {
+    if (pick.back) return openDiplomacyMenu(player, settlementId, sessionToken);
+    return;
+  }
+
+  const alliance = pick.item;
+  const members = alliance.members.map((id) => getSettlement(data, id)).filter(Boolean);
+  player.sendMessage(`§6Альянс "${alliance.name}": ${members.map((entry) => entry.name).join(", ")}`);
+  return openDiplomacyMenu(player, settlementId, sessionToken);
+}
+
+async function dissolveAllianceMenu(player, settlementId, sessionToken) {
+  const data = loadData();
+  const settlement = getSettlement(data, settlementId);
+  const playerName = getPlayerName(player);
+  if (!settlement?.allianceId) {
+    player.sendMessage("§7Ваше поселение не состоит в альянсе.");
+    return openDiplomacyMenu(player, settlementId, sessionToken);
+  }
+  if (!canDisbandAlliance(data, playerName, settlement)) {
+    player.sendMessage("§cРасформировать альянс может только создатель поселения.");
+    return openDiplomacyMenu(player, settlementId, sessionToken);
+  }
+
+  const alliance = getAlliance(data, settlement.allianceId);
+  const response = await showFormDeferred(player, new MessageFormData()
+    .title("Расформировать альянс")
+    .body(`Расформировать альянс "${alliance?.name ?? "?"}"?`)
+    .button1("Да")
+    .button2("Нет"));
+  if (response.canceled || response.selection !== 0) return openDiplomacyMenu(player, settlementId, sessionToken);
+
+  disbandAlliance(data, settlement.allianceId, "создатель расформировал альянс");
+  saveData(data);
+  updatePlayerPrefixDisplays(data);
+  player.sendMessage("§eАльянс расформирован.");
+  return openDiplomacyMenu(player, settlementId, sessionToken);
+}
+
+function disbandAlliance(data, allianceId, reason) {
+  const alliance = getAlliance(data, allianceId);
+  if (!alliance) return;
+  for (const memberId of alliance.members) {
+    const member = getSettlement(data, memberId);
+    if (member) member.allianceId = undefined;
+  }
+  data.alliances = data.alliances.filter((entry) => entry.id !== allianceId);
+  world.sendMessage(`§6[Королевства] §fАльянс "${alliance.name}" расформирован: ${reason}.`);
 }
 
 async function openAllianceMenu(player, settlementId, sessionToken) {
   if (!assertSettlementMenuSession(player, settlementId, sessionToken)) return;
   const data = loadData();
   const settlement = getSettlement(data, settlementId);
-  if (!settlement || !requireOwner(player, settlement)) return;
+  const playerName = getPlayerName(player);
+  if (!settlement || !canAccessDiplomacy(data, playerName, settlement)) return;
 
   const targets = data.settlements.filter((candidate) => candidate.id !== settlement.id && !areAllied(data, candidate.id, settlement.id));
   if (!targets.length) {
@@ -1088,7 +1319,11 @@ async function openWarMenu(player, settlementId, sessionToken) {
   if (!assertSettlementMenuSession(player, settlementId, sessionToken)) return;
   const data = loadData();
   const settlement = getSettlement(data, settlementId);
-  if (!settlement || !requireOwner(player, settlement)) return;
+  const playerName = getPlayerName(player);
+  if (!settlement || !canDeclareWar(data, playerName, settlement)) {
+    player.sendMessage("§cОбъявлять войну могут создатель и Советник.");
+    return openSettlementMenu(player, settlementId, SETTLEMENT_MENU_PAGE.MAIN, false, sessionToken);
+  }
 
   const targets = data.settlements.filter((candidate) => {
     if (candidate.id === settlement.id) return false;
@@ -1125,7 +1360,11 @@ function claimTax(player, settlementId, sessionToken) {
   if (!assertSettlementMenuSession(player, settlementId, sessionToken)) return;
   const data = loadData();
   const settlement = getSettlement(data, settlementId);
-  if (!settlement || !requireOwner(player, settlement)) return;
+  const playerName = getPlayerName(player);
+  if (!settlement || !canClaimTax(data, playerName, settlement)) {
+    player.sendMessage("§cНалог могут забирать создатель и Советник.");
+    return;
+  }
 
   const elapsed = system.currentTick - (settlement.lastTaxTick ?? -TAX_COOLDOWN_TICKS);
   if (elapsed < TAX_COOLDOWN_TICKS) {
@@ -1151,7 +1390,11 @@ async function confirmDisband(player, settlementId, sessionToken) {
   if (!assertSettlementMenuSession(player, settlementId, sessionToken)) return;
   const data = loadData();
   const settlement = getSettlement(data, settlementId);
-  if (!settlement || !requireOwner(player, settlement)) return;
+  const playerName = getPlayerName(player);
+  if (!settlement || !canDisbandSettlement(data, playerName, settlement)) {
+    player.sendMessage("§cРасформировать поселение может только создатель.");
+    return;
+  }
 
   const response = await showForm(player, new MessageFormData()
     .title("Расформировать")
@@ -1346,7 +1589,11 @@ async function openConstructionMenu(player, settlementId, sessionToken) {
   if (!assertSettlementMenuSession(player, settlementId, sessionToken)) return;
   const data = loadData();
   const settlement = getSettlement(data, settlementId);
-  if (!settlement || !requireOwner(player, settlement)) return;
+  const playerName = getPlayerName(player);
+  if (!settlement || !canAccessConstruction(data, playerName, settlement)) {
+    player.sendMessage("§cСтроительство доступно создателю, Ремесленнику, Рыцарю, Дворянину и Советнику.");
+    return openSettlementMenu(player, settlementId, SETTLEMENT_MENU_PAGE.MAIN, false, sessionToken);
+  }
 
   const buildings = listBuildings();
   const lines = [
@@ -1391,7 +1638,7 @@ async function openBuildingDetails(player, settlementId, buildingId, sessionToke
   if (!assertSettlementMenuSession(player, settlementId, sessionToken)) return;
   const data = loadData();
   const settlement = getSettlement(data, settlementId);
-  if (!settlement || !requireOwner(player, settlement)) return;
+  if (!settlement || !canAccessConstruction(data, getPlayerName(player), settlement)) return;
 
   const def = getBuildingDef(buildingId);
   if (!def) return;
@@ -1440,7 +1687,7 @@ function purchaseBuilding(player, settlementId, buildingId, sessionToken) {
   const data = loadData();
   const settlement = getSettlement(data, settlementId);
   const def = getBuildingDef(buildingId);
-  if (!settlement || !def || !requireOwner(player, settlement)) return;
+  if (!settlement || !def || !canAccessConstruction(data, getPlayerName(player), settlement)) return;
 
   if (countBuildingsOfType(settlement, def.id) >= (def.maxPerSettlement ?? 1)) {
     player.sendMessage(`§cВ поселении уже куплен максимум построек этого типа (${def.maxPerSettlement ?? 1}).`);
@@ -1650,9 +1897,9 @@ function settlementInfo(data, settlement) {
   const nextType = SETTLEMENT_TYPES[settlement.typeIndex + 1];
   return [
     `Тип: ${type.name}`,
-    `Имя: ${shortText(settlement.name, 18)}`,
+    `Имя: ${settlement.name}`,
     `Созд.: ${creatorPrefixFor(settlement.typeIndex)}`,
-    shortText(settlement.creatorName, 20),
+    settlement.creatorName,
     `HP: ${settlement.hp}/${getMaxHp(settlement)}`,
     `Мораль: ${settlement.morale}/100`,
     `Жители: ${getPopulation(settlement)}`,
@@ -1663,13 +1910,27 @@ function settlementInfo(data, settlement) {
     `Итого налог: ${formatCopperValue(buildingCostCopper(type.tax + getExtraIncomeBonus(settlement)))}`,
     `Создание: ${formatCopperValue(CREATION_COST)}`,
     `Улучш.: ${nextType ? emeraldCostToLabel(nextType.upgradeCost) : "нет"}`,
-    `Альянс: ${alliance ? shortText(alliance.name, 15) : "нет"}`,
-    `Войны: ${wars.length ? shortText(wars.join(", "), 15) : "нет"}`
+    `Альянс: ${alliance ? alliance.name : "нет"}`,
+    `Войны: ${wars.length ? wars.join(", ") : "нет"}`
   ].join("\n");
 }
 
 function settlementLabel(data, settlement) {
   return `${settlementDisplayName(data, settlement)}\n${creatorPrefixFor(settlement.typeIndex)} ${settlement.creatorName}\nHP ${settlement.hp}/${getMaxHp(settlement)} | Мораль ${settlement.morale}`;
+}
+
+function buildPlayerIdentityTag(data, playerName, rolePrefix) {
+  const settlement = getPlayerSettlement(data, playerName);
+  const lines = [`§f${playerName}`];
+  if (settlement) {
+    lines.push(`§7Поселение §6${settlement.name}`);
+    const alliance = getAlliance(data, settlement.allianceId);
+    if (alliance) lines.push(`§7Альянс: §6${alliance.name}`);
+  }
+  if (rolePrefix && settlement && !samePlayerName(settlement.creatorName, playerName)) {
+    lines.unshift(`§7[§6${rolePrefix}§7]`);
+  }
+  return lines.join("\n");
 }
 
 function playerSettlementName(data, playerName) {
@@ -1727,7 +1988,7 @@ function updatePlayerPrefixDisplays(knownData) {
     if (prefix) playerPrefixCache.set(playerName, prefix);
     else playerPrefixCache.delete(playerName);
 
-    applyPlayerPrefix(player, prefix);
+    applyPlayerIdentity(player, data, prefix);
   }
 
   for (const cachedName of playerPrefixCache.keys()) {
@@ -1735,11 +1996,12 @@ function updatePlayerPrefixDisplays(knownData) {
   }
 }
 
-function applyPlayerPrefix(player, prefix) {
+function applyPlayerIdentity(player, data, prefix) {
   const playerName = getPlayerName(player);
-  const formattedPrefix = prefix ? `§7[§6${prefix}§7] ` : "";
+  const identityTag = buildPlayerIdentityTag(data, playerName, prefix);
+  const chatPrefix = prefix ? `§7[§6${prefix}§7] ` : "";
 
-  if (!prefix) {
+  if (!getPlayerSettlement(data, playerName)) {
     clearDirectChatPrefix(player);
     removePlayerPrefixLabel(player);
     try {
@@ -1750,23 +2012,27 @@ function applyPlayerPrefix(player, prefix) {
     return;
   }
 
-  if (tryApplyDirectChatPrefix(player, formattedPrefix)) {
+  if (tryApplyDirectChatPrefix(player, `${chatPrefix}${identityTag.replace(/\n/g, " §8| ")}`)) {
     directChatPrefixAvailable = true;
-    removePlayerPrefixLabel(player);
+    updatePlayerIdentityLabel(player, identityTag);
     try {
-      if (player.nameTag !== playerName) player.nameTag = playerName;
+      if (player.nameTag !== "") player.nameTag = "";
     } catch (_error) {
       // Ignore nameTag reset failures.
     }
     return;
   }
 
-  updatePlayerPrefixLabel(player, prefix);
+  updatePlayerIdentityLabel(player, identityTag);
   try {
-    if (player.nameTag !== playerName) player.nameTag = "";
+    if (player.nameTag !== "") player.nameTag = "";
   } catch (_error) {
     // Ignore nameTag reset failures.
   }
+}
+
+function applyPlayerPrefix(player, prefix) {
+  applyPlayerIdentity(player, loadData(), prefix);
 }
 
 function tryApplyDirectChatPrefix(player, formattedPrefix) {
@@ -1814,13 +2080,12 @@ function getPlayerPrefixLabelLocation(player) {
   };
 }
 
-function updatePlayerPrefixLabel(player, prefix) {
+function updatePlayerIdentityLabel(player, displayText) {
   const dimension = player.dimension;
   if (!dimension) return;
 
   const pidTag = playerPrefixLabelTag(player);
   const location = getPlayerPrefixLabelLocation(player);
-  const displayText = `§7[§6${prefix}§7] §f${getPlayerName(player)}`;
   let labels = [];
 
   try {
@@ -1841,6 +2106,10 @@ function updatePlayerPrefixLabel(player, prefix) {
   }
 
   for (const duplicate of labels.slice(1)) duplicate.remove();
+}
+
+function updatePlayerPrefixLabel(player, prefix) {
+  updatePlayerIdentityLabel(player, buildPlayerIdentityTag(loadData(), getPlayerName(player), prefix));
 }
 
 function removePlayerPrefixLabel(player) {
@@ -1881,7 +2150,7 @@ function notifyPlayerAboutAddon(player) {
   if (loadedNoticeShown.has(playerName)) return;
   loadedNoticeShown.add(playerName);
 
-  player.sendMessage("§6[KW Build] §fv1.10.4 — монеты, защита спавна, армия");
+  player.sendMessage("§6[KW Build] §fv1.11.0 — дипломатия, торговля, префиксы");
   player.sendMessage(`§7Флаг — сущность. Кликните предметом по блоку. Нужно ${formatCopperValue(CREATION_COST)}.`);
 }
 
@@ -1927,9 +2196,11 @@ function loadData() {
       if (!Array.isArray(settlement.wars)) settlement.wars = [];
       if (!Array.isArray(settlement.buildings)) settlement.buildings = [];
       ensureSettlementArmyData(settlement);
+      ensureSettlementTradeData(settlement);
       if (typeof settlement.morale !== "number") settlement.morale = 75;
       if (typeof settlement.territoryBonus !== "number") settlement.territoryBonus = 0;
     }
+    if (typeof data.nextTradeOfferIdValue !== "number") data.nextTradeOfferIdValue = 1;
     return data;
   } catch (error) {
     world.sendMessage(`§c[Королевства] Ошибка чтения данных: ${error}`);

@@ -144,15 +144,13 @@ export function formatArmyPageBody(settlement) {
     "1 казарма = 5 слотов рыцарей.",
     "Покупка: сразу 5 рыцарей.",
     "",
-    "Созыв: Создатель, Рыцарь, Советник."
+    "Созыв: Создатель, Стражник, Рыцарь, Дворянин, Советник."
   ].join("\n");
 }
 
 export function canCommandArmy(data, player, settlement) {
   const name = deps.getPlayerName(player);
-  if (deps.samePlayerName(settlement.creatorName, name)) return true;
-  const prefix = deps.playerDisplayPrefix(data, name);
-  return prefix === "Рыцарь" || prefix === "Советник";
+  return deps.canCommandArmy(data, name, settlement);
 }
 
 export function hasActiveArmy(player) {
@@ -453,7 +451,7 @@ function dismissArmyForPlayerId(playerId, applyCooldown) {
 }
 
 function backToExtraPage(player, settlementId, sessionToken) {
-  return deps.openSettlementMenu(player, settlementId, deps.SETTLEMENT_MENU_PAGE.ARMY, false, sessionToken);
+  return deps.openSettlementMenu(player, settlementId, deps.SETTLEMENT_MENU_PAGE.EXTRA, false, sessionToken);
 }
 
 export async function openArmyMenu(player, settlementId, sessionToken) {
@@ -478,7 +476,7 @@ export async function openArmyMenu(player, settlementId, sessionToken) {
   }
 
   const form = new deps.ActionFormData()
-    .title(deps.settlementMenuTitle(deps.SETTLEMENT_MENU_PAGE.ARMY))
+    .title(deps.settlementMenuTitle(deps.SETTLEMENT_MENU_PAGE.EXTRA))
     .body(lines.join("\n"))
     .button("Купить рыцаря", "textures/ui/kingdoms/icon_war")
     .button("Созвать армию", "textures/ui/kingdoms/icon_war")
@@ -496,7 +494,10 @@ export async function openArmyMenu(player, settlementId, sessionToken) {
 export async function openKnightShop(player, settlementId, sessionToken) {
   const data = deps.loadData();
   const settlement = deps.getSettlement(data, settlementId);
-  if (!settlement || !deps.requireOwner(player, settlement)) return;
+  if (!settlement || !deps.canBuyKnights(data, deps.getPlayerName(player), settlement)) {
+    player.sendMessage("§cПокупать рыцарей могут создатель, Рыцарь, Дворянин и Советник.");
+    return backToExtraPage(player, settlementId, sessionToken);
+  }
 
   if (countBarracks(settlement) <= 0) {
     player.sendMessage("§cСначала купите казармы в разделе «Строительство».");
@@ -510,7 +511,7 @@ export async function openKnightShop(player, settlementId, sessionToken) {
 export async function openKnightDetails(player, settlementId, knightId, sessionToken) {
   const data = deps.loadData();
   const settlement = deps.getSettlement(data, settlementId);
-  if (!settlement || !deps.requireOwner(player, settlement)) return;
+  if (!settlement || !deps.canBuyKnights(data, deps.getPlayerName(player), settlement)) return;
 
   const def = getKnightDef(knightId);
   if (!def) return;
@@ -529,7 +530,7 @@ export async function openKnightDetails(player, settlementId, knightId, sessionT
 
   const canBuy = owned + KNIGHT_PURCHASE_BATCH <= cap;
   const form = new deps.ActionFormData()
-    .title(deps.settlementMenuTitle(deps.SETTLEMENT_MENU_PAGE.ARMY))
+    .title(deps.settlementMenuTitle(deps.SETTLEMENT_MENU_PAGE.EXTRA))
     .body(body)
     .button(canBuy ? `Купить ${KNIGHT_PURCHASE_BATCH} шт.` : "Лимит", "textures/ui/kingdoms/icon_war")
     .button("Назад", "textures/ui/kingdoms/icon_disband");
@@ -578,7 +579,7 @@ export async function openSummonArmyMenu(player, settlementId, sessionToken) {
   if (!settlement) return;
 
   if (!canCommandArmy(data, player, settlement)) {
-    player.sendMessage("§cСозывать армию могут только Создатель, Рыцарь или Советник.");
+    player.sendMessage("§cСозывать армию могут создатель, Стражник, Рыцарь, Дворянин и Советник.");
     return backToExtraPage(player, settlementId, sessionToken);
   }
 
@@ -600,7 +601,12 @@ export async function openSummonArmyMenu(player, settlementId, sessionToken) {
     return backToExtraPage(player, settlementId, sessionToken);
   }
 
-  const maxCount = Math.min(MAX_SUMMON_KNIGHTS, owned);
+  const maxCount = deps.getMaxSummonCount(data, deps.getPlayerName(player), settlement, owned, MAX_SUMMON_KNIGHTS);
+  if (maxCount <= 0) {
+    player.sendMessage("§cНет доступных рыцарей для созыва.");
+    return backToExtraPage(player, settlementId, sessionToken);
+  }
+
   const form = new deps.ModalFormData()
     .title("Созвать армию")
     .slider(`Рыцари в доспехах (макс. ${maxCount})`, 1, maxCount, {

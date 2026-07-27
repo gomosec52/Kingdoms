@@ -81,7 +81,8 @@ function registerSpawnGuard(player, block) {
     blockPvp: true,
     blockBreak: true,
     blockPlace: true,
-    blockSettlements: true
+    blockSettlements: true,
+    blockInteract: true
   });
   deps.saveData(data);
   player.sendMessage(`§aЯдро защиты спавна установлено. Радиус: ${DEFAULT_SPAWN_GUARD_RADIUS}. Кликните по блоку для настройки.`);
@@ -134,7 +135,8 @@ async function handleSpawnGuardInteract(player, block) {
       .toggle("Запрет PvP", { defaultValue: record.blockPvp !== false })
       .toggle("Запрет ломать блоки", { defaultValue: record.blockBreak !== false })
       .toggle("Запрет ставить блоки", { defaultValue: record.blockPlace !== false })
-      .toggle("Запрет основания поселений", { defaultValue: record.blockSettlements !== false });
+      .toggle("Запрет основания поселений", { defaultValue: record.blockSettlements !== false })
+      .toggle("Запрет взаимодействий", { defaultValue: record.blockInteract !== false });
 
     const response = await deps.showForm(player, form);
     if (response.canceled) return;
@@ -149,6 +151,7 @@ async function handleSpawnGuardInteract(player, block) {
     freshRecord.blockBreak = Boolean(response.formValues?.[2]);
     freshRecord.blockPlace = Boolean(response.formValues?.[3]);
     freshRecord.blockSettlements = Boolean(response.formValues?.[4]);
+    freshRecord.blockInteract = Boolean(response.formValues?.[5]);
     deps.saveData(freshData);
     player.sendMessage(`§aРадиус защиты спавна: §f${freshRecord.radius}§a блоков.`);
 }
@@ -176,5 +179,21 @@ export function shouldBlockSpawnPvp(data, location, dimensionId) {
 export function shouldBlockSpawnSettlement(data, location, dimensionId) {
   const guard = findSpawnProtectionAt(data, location, dimensionId);
   if (!guard || guard.blockSettlements === false) return false;
+  return true;
+}
+
+export function wouldSettlementRadiusOverlapSpawnGuard(data, center, dimensionId, radius) {
+  ensureSpawnGuards(data);
+  for (const guard of data.spawnGuards) {
+    if (guard.dimensionId !== dimensionId) continue;
+    if (deps.distance2D(center, guard.location) < guard.radius + radius) return guard;
+  }
+  return undefined;
+}
+
+export function shouldBlockSpawnInteract(data, player, location, dimensionId) {
+  const guard = findSpawnProtectionAt(data, location, dimensionId);
+  if (!guard || guard.blockInteract === false) return false;
+  if (player.hasTag("kingdoms_admin")) return false;
   return true;
 }
