@@ -14,7 +14,7 @@
         ]
       },
       "minecraft:collision_box": {
-        "width": 0.55,
+        "width": 0.95,
         "height": 0.55
       },
       "minecraft:nameable": {
@@ -38,7 +38,7 @@
       "minecraft:interact": {
         "interactions": [
           {
-            "interact_text": "Выбрать"
+            "interact_text": "Приказ"
           }
         ]
       },

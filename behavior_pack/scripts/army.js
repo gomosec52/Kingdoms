@@ -63,8 +63,7 @@ export function bindArmySystem(dependencies) {
     dismissArmyForPlayerId(event.playerId, false);
   });
 
-  deps.system.runInterval(() => tickArmies(), 5);
-  deps.system.runInterval(() => tickOrderButtons(), 4);
+  deps.system.runInterval(() => tickArmies(), 20);
 }
 
 function handleOrderButtonTouch(source, target) {
@@ -200,17 +199,50 @@ function distanceFlat(a, b) {
   return Math.sqrt(dx * dx + dz * dz);
 }
 
-function getLeftOffset(view, index) {
-  const leftX = -view.z;
-  const leftZ = view.x;
-  const len = Math.sqrt(leftX * leftX + leftZ * leftZ) || 1;
-  const dist = 2.4;
-  const yOffset = 1.75 - index * 0.58;
+function getBodyRightVector(player) {
+  const rot = player.getRotation();
+  const yawRad = (rot?.y ?? 0) * (Math.PI / 180);
   return {
-    x: (leftX / len) * dist,
-    y: yOffset,
-    z: (leftZ / len) * dist
+    x: Math.cos(yawRad),
+    z: Math.sin(yawRad)
   };
+}
+
+function getFixedMenuPosition(player, index) {
+  const right = getBodyRightVector(player);
+  const base = player.location;
+  const horizontalDist = 3.2;
+  return {
+    x: base.x + right.x * horizontalDist,
+    y: base.y + 1.85 - index * 0.62,
+    z: base.z + right.z * horizontalDist
+  };
+}
+
+function tameKnight(knight, player) {
+  try {
+    const tameable = knight.getComponent("minecraft:tameable");
+    tameable?.tame(player);
+  } catch (_error) {
+    // Ignore when tameable is unavailable.
+  }
+}
+
+function setKnightsMode(state, mode, player) {
+  for (const knightId of state.knightIds) {
+    const knight = deps.world.getEntity(knightId);
+    if (!knight?.isValid) continue;
+    try {
+      if (mode === ORDER_MODES.HOLD) {
+        knight.triggerEvent("kingdoms:mode_hold");
+      } else {
+        knight.triggerEvent("kingdoms:mode_follow");
+        tameKnight(knight, player);
+      }
+    } catch (_error) {
+      // Ignore event failures on older runtimes.
+    }
+  }
 }
 
 function markAttackTarget(entity) {
@@ -233,26 +265,6 @@ function handleOwnerHurt(player, damagingEntity) {
   markAttackTarget(damagingEntity);
 }
 
-function followEntity(entity, targetLoc, stopDistance) {
-  const loc = entity.location;
-  const dx = targetLoc.x - loc.x;
-  const dz = targetLoc.z - loc.z;
-  const dist = Math.sqrt(dx * dx + dz * dz);
-  if (dist <= stopDistance) return;
-
-  const speed = Math.min(0.14, (dist - stopDistance) * 0.035);
-  try {
-    entity.applyImpulse({ x: (dx / dist) * speed, y: 0.02, z: (dz / dist) * speed });
-  } catch (_error) {
-    // Fallback for entities without impulse support.
-    const step = Math.min(0.35, dist - stopDistance);
-    entity.teleport(
-      { x: loc.x + (dx / dist) * step, y: targetLoc.y, z: loc.z + (dz / dist) * step },
-      { dimension: entity.dimension }
-    );
-  }
-}
-
 function tickArmies() {
   for (const [playerId, state] of activeArmies.entries()) {
     const player = deps.world.getEntity(playerId);
@@ -268,26 +280,6 @@ function tickArmies() {
 
     if (!state.knightIds.length) {
       cleanupArmyState(playerId);
-      continue;
-    }
-
-    if (state.mode === ORDER_MODES.HOLD) {
-      for (const knightId of state.knightIds) {
-        const knight = deps.world.getEntity(knightId);
-        if (!knight?.isValid) continue;
-        const hold = state.holdPoint;
-        if (distanceFlat(knight.location, hold) > 1.8) {
-          followEntity(knight, hold, 1.2);
-        }
-      }
-      continue;
-    }
-
-    const targetLoc = player.location;
-    for (const knightId of state.knightIds) {
-      const knight = deps.world.getEntity(knightId);
-      if (!knight?.isValid) continue;
-      followEntity(knight, targetLoc, 5);
     }
   }
 }
@@ -307,37 +299,6 @@ function updateOrderButtonLabels(player, state) {
   }
 }
 
-function tickOrderButtons() {
-  for (const [playerId, state] of activeArmies.entries()) {
-    const player = deps.world.getEntity(playerId);
-    if (!player?.isValid) continue;
-
-    const view = player.getViewDirection();
-    const base = player.location;
-    for (let i = 0; i < (state.orderBtnIds || []).length; i += 1) {
-      const btn = state.orderBtnIds[i];
-      const entity = deps.world.getEntity(btn.id);
-      if (!entity?.isValid) continue;
-      const offset = getLeftOffset(view, i);
-      const pos = { x: base.x + offset.x, y: base.y + offset.y, z: base.z + offset.z };
-      try {
-        entity.teleport(pos, { dimension: player.dimension });
-      } catch (_error) {
-        // Ignore teleport failures.
-      }
-    }
-
-    updateOrderButtonLabels(player, state);
-    try {
-      player.onScreenDisplay.setActionBar(
-        `§6Приказы §7| §f${ORDER_BUTTONS.find((b) => b.id === state.mode)?.label ?? "—"} §7| удар/ПКМ по кнопкам`
-      );
-    } catch (_error) {
-      // Ignore action bar failures.
-    }
-  }
-}
-
 function spawnOrderButtons(player) {
   const dimension = player.dimension;
   const ownerTag = orderBtnTag(player.id);
@@ -345,8 +306,9 @@ function spawnOrderButtons(player) {
 
   for (let i = 0; i < ORDER_BUTTONS.length; i += 1) {
     const def = ORDER_BUTTONS[i];
+    const pos = getFixedMenuPosition(player, i);
     try {
-      const entity = dimension.spawnEntity(ORDER_BTN_ENTITY, player.location);
+      const entity = dimension.spawnEntity(ORDER_BTN_ENTITY, pos);
       entity.addTag("kingdoms_order_btn");
       entity.addTag(ownerTag);
       entity.addTag(knightTag(player.id));
@@ -369,15 +331,6 @@ function removeOrderButtons(state) {
   state.orderBtnIds = [];
 }
 
-function setArmyHudTag(player, enabled) {
-  try {
-    if (enabled) player.addTag("kingdoms_army_hud");
-    else player.removeTag("kingdoms_army_hud");
-  } catch (_error) {
-    // Ignore tag failures.
-  }
-}
-
 function applyArmyOrder(player, orderId) {
   const state = getArmyState(player);
   if (!state) return;
@@ -392,14 +345,19 @@ function applyArmyOrder(player, orderId) {
   if (orderId === ORDER_MODES.HOLD) {
     const loc = player.location;
     state.holdPoint = { x: loc.x, y: loc.y, z: loc.z };
+    setKnightsMode(state, ORDER_MODES.HOLD, player);
     for (const knightId of state.knightIds) {
       const knight = deps.world.getEntity(knightId);
-      if (knight?.isValid) knight.teleport(loc, { dimension: knight.dimension });
+      if (knight?.isValid) {
+        knight.teleport(state.holdPoint, { dimension: knight.dimension });
+      }
     }
     player.sendMessage("§aРыцари стоят на месте.");
   } else if (orderId === ORDER_MODES.PEACE) {
+    setKnightsMode(state, ORDER_MODES.FOLLOW, player);
     player.sendMessage("§aРыцари не атакуют в ответ.");
   } else {
+    setKnightsMode(state, ORDER_MODES.FOLLOW, player);
     player.sendMessage("§aРыцари следуют за вами.");
   }
 
@@ -418,8 +376,6 @@ function cleanupArmyState(playerId) {
   const state = activeArmies.get(playerId);
   if (state) cleanupArmyEntities(state);
   activeArmies.delete(playerId);
-  const player = deps.world.getEntity(playerId);
-  if (player?.isValid) setArmyHudTag(player, false);
 }
 
 function dismissArmyForPlayerId(playerId, applyCooldown) {
@@ -429,11 +385,8 @@ function dismissArmyForPlayerId(playerId, applyCooldown) {
   activeArmies.delete(playerId);
 
   const player = deps.world.getEntity(playerId);
-  if (player?.isValid) {
-    setArmyHudTag(player, false);
-    if (applyCooldown) {
-      setDismissCooldownUntil(player, deps.system.currentTick + ARMY_DISMISS_COOLDOWN_TICKS);
-    }
+  if (player?.isValid && applyCooldown) {
+    setDismissCooldownUntil(player, deps.system.currentTick + ARMY_DISMISS_COOLDOWN_TICKS);
   }
 }
 
@@ -455,7 +408,7 @@ export async function openArmyMenu(player, settlementId) {
   ];
 
   if (hasActiveArmy(player)) {
-    lines.push("", "§aПриказы слева на экране§r — удар или ПКМ.");
+    lines.push("", "§aПриказы справа§r — удар или ПКМ по тексту.");
   }
 
   const form = new deps.ActionFormData()
@@ -563,7 +516,7 @@ export async function openSummonArmyMenu(player, settlementId) {
   }
 
   if (hasActiveArmy(player)) {
-    player.sendMessage("§eАрмия уже созвана. Используйте приказы слева.");
+    player.sendMessage("§eАрмия уже созвана. Приказы справа — удар или ПКМ по тексту.");
     return openArmyMenu(player, settlementId);
   }
 
@@ -593,7 +546,7 @@ export async function openSummonArmyMenu(player, settlementId) {
 
   const count = Math.max(1, Math.min(maxCount, Math.round(Number(response.formValues?.[0] ?? 1))));
   summonArmy(player, settlement, count);
-  player.sendMessage(`§aСозвано ${count} рыцарей. Приказы слева — удар или ПКМ.`);
+  player.sendMessage(`§aСозвано ${count} рыцарей. Приказы справа — удар или ПКМ по тексту.`);
   return openArmyMenu(player, settlementId);
 }
 
@@ -614,6 +567,7 @@ function summonArmy(player, settlement, count) {
       knight.addTag(ownerTag);
       knight.addTag(`kingdoms_settlement_${settlement.id}`);
       knight.addTag(`kingdoms_knight_type_${DEFAULT_KNIGHT_TYPE}`);
+      tameKnight(knight, player);
       knightIds.push(knight.id);
     } catch (error) {
       player.sendMessage(`§cНе удалось призвать рыцаря: ${error}`);
@@ -633,7 +587,7 @@ function summonArmy(player, settlement, count) {
 
   activeArmies.set(player.id, state);
   state.orderBtnIds = spawnOrderButtons(player);
-  setArmyHudTag(player, true);
+  setKnightsMode(state, ORDER_MODES.FOLLOW, player);
   updateOrderButtonLabels(player, state);
 }
 
@@ -642,7 +596,7 @@ export async function openArmyOrdersMenu(player) {
     player.sendMessage("§cАрмия не созвана.");
     return undefined;
   }
-  player.sendMessage("§7Приказы слева на экране: удар или ПКМ по кнопкам.");
+  player.sendMessage("§7Приказы справа от вас: удар или ПКМ по тексту.");
   return undefined;
 }
 

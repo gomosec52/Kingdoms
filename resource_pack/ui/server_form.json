@@ -36,9 +36,6 @@
         "kingdoms_form@server_form.kingdoms_long_form_root": {}
       },
       {
-        "army_orders_hud@server_form.kingdoms_army_orders_hud": {}
-      },
-      {
         "vanilla_form@common_dialogs.main_panel_no_buttons": {
           "$title_panel": "common_dialogs.standard_title_label",
           "$title_size": [
@@ -61,7 +58,7 @@
             },
             {
               "binding_type": "view",
-              "source_property_name": "(not (#text = 'kingdoms:settlement') and not (#text = 'kingdoms:army_orders') and not (#text = 'hello') and not(#text = 'Progression') and not(#text = 'Life & Bonds') and not(#text = 'Advancements') and not(#text = 'Advancements II') and not(#text = 'Adventure') and not(#text = 'Exploration') and not(#text = 'Magic') and not(#text = 'The End') and not(#text = 'Nature & Growth') and not(#text = 'Nether'))",
+              "source_property_name": "(not (#text = 'kingdoms:settlement') and not (#text = 'hello') and not(#text = 'Progression') and not(#text = 'Life & Bonds') and not(#text = 'Advancements') and not(#text = 'Advancements II') and not(#text = 'Adventure') and not(#text = 'Exploration') and not(#text = 'Magic') and not(#text = 'The End') and not(#text = 'Nature & Growth') and not(#text = 'Nether'))",
               "target_property_name": "#visible"
             }
           ]
@@ -1083,72 +1080,6 @@
               }
             }
           ]
-        }
-      }
-    ]
-  },
-  "kingdoms_army_orders_hud": {
-    "type": "panel",
-    "size": [
-      130,
-      180
-    ],
-    "offset": [
-      12,
-      0
-    ],
-    "anchor_from": "left_middle",
-    "anchor_to": "left_middle",
-    "layer": 55,
-    "bindings": [
-      {
-        "binding_name": "#title_text",
-        "binding_type": "global"
-      },
-      {
-        "binding_type": "view",
-        "source_property_name": "(not ((#title_text - 'kingdoms:army_orders') = #title_text))",
-        "target_property_name": "#visible"
-      }
-    ],
-    "controls": [
-      {
-        "back": {
-          "type": "image",
-          "texture": "textures/ui/kingdoms/info_panel",
-          "size": [
-            "100%",
-            "100%"
-          ],
-          "alpha": 0.92,
-          "nineslice_size": 6,
-          "layer": 1
-        }
-      },
-      {
-        "title": {
-          "type": "label",
-          "text": "ПРИКАЗЫ",
-          "font_size": "large",
-          "font_scale_factor": 0.9,
-          "shadow": true,
-          "color": [
-            0.33,
-            0.17,
-            0.05
-          ],
-          "text_alignment": "center",
-          "size": [
-            "100% - 8px",
-            "default"
-          ],
-          "offset": [
-            0,
-            10
-          ],
-          "anchor_from": "top_middle",
-          "anchor_to": "top_middle",
-          "layer": 2
         }
       }
     ]
