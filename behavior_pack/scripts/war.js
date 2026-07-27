@@ -12,6 +12,8 @@ export const MAX_SETTLEMENT_TYPE_INDEX = SETTLEMENT_TYPE_NAMES.length - 1;
 export const WAR_DECLARE_COOLDOWN_TICKS = 24 * 60 * 60 * 20;
 export const WEAK_WAR_COOLDOWN_TICKS = 48 * 60 * 60 * 20;
 export const WEAK_VICTORY_TYPE_GAP = 2;
+export const WEAK_ATTACKER_TYPE_GAP = 2;
+export const MIN_TARGET_ONLINE_FOR_WAR = 3;
 export const FLAG_DAMAGE_COOLDOWN_TICKS = 10 * 20;
 
 export function canTargetSettlementType(attackerTypeIndex, targetTypeIndex) {
@@ -63,10 +65,41 @@ export function getWarBlockForTarget(data, settlement, target, currentTick) {
   return { ok: true };
 }
 
-export function canDeclareWarOnTarget(data, settlement, target, currentTick) {
+export function isMuchWeakerAttacker(attackerTypeIndex, targetTypeIndex) {
+  return targetTypeIndex - attackerTypeIndex >= WEAK_ATTACKER_TYPE_GAP;
+}
+
+export function getWarTargetOnlineBlockReason(attacker, target, onlineCount) {
+  if (onlineCount <= 0) {
+    return {
+      ok: false,
+      reason: "offline",
+      message: "§cНельзя объявить войну поселению без игроков в сети."
+    };
+  }
+  if (isMuchWeakerAttacker(attacker.typeIndex, target.typeIndex) && onlineCount === 1) {
+    return {
+      ok: false,
+      reason: "weak_sniper",
+      message: "§cСлабое поселение не может объявить войну более крупному противнику, когда у него в сети только 1 игрок."
+    };
+  }
+  if (onlineCount < MIN_TARGET_ONLINE_FOR_WAR) {
+    return {
+      ok: false,
+      reason: "insufficient_online",
+      message: `§cОбъявить войну можно только поселению, у которого больше 2 игроков в сети (минимум ${MIN_TARGET_ONLINE_FOR_WAR}, сейчас ${onlineCount}).`
+    };
+  }
+  return { ok: true };
+}
+
+export function canDeclareWarOnTarget(data, settlement, target, currentTick, targetOnlineCount = MIN_TARGET_ONLINE_FOR_WAR) {
   if (!canTargetSettlementType(settlement.typeIndex, target.typeIndex)) {
     return { ok: false, reason: "type" };
   }
+  const onlineCheck = getWarTargetOnlineBlockReason(settlement, target, targetOnlineCount);
+  if (!onlineCheck.ok) return onlineCheck;
   return getWarBlockForTarget(data, settlement, target, currentTick);
 }
 

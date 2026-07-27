@@ -195,7 +195,6 @@ import {
   ensureWarCooldownData,
   formatCooldownTicks,
   getAllowedTargetTypeNames,
-  getWarDeclareCooldownRemaining,
   getAllianceWarDeclareCooldownRemaining,
   getWeakWarCooldownRemaining,
   recordWarDeclaration,
@@ -208,7 +207,9 @@ import {
   linkAllianceWar,
   unlinkAllianceWar,
   findWarInitiator,
-  allianceHasActiveWars
+  allianceHasActiveWars,
+  getWarTargetOnlineBlockReason,
+  MIN_TARGET_ONLINE_FOR_WAR
 } from "./war.js";
 import { processPendingTradePayouts, processPendingTradeItemReturns } from "./trade.js";
 
@@ -1601,6 +1602,7 @@ async function openWarMenu(player, settlementId, sessionToken) {
         ? `Активные войны альянса: ${activeInitiatedWars.map((entry) => entry.name).join(", ")}`
         : "Выберите действие.",
       `Доступные цели: ${allowedTypes}.`,
+      `Цель: минимум ${MIN_TARGET_ONLINE_FOR_WAR} игрока поселения в сети, офлайн-цели недоступны.`,
       "Прекратить войну может только поселение, которое её объявило.",
       ...cooldownLines
     ].join("\n"))
@@ -1616,6 +1618,21 @@ async function openWarMenu(player, settlementId, sessionToken) {
   return endWarMenu(player, settlementId, sessionToken);
 }
 
+function countOnlineSettlementMembers(settlement) {
+  const memberNames = new Set([settlement.creatorName, ...Object.keys(settlement.members || {})]);
+  let count = 0;
+  for (const player of world.getPlayers()) {
+    const playerName = getPlayerName(player);
+    for (const memberName of memberNames) {
+      if (samePlayerName(memberName, playerName)) {
+        count += 1;
+        break;
+      }
+    }
+  }
+  return count;
+}
+
 async function declareWarMenu(player, settlementId, sessionToken) {
   const data = loadData();
   const settlement = getSettlement(data, settlementId);
@@ -1626,19 +1643,22 @@ async function declareWarMenu(player, settlementId, sessionToken) {
     if (candidate.id === settlement.id) return false;
     if (areAllied(data, candidate.id, settlement.id)) return false;
     if (areSettlementsAtWar(data, settlement, candidate)) return false;
-    return canTargetSettlementType(settlement.typeIndex, candidate.typeIndex);
+    if (!canTargetSettlementType(settlement.typeIndex, candidate.typeIndex)) return false;
+    const onlineCount = countOnlineSettlementMembers(candidate);
+    return getWarTargetOnlineBlockReason(settlement, candidate, onlineCount).ok;
   });
 
   if (!targets.length) {
-    player.sendMessage(`§7Нет подходящих целей. Ваш тип: ${settlementType(settlement).name}. Доступно: ${getAllowedTargetTypeNames(settlement.typeIndex)}.`);
+    player.sendMessage(`§7Нет подходящих целей. Нужен противник в сети (минимум ${MIN_TARGET_ONLINE_FOR_WAR} игрока поселения). Ваш тип: ${settlementType(settlement).name}.`);
     return openWarMenu(player, settlementId, sessionToken);
   }
 
   const pick = await pickFromActionList(player, "Объявить войну", "Выберите цель:", targets, {
     getLabel: (candidate) => {
+      const onlineCount = countOnlineSettlementMembers(candidate);
       const weakCooldown = getWeakWarCooldownRemaining(settlement, candidate.typeIndex, system.currentTick);
       const suffix = weakCooldown > 0 ? ` §7(кулдаун ${formatCooldownTicks(weakCooldown)})` : "";
-      return `${settlementType(candidate).name} "${candidate.name}" (${candidate.creatorName})${suffix}`;
+      return `${settlementType(candidate).name} "${candidate.name}" (${candidate.creatorName}) §7[${onlineCount} в сети]${suffix}`;
     },
     icon: "textures/ui/kingdoms/icon_war"
   });
@@ -1648,9 +1668,12 @@ async function declareWarMenu(player, settlementId, sessionToken) {
   }
 
   const target = pick.item;
-  const check = canDeclareWarOnTarget(data, settlement, target, system.currentTick);
+  const targetOnlineCount = countOnlineSettlementMembers(target);
+  const check = canDeclareWarOnTarget(data, settlement, target, system.currentTick, targetOnlineCount);
   if (!check.ok) {
-    if (check.reason === "global") {
+    if (check.message) {
+      player.sendMessage(check.message);
+    } else if (check.reason === "global") {
       player.sendMessage(`§cОбъявить войну можно через ${formatCooldownTicks(check.remaining)}.`);
     } else if (check.reason === "weak") {
       const typeName = SETTLEMENT_TYPE_NAMES[check.targetTypeIndex] ?? "?";
