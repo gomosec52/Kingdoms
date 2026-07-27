@@ -2,12 +2,12 @@
   "format_version": 2,
   "header": {
     "name": "KW Build",
-    "description": "v1.5.6 — direct model.geo_0418 with centered mesh",
-    "uuid": "b7c03b4e-2b1b-49ff-8bfa-bc731695cedc",
+    "description": "v1.5.7 — model.geo_49b2 + lambert texture (axis fixed)",
+    "uuid": "8fd73088-04af-403c-84a8-4e29d5d51106",
     "version": [
       1,
       5,
-      6
+      7
     ],
     "min_engine_version": [
       1,
@@ -18,32 +18,32 @@
   "modules": [
     {
       "type": "data",
-      "uuid": "92d13a02-ea54-4615-a775-f5bc91866571",
+      "uuid": "24cbb2e3-1a30-42e0-a67f-31e8f5b3c38a",
       "version": [
         1,
         5,
-        6
+        7
       ]
     },
     {
       "type": "script",
       "language": "javascript",
-      "uuid": "60825a77-01b2-46a6-9dba-9c736b1df8dd",
+      "uuid": "757836a8-b982-4d00-adff-c2bdfad4d485",
       "entry": "scripts/main.js",
       "version": [
         1,
         5,
-        6
+        7
       ]
     }
   ],
   "dependencies": [
     {
-      "uuid": "86f206ee-66c7-4b6f-ba67-09858097da69",
+      "uuid": "c43fe74f-e7fd-4a8c-a152-27c875dfcabd",
       "version": [
         1,
         5,
-        6
+        7
       ]
     },
     {

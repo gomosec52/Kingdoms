@@ -2,12 +2,12 @@
   "format_version": 2,
   "header": {
     "name": "KW Build Resources",
-    "description": "v1.5.6 — model.geo_0418 attempt",
-    "uuid": "86f206ee-66c7-4b6f-ba67-09858097da69",
+    "description": "v1.5.7 — direct new model+texture pair from uploads",
+    "uuid": "c43fe74f-e7fd-4a8c-a152-27c875dfcabd",
     "version": [
       1,
       5,
-      6
+      7
     ],
     "min_engine_version": [
       1,
@@ -18,11 +18,11 @@
   "modules": [
     {
       "type": "resources",
-      "uuid": "f4282377-687d-4c5d-af1e-50cb5d88546a",
+      "uuid": "6a431a6a-6016-40a7-8e62-bcf0c241c38a",
       "version": [
         1,
         5,
-        6
+        7
       ]
     }
   ]
