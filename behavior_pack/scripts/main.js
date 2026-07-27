@@ -58,6 +58,8 @@ import {
   canUpgradeSettlement,
   canClaimTax,
   canBuyKnights,
+  canCommandArmy,
+  getMaxSummonCount,
   isSettlementOwner
 } from "./permissions.js";
 import { bindTradeSystem, ensureSettlementTradeData, openTradeHub } from "./trade.js";
@@ -2150,7 +2152,7 @@ function notifyPlayerAboutAddon(player) {
   if (loadedNoticeShown.has(playerName)) return;
   loadedNoticeShown.add(playerName);
 
-  player.sendMessage("§6[KW Build] §fv1.11.0 — дипломатия, торговля, префиксы");
+  player.sendMessage("§6[KW Build] §fv1.11.1 — монеты, дипломатия, торговля");
   player.sendMessage(`§7Флаг — сущность. Кликните предметом по блоку. Нужно ${formatCopperValue(CREATION_COST)}.`);
 }
 
