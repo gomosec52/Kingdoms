@@ -196,15 +196,19 @@ import {
   formatCooldownTicks,
   getAllowedTargetTypeNames,
   getWarDeclareCooldownRemaining,
+  getAllianceWarDeclareCooldownRemaining,
   getWeakWarCooldownRemaining,
   recordWarDeclaration,
+  recordAllianceWarDeclaration,
   recordWeakVictoryCooldown,
   SETTLEMENT_TYPE_NAMES,
   FLAG_DAMAGE_COOLDOWN_TICKS,
   areSettlementsAtWar,
   getAllianceSettlements,
   linkAllianceWar,
-  unlinkAllianceWar
+  unlinkAllianceWar,
+  findWarInitiator,
+  allianceHasActiveWars
 } from "./war.js";
 import { processPendingTradePayouts, processPendingTradeItemReturns } from "./trade.js";
 
@@ -1420,9 +1424,12 @@ async function dissolveAllianceMenu(player, settlementId, sessionToken) {
   }
 
   const alliance = getAlliance(data, settlement.allianceId);
+  const warNote = allianceHasActiveWars(data, settlement)
+    ? "\n\n§cВнимание: у участников альянса есть активные войны. После роспуска войны продолжатся, но общий доступ к территориям союзников пропадёт."
+    : "";
   const response = await showFormDeferred(player, new MessageFormData()
     .title("Расформировать альянс")
-    .body(`Расформировать альянс "${alliance?.name ?? "?"}"?`)
+    .body(`Расформировать альянс "${alliance?.name ?? "?"}"?${warNote}`)
     .button1("Да")
     .button2("Нет"));
   if (response.canceled || response.selection !== 0) return openDiplomacyMenu(player, settlementId, sessionToken);
@@ -1452,7 +1459,12 @@ async function openAllianceMenu(player, settlementId, sessionToken) {
   const playerName = getPlayerName(player);
   if (!settlement || !canAccessDiplomacy(data, playerName, settlement)) return;
 
-  const targets = data.settlements.filter((candidate) => candidate.id !== settlement.id && !areAllied(data, candidate.id, settlement.id));
+  const targets = data.settlements.filter((candidate) => {
+    if (candidate.id === settlement.id) return false;
+    if (areAllied(data, candidate.id, settlement.id)) return false;
+    if (areSettlementsAtWar(data, settlement, candidate)) return false;
+    return true;
+  });
   if (!targets.length) {
     player.sendMessage("§7Нет поселений для нового альянса.");
     return openSettlementMenu(player, settlementId, SETTLEMENT_MENU_PAGE.MAIN, false, sessionToken);
@@ -1468,6 +1480,11 @@ async function openAllianceMenu(player, settlementId, sessionToken) {
   }
 
   const target = pick.item;
+  if (areSettlementsAtWar(data, settlement, target)) {
+    player.sendMessage("§cНельзя заключить альянс с поселением, с которым идёт война.");
+    return openSettlementMenu(player, settlementId, SETTLEMENT_MENU_PAGE.MAIN, false, sessionToken);
+  }
+
   const targetOwner = world.getPlayers().find((online) => samePlayerName(getPlayerName(online), target.creatorName));
   if (!targetOwner) {
     player.sendMessage("§cСоздатель выбранного поселения должен быть онлайн, чтобы принять альянс.");
@@ -1522,6 +1539,10 @@ async function openAllianceMenu(player, settlementId, sessionToken) {
   if (!ownFresh || !targetFresh || areAllied(fresh, ownFresh.id, targetFresh.id)) {
     return openSettlementMenu(player, settlementId, SETTLEMENT_MENU_PAGE.MAIN, false, sessionToken);
   }
+  if (areSettlementsAtWar(fresh, ownFresh, targetFresh)) {
+    player.sendMessage("§cНельзя заключить альянс с поселением, с которым идёт война.");
+    return openSettlementMenu(player, settlementId, SETTLEMENT_MENU_PAGE.MAIN, false, sessionToken);
+  }
 
   const alliance = { id: nextAllianceId(fresh), name, members: [ownFresh.id, targetFresh.id], createdTick: system.currentTick };
   fresh.alliances.push(alliance);
@@ -1551,7 +1572,7 @@ async function openWarMenu(player, settlementId, sessionToken) {
     .filter(Boolean)
     .filter((entry, index, list) => list.findIndex((other) => other.id === entry.id) === index);
   const currentTick = system.currentTick;
-  const globalCooldown = getWarDeclareCooldownRemaining(settlement, currentTick);
+  const globalCooldown = getAllianceWarDeclareCooldownRemaining(data, settlement, currentTick);
   const allowedTypes = getAllowedTargetTypeNames(settlement.typeIndex);
   const warTargets = data.settlements.filter((candidate) => {
     if (candidate.id === settlement.id) return false;
@@ -1566,7 +1587,7 @@ async function openWarMenu(player, settlementId, sessionToken) {
   if (maxWeakCooldown > globalCooldown) {
     cooldownLines.push(`Кулдаун на слабые типы (48 ч.): ${formatCooldownTicks(maxWeakCooldown)}.`);
   } else if (globalCooldown > 0) {
-    cooldownLines.push(`Кулдаун объявления войны: ${formatCooldownTicks(globalCooldown)}.`);
+    cooldownLines.push(`Кулдаун объявления войны (альянс): ${formatCooldownTicks(globalCooldown)}.`);
   } else if (maxWeakCooldown > 0) {
     cooldownLines.push(`Кулдаун на слабые типы (48 ч.): ${formatCooldownTicks(maxWeakCooldown)}.`);
   } else {
@@ -1577,9 +1598,10 @@ async function openWarMenu(player, settlementId, sessionToken) {
     .title(kingdomsMenuTitle(KINGDOMS_MENU_PAGE.MAIN))
     .body([
       activeInitiatedWars.length
-        ? `Активные войны, объявленные вами: ${activeInitiatedWars.map((entry) => entry.name).join(", ")}`
+        ? `Активные войны альянса: ${activeInitiatedWars.map((entry) => entry.name).join(", ")}`
         : "Выберите действие.",
       `Доступные цели: ${allowedTypes}.`,
+      "Прекратить войну может только поселение, которое её объявило.",
       ...cooldownLines
     ].join("\n"))
     .button("Объявить войну", "textures/ui/kingdoms/icon_war")
@@ -1626,7 +1648,7 @@ async function declareWarMenu(player, settlementId, sessionToken) {
   }
 
   const target = pick.item;
-  const check = canDeclareWarOnTarget(settlement, target, system.currentTick);
+  const check = canDeclareWarOnTarget(data, settlement, target, system.currentTick);
   if (!check.ok) {
     if (check.reason === "global") {
       player.sendMessage(`§cОбъявить войну можно через ${formatCooldownTicks(check.remaining)}.`);
@@ -1642,7 +1664,7 @@ async function declareWarMenu(player, settlementId, sessionToken) {
   linkAllianceWar(data, settlement, target);
   ensureWarInitiatedAgainst(settlement);
   if (!settlement.warInitiatedAgainst.includes(target.id)) settlement.warInitiatedAgainst.push(target.id);
-  recordWarDeclaration(settlement, system.currentTick);
+  recordAllianceWarDeclaration(data, settlement, system.currentTick);
   settlement.morale = Math.max(0, settlement.morale - 6);
   target.morale = Math.max(0, target.morale - 6);
   saveData(data);
@@ -1777,7 +1799,11 @@ async function confirmDisband(player, settlementId, sessionToken) {
 
   const response = await showForm(player, new MessageFormData()
     .title("Расформировать")
-    .body("Вы правда хотите расформировать своё поселение/государство? Флаг и защита территории исчезнут.")
+    .body(
+      (settlement.wars || []).length
+        ? "§cУ вашего поселения активные войны. Расформирование не засчитается как победа противнику — война просто прекратится.\n\nВы правда хотите расформировать своё поселение/государство? Флаг и защита территории исчезнут."
+        : "Вы правда хотите расформировать своё поселение/государство? Флаг и защита территории исчезнут."
+    )
     .button1("Принять")
     .button2("Отклонить"));
   if (response.canceled || response.selection !== 0) return;
@@ -2156,7 +2182,8 @@ function damageFlag(data, target, attackerSettlement, player, flagEntity, rawDam
   if (target.hp <= 0) {
     target.hp = 0;
     const loserSnapshot = captureSettlementSnapshot(target);
-    handleWarVictory(data, attackerSettlement, target, player);
+    const warInitiator = findWarInitiator(data, target, attackerSettlement);
+    handleWarVictory(data, warInitiator, target, player);
     if (!saveData(data)) {
       player.sendMessage("§cНе удалось сохранить результат войны: слишком много данных мира.");
     }
@@ -2177,7 +2204,6 @@ function handleWarVictory(data, winner, loser, attackerPlayer) {
   const winnerLabel = settlementDisplayName(data, winner);
   const loserLabel = settlementDisplayName(data, loser);
 
-  winner.wars = (winner.wars || []).filter((id) => id !== loser.id);
   unlinkAllianceWar(data, winner, loser.id);
   if (Array.isArray(winner.warInitiatedAgainst)) {
     winner.warInitiatedAgainst = winner.warInitiatedAgainst.filter((id) => id !== loser.id);
@@ -2198,12 +2224,14 @@ function handleWarVictory(data, winner, loser, attackerPlayer) {
   winner.morale = Math.min(100, (winner.morale ?? 75) + 12);
   ensureWarCooldownData(winner);
   recordWeakVictoryCooldown(winner, loser, system.currentTick);
+  const winnerSide = getAllianceSettlements(data, winner);
   data.lootZones.push({
     name: loser.name,
     dimensionId: loser.dimensionId,
     center: { ...loser.flag },
     radius: getTerritoryRadius(loser),
     winnerSettlementId: winner.id,
+    winnerSettlementIds: winnerSide.map((entry) => entry.id),
     winnerAllianceId: winner.allianceId,
     expiresTick: system.currentTick + LOOT_WINDOW_TICKS
   });
@@ -2666,6 +2694,11 @@ function loadData() {
     }
     if (!Array.isArray(data.pendingPlayerPayouts)) data.pendingPlayerPayouts = [];
     if (typeof data.nextTradeOfferIdValue !== "number") data.nextTradeOfferIdValue = 1;
+    for (const zone of data.lootZones) {
+      if (!Array.isArray(zone.winnerSettlementIds) || !zone.winnerSettlementIds.length) {
+        zone.winnerSettlementIds = zone.winnerSettlementId ? [zone.winnerSettlementId] : [];
+      }
+    }
     return data;
   } catch (error) {
     world.sendMessage(`§c[Королевства] Ошибка чтения данных: ${error}`);
@@ -2788,10 +2821,14 @@ function hasTerritoryAccess(data, settlement, playerName) {
 }
 
 function hasLootAccess(data, zone, playerName) {
-  const winner = getSettlement(data, zone.winnerSettlementId);
-  if (winner && isMember(winner, playerName)) return true;
-  if (!zone.winnerAllianceId) return false;
-  return data.settlements.some((settlement) => settlement.allianceId === zone.winnerAllianceId && isMember(settlement, playerName));
+  const winnerIds = Array.isArray(zone.winnerSettlementIds) && zone.winnerSettlementIds.length
+    ? zone.winnerSettlementIds
+    : (zone.winnerSettlementId ? [zone.winnerSettlementId] : []);
+  for (const settlementId of winnerIds) {
+    const winner = getSettlement(data, settlementId);
+    if (winner && isMember(winner, playerName)) return true;
+  }
+  return false;
 }
 
 function getPlayerSettlement(data, playerName) {

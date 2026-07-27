@@ -40,8 +40,15 @@ export function getWeakWarCooldownRemaining(settlement, targetTypeIndex, current
   return Math.max(0, until - currentTick);
 }
 
-export function getWarBlockForTarget(settlement, target, currentTick) {
-  const globalRemaining = getWarDeclareCooldownRemaining(settlement, currentTick);
+export function getAllianceWarDeclareCooldownRemaining(data, settlement, currentTick) {
+  return getAllianceSettlements(data, settlement).reduce((max, member) => {
+    ensureWarCooldownData(member);
+    return Math.max(max, getWarDeclareCooldownRemaining(member, currentTick));
+  }, 0);
+}
+
+export function getWarBlockForTarget(data, settlement, target, currentTick) {
+  const globalRemaining = getAllianceWarDeclareCooldownRemaining(data, settlement, currentTick);
   const weakRemaining = getWeakWarCooldownRemaining(settlement, target.typeIndex, currentTick);
 
   if (weakRemaining > 0 && weakRemaining >= globalRemaining) {
@@ -56,15 +63,22 @@ export function getWarBlockForTarget(settlement, target, currentTick) {
   return { ok: true };
 }
 
-export function canDeclareWarOnTarget(settlement, target, currentTick) {
+export function canDeclareWarOnTarget(data, settlement, target, currentTick) {
   if (!canTargetSettlementType(settlement.typeIndex, target.typeIndex)) {
     return { ok: false, reason: "type" };
   }
-  return getWarBlockForTarget(settlement, target, currentTick);
+  return getWarBlockForTarget(data, settlement, target, currentTick);
 }
 
 export function recordWarDeclaration(settlement, currentTick) {
   settlement.lastWarDeclaredTick = currentTick;
+}
+
+export function recordAllianceWarDeclaration(data, settlement, currentTick) {
+  for (const member of getAllianceSettlements(data, settlement)) {
+    ensureWarCooldownData(member);
+    recordWarDeclaration(member, currentTick);
+  }
 }
 
 export function recordWeakVictoryCooldown(winner, loser, currentTick) {
@@ -134,6 +148,15 @@ export function unlinkAllianceWar(data, attackerSideLeader, targetId) {
 
 function getSettlementById(data, settlementId) {
   return data.settlements.find((entry) => entry.id === settlementId);
+}
+
+export function findWarInitiator(data, loser, attackerSide) {
+  const attackers = getAllianceSettlements(data, attackerSide);
+  return attackers.find((member) => (member.warInitiatedAgainst || []).includes(loser.id)) ?? attackerSide;
+}
+
+export function allianceHasActiveWars(data, settlement) {
+  return getAllianceSettlements(data, settlement).some((member) => (member.wars || []).length > 0);
 }
 
 export function ensureWarCooldownData(settlement) {
