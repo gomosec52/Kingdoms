@@ -2,12 +2,12 @@
   "format_version": 2,
   "header": {
     "name": "KW Build Resources",
-    "description": "v1.6.0 — simplified 512 flag texture",
+    "description": "v1.6.1 — wood beam moved behind cloth",
     "uuid": "0319ea31-7410-4887-be2d-2d52676a4a6d",
     "version": [
       1,
       6,
-      0
+      1
     ],
     "min_engine_version": [
       1,
@@ -21,8 +21,8 @@
       "uuid": "c0ec327f-dd03-4e53-8b0f-7a0008b0946a",
       "version": [
         1,
-        5,
-        9
+        6,
+        0
       ]
     }
   ]

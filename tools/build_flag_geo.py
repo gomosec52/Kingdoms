@@ -6,7 +6,11 @@ from __future__ import annotations
 import json
 import math
 import sys
+from collections import defaultdict
 from pathlib import Path
+
+CLOTH_Z = 0.04
+WOOD_Z = -0.25
 
 
 def cross(a: list[float], b: list[float]) -> list[float]:
@@ -28,9 +32,11 @@ def round_vec(v: list[float]) -> list[float]:
     return [round(component, 5) for component in v]
 
 
-def transform_position(position: list[float], center_x: float, min_z: float) -> list[float]:
+def transform_position(
+    position: list[float], center_x: float, min_z: float, depth: float
+) -> list[float]:
     # Source flag lies in XZ with constant Y; map height to Bedrock Y-up.
-    return round_vec([position[0] - center_x, position[2] - min_z, 0.0])
+    return round_vec([position[0] - center_x, position[2] - min_z, depth])
 
 
 def triangle_normal(
@@ -66,6 +72,37 @@ def build_poly(
     ]
 
 
+def is_wood_vertex(flat_x: float, flat_y: float) -> bool:
+    # Horizontal beam, end caps, and top pole hardware sit behind the cloth.
+    if flat_y >= 63.5:
+        return True
+    if flat_x <= -17.0 and flat_y >= 60.0:
+        return True
+    if flat_x >= 17.0 and flat_y >= 63.0:
+        return True
+    return False
+
+
+def classify_vertices(
+    positions_src: list[list[float]], center_x: float, min_z: float
+) -> list[bool]:
+    wood_flags: list[bool] = []
+    for position in positions_src:
+        flat_x = position[0] - center_x
+        flat_y = position[2] - min_z
+        wood_flags.append(is_wood_vertex(flat_x, flat_y))
+    return wood_flags
+
+
+def poly_kind(indices: list[int], wood_flags: list[bool]) -> str:
+    wood_count = sum(1 for index in indices if wood_flags[index])
+    if wood_count == len(indices):
+        return "wood"
+    if wood_count == 0:
+        return "cloth"
+    return "mixed"
+
+
 def convert(source_path: Path) -> dict:
     with source_path.open(encoding="utf-8") as handle:
         source = json.load(handle)
@@ -83,16 +120,53 @@ def convert(source_path: Path) -> dict:
     min_z = min(zs)
     center_x = (min(xs) + max(xs)) / 2
 
-    positions = [transform_position(position, center_x, min_z) for position in positions_src]
+    wood_flags = classify_vertices(positions_src, center_x, min_z)
+    positions = [
+        transform_position(position, center_x, min_z, WOOD_Z if is_wood else CLOTH_Z)
+        for position, is_wood in zip(positions_src, wood_flags, strict=True)
+    ]
     height = max(position[1] for position in positions)
 
     normals: list[list[float]] = []
     normal_map: dict[tuple[float, float, float], int] = {}
     polys: list[list[list[int]]] = []
+    stats = defaultdict(int)
 
     for poly in polys_src:
-        polys.append(build_poly(positions, poly, normals, normal_map, reverse=False))
-        polys.append(build_poly(positions, poly, normals, normal_map, reverse=True))
+        indices = [corner[0] for corner in poly[:3]]
+        kind = poly_kind(indices, wood_flags)
+
+        if kind == "mixed":
+            # Border triangles belong to the cloth layer so art stays continuous up front.
+            kind = "cloth"
+            stats["mixed_as_cloth"] += 1
+
+        if kind == "cloth":
+            polys.append(build_poly(positions, poly, normals, normal_map, reverse=False))
+            polys.append(build_poly(positions, poly, normals, normal_map, reverse=True))
+            stats["cloth"] += 2
+            continue
+
+        front = build_poly(positions, poly, normals, normal_map, reverse=False)
+        back = build_poly(positions, poly, normals, normal_map, reverse=True)
+        front_normal = normals[front[0][1]]
+        back_normal = normals[back[0][1]]
+
+        # Keep only the face pointing away from the viewer standing in front (+Z).
+        if front_normal[2] < 0:
+            polys.append(front)
+            stats["wood_back"] += 1
+        elif back_normal[2] < 0:
+            polys.append(back)
+            stats["wood_back"] += 1
+        else:
+            stats["wood_skipped"] += 1
+
+    print(
+        "poly layers:",
+        dict(stats),
+        f"wood verts {sum(wood_flags)}/{len(wood_flags)}",
+    )
 
     return {
         "format_version": "1.12.0",
