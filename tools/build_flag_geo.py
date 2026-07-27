@@ -100,8 +100,8 @@ def convert(source_path: Path) -> dict:
             {
                 "description": {
                     "identifier": "geometry.kingdoms_flag",
-                    "texture_width": 2048,
-                    "texture_height": 2048,
+                    "texture_width": 512,
+                    "texture_height": 512,
                     "visible_bounds_width": 3,
                     "visible_bounds_height": max(3, round(height / 16, 2)),
                     "visible_bounds_offset": [0, round(height / 32, 3), 0],
