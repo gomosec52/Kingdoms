@@ -1,6 +1,39 @@
 const CHUNK_SIZE = 16;
-export const MAX_EMPIRE_CAPTURED_CHUNKS = 100;
+export const MIN_CAPTURE_TYPE_INDEX = 1;
+export const KINGDOM_TYPE_INDEX = 5;
+export const CHUNK_CAPTURE_COST_COPPER = 10;
+
+/** Max extra captured chunks per settlement type (index 0 = village base, no capture). */
+export const CAPTURE_LIMITS_BY_TYPE = [
+  0,
+  5,
+  15,
+  30,
+  60,
+  100,
+  150
+];
+
+/** @deprecated use getMaxCapturedChunks */
+export const MAX_EMPIRE_CAPTURED_CHUNKS = CAPTURE_LIMITS_BY_TYPE[6];
+/** @deprecated use MIN_CAPTURE_TYPE_INDEX */
 export const EMPIRE_TYPE_INDEX = 6;
+
+export function canCaptureChunksType(settlement) {
+  return settlement.typeIndex >= MIN_CAPTURE_TYPE_INDEX;
+}
+
+export function getMaxCapturedChunks(settlement) {
+  return CAPTURE_LIMITS_BY_TYPE[settlement.typeIndex] ?? 0;
+}
+
+export function chunkCaptureCostsCoins(settlement) {
+  return settlement.typeIndex < KINGDOM_TYPE_INDEX;
+}
+
+export function getChunkCaptureCostCopper(settlement) {
+  return chunkCaptureCostsCoins(settlement) ? CHUNK_CAPTURE_COST_COPPER : 0;
+}
 
 export function chunkFromLocation(location) {
   return {
@@ -142,8 +175,8 @@ export function expandTerritoryOnVictory(data, winner, loser) {
 }
 
 export function canCaptureChunk(data, settlement, cx, cz) {
-  if (settlement.typeIndex < EMPIRE_TYPE_INDEX) {
-    return "§cЗахват чанков доступен только Империи.";
+  if (!canCaptureChunksType(settlement)) {
+    return "§cЗахват чанков доступен после улучшения поселения.";
   }
   if (ownsChunk(settlement, cx, cz)) {
     return "§cЭтот чанк уже принадлежит вашему поселению.";
@@ -151,8 +184,9 @@ export function canCaptureChunk(data, settlement, cx, cz) {
   if (findSettlementOwningChunk(data, settlement.dimensionId, cx, cz, settlement.id)) {
     return "§cЭтот чанк принадлежит другому поселению.";
   }
-  if (countCapturedChunks(settlement) >= MAX_EMPIRE_CAPTURED_CHUNKS) {
-    return `§cЛимит захвата: ${MAX_EMPIRE_CAPTURED_CHUNKS} чанков.`;
+  const maxCaptured = getMaxCapturedChunks(settlement);
+  if (countCapturedChunks(settlement) >= maxCaptured) {
+    return `§cЛимит захвата: ${maxCaptured} чанков.`;
   }
 
   let touchesOwn = false;

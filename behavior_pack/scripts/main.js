@@ -52,8 +52,9 @@ import {
   captureChunk,
   countCapturedChunks,
   getAllSettlementChunkKeys,
-  MAX_EMPIRE_CAPTURED_CHUNKS,
-  EMPIRE_TYPE_INDEX
+  chunkCaptureCostsCoins,
+  getMaxCapturedChunks,
+  CHUNK_CAPTURE_COST_COPPER
 } from "./territory.js";
 import {
   bindArmySystem,
@@ -1106,9 +1107,13 @@ async function upgradeSettlement(player, settlementId, sessionToken) {
   settlement.hp = getMaxHp(settlement);
   settlement.morale = Math.min(100, settlement.morale + 10);
   settlement.chunks = chunksInRadius(settlement.flag, settlementType(settlement).radius);
-  if (settlement.typeIndex >= EMPIRE_TYPE_INDEX) {
+  if (settlement.typeIndex >= 1) {
     giveItemStack(player, new ItemStack("kingdoms:chunk_capture_flag", 1));
-    player.sendMessage("§aИмперия! Вы получили §fФлаг захвата чанка§a — ставьте его на соседний свободный чанк.");
+    const maxChunks = getMaxCapturedChunks(settlement);
+    const costNote = chunkCaptureCostsCoins(settlement)
+      ? ` Стоимость захвата: ${formatCopperValue(CHUNK_CAPTURE_COST_COPPER)} за чанк.`
+      : " Захват чанков бесплатный.";
+    player.sendMessage(`§aВы получили §fФлаг захвата чанка§a (лимит: ${maxChunks}).${costNote}`);
   }
   saveData(data);
   updateFlagLabelFor(settlement);
@@ -2350,7 +2355,7 @@ function settlementInfo(data, settlement) {
     `HP: ${settlement.hp}/${getMaxHp(settlement)}`,
     `Мораль: ${settlement.morale}/100`,
     `Жители: ${getPopulation(settlement)}`,
-    `Чанков: ${getTerritoryChunkCount(settlement)} (захвачено: ${countCapturedChunks(settlement)}/${MAX_EMPIRE_CAPTURED_CHUNKS})`,
+    `Чанков: ${getTerritoryChunkCount(settlement)} (захвачено: ${countCapturedChunks(settlement)}/${getMaxCapturedChunks(settlement)})`,
     `Налог: ${formatCopperValue(buildingCostCopper(type.tax))}/25м`,
     formatExtraIncomeLine(settlement),
     formatArmyPowerLine(settlement),

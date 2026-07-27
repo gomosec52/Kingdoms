@@ -1,12 +1,15 @@
 import { system, ItemStack } from "@minecraft/server";
+import { formatCopperValue, takeCopperValueWithNotice } from "./economy.js";
 import {
   chunkFromLocation,
   chunkKey,
   canPlaceChunkMarker,
   captureChunk,
+  chunkCaptureCostsCoins,
   countCapturedChunks,
-  isCapturedChunk,
-  MAX_EMPIRE_CAPTURED_CHUNKS
+  getChunkCaptureCostCopper,
+  getMaxCapturedChunks,
+  isCapturedChunk
 } from "./territory.js";
 
 export const CHUNK_CAPTURE_FLAG_ITEM = "kingdoms:chunk_capture_flag";
@@ -85,7 +88,7 @@ function validateChunkCapture(player, clickedBlock) {
   const playerName = deps.getPlayerName(player);
   const settlement = deps.getPlayerSettlement(data, playerName);
   if (!settlement) {
-    return { error: "§cЗахват чанков доступен только жителям Империи." };
+    return { error: "§cЗахват чанков доступен только жителям поселения." };
   }
   if (!deps.canCaptureChunks(data, playerName, settlement)) {
     return { error: "§cСтавить флаг захвата могут создатель и Советник." };
@@ -115,7 +118,16 @@ function finalizeChunkCapture(player, clickedBlock, settlement, cx, cz, existing
   }
 
   const newlyCaptured = !isCapturedChunk(freshSettlement, cx, cz);
-  if (newlyCaptured) captureChunk(freshSettlement, cx, cz);
+  if (newlyCaptured) {
+    const captureCost = getChunkCaptureCostCopper(freshSettlement);
+    if (captureCost > 0 && !takeCopperValueWithNotice(player, captureCost)) {
+      if (existingMarker?.isValid) existingMarker.remove();
+      restoreChunkCaptureFlag(player);
+      player.sendMessage(`§cДля захвата чанка нужно ${formatCopperValue(captureCost)}.`);
+      return;
+    }
+    captureChunk(freshSettlement, cx, cz);
+  }
   const marker = existingMarker?.isValid
     ? existingMarker
     : spawnChunkMarker(clickedBlock, cx, cz, freshSettlement.id);
@@ -143,7 +155,9 @@ function finalizeChunkCapture(player, clickedBlock, settlement, cx, cz, existing
   }
   player.sendMessage(
     newlyCaptured
-      ? `§aЧанк [${cx}, ${cz}] захвачен! (${countCapturedChunks(freshSettlement)}/${MAX_EMPIRE_CAPTURED_CHUNKS})`
+      ? chunkCaptureCostsCoins(freshSettlement)
+        ? `§aЧанк [${cx}, ${cz}] захвачен за ${formatCopperValue(getChunkCaptureCostCopper(freshSettlement))}! (${countCapturedChunks(freshSettlement)}/${getMaxCapturedChunks(freshSettlement)})`
+        : `§aЧанк [${cx}, ${cz}] захвачен! (${countCapturedChunks(freshSettlement)}/${getMaxCapturedChunks(freshSettlement)})`
       : `§aФлаг чанка [${cx}, ${cz}] установлен заново.`
   );
 }
