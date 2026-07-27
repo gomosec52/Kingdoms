@@ -58,8 +58,26 @@
       "minecraft:attack": {
         "damage": 7
       },
+      "minecraft:equip_item": {},
+      "minecraft:equippable": {
+        "slots": [
+          {
+            "slot": 0,
+            "item": "minecraft:iron_sword",
+            "accepted_items": [
+              "minecraft:iron_sword"
+            ]
+          }
+        ]
+      },
       "minecraft:equipment": {
-        "table": "entities/knight_equipment.json"
+        "table": "loot_tables/entities/knight_equipment.json",
+        "slot_drop_chance": [
+          {
+            "slot": "slot.weapon.mainhand",
+            "drop_chance": 0
+          }
+        ]
       },
       "minecraft:tameable": {
         "probability": 1,

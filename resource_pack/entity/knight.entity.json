@@ -24,6 +24,9 @@
         "look_at_target": "animation.common.look_at_target"
       },
       "scripts": {
+        "pre_animation": [
+          "variable.is_holding_right = query.is_item_equipped('main_hand');"
+        ],
         "animate": [
           "controller.animation.player.root",
           "controller.animation.player.base",
@@ -36,8 +39,7 @@
       "enable_attachables": true,
       "hide_armor": true,
       "render_controllers": [
-        "controller.render.knight",
-        "controller.render.item_default"
+        "controller.render.knight"
       ]
     }
   }

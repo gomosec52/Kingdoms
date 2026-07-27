@@ -231,12 +231,20 @@ function tameKnight(knight, player) {
 }
 
 function equipKnightWeapon(knight) {
-  try {
-    const equippable = knight.getComponent("minecraft:equippable");
-    equippable?.setEquipment(deps.EquipmentSlot.Mainhand, new deps.ItemStack("minecraft:iron_sword", 1));
-  } catch (_error) {
-    // Ignore when equippable is unavailable.
-  }
+  const apply = () => {
+    try {
+      const equippable = knight.getComponent("minecraft:equippable");
+      if (!equippable) return;
+      const current = equippable.getEquipment(deps.EquipmentSlot.Mainhand);
+      if (current?.typeId === "minecraft:iron_sword") return;
+      equippable.setEquipment(deps.EquipmentSlot.Mainhand, new deps.ItemStack("minecraft:iron_sword", 1));
+    } catch (_error) {
+      // Ignore when equippable is unavailable.
+    }
+  };
+
+  apply();
+  deps.system.runTimeout(apply, 1);
 }
 
 function setKnightsMode(state, mode, player) {
