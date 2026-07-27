@@ -2,12 +2,12 @@
   "format_version": 2,
   "header": {
     "name": "KW Build",
-    "description": "v1.5.4 — direct model.geo_e209 wiring",
-    "uuid": "c8dbc5d1-d1ad-4ba5-b7d8-46b53df543ba",
+    "description": "v1.5.5 — model.geo_e209 + proven flag_atlas binding",
+    "uuid": "bfde9885-67f8-4337-aa19-2c23b78f8a41",
     "version": [
       1,
       5,
-      4
+      5
     ],
     "min_engine_version": [
       1,
@@ -18,32 +18,32 @@
   "modules": [
     {
       "type": "data",
-      "uuid": "6b8c1e14-d18a-4efe-8aa7-b54afe8e14cb",
+      "uuid": "0e8965fc-53d0-42ab-96e3-729f3ec1da8a",
       "version": [
         1,
         5,
-        4
+        5
       ]
     },
     {
       "type": "script",
       "language": "javascript",
-      "uuid": "dafc2c82-b6ae-45ea-84f9-67a55887dd70",
+      "uuid": "51080ef7-b93b-4149-861e-686ea9e43a89",
       "entry": "scripts/main.js",
       "version": [
         1,
         5,
-        4
+        5
       ]
     }
   ],
   "dependencies": [
     {
-      "uuid": "ef7e1e05-274a-4a17-a34f-3cd520bcb0f6",
+      "uuid": "ed4d85f4-f744-4d0a-bf8a-28dc01eb5e4f",
       "version": [
         1,
         5,
-        4
+        5
       ]
     },
     {
