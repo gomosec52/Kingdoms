@@ -169,6 +169,7 @@ const flagInteractionCooldown = new Map();
 const flagPlacementCooldown = new Map();
 const pendingPlacementLocks = new Set();
 const playerPrefixCache = new Map();
+const playerIdentityCache = new Map();
 const playerIdByName = new Map();
 const chatPrefixNoticeShown = new Set();
 const loadedNoticeShown = new Set();
@@ -312,6 +313,7 @@ world.afterEvents.playerSpawn?.subscribe((event) => {
 world.afterEvents.playerLeave?.subscribe((event) => {
   if (event.playerName) {
     playerPrefixCache.delete(event.playerName);
+    playerIdentityCache.delete(event.playerName);
     playerIdByName.delete(event.playerName);
     chatPrefixNoticeShown.delete(event.playerName);
   }
@@ -2354,29 +2356,22 @@ function updatePlayerPrefixDisplays(knownData) {
 
     const prefix = playerDisplayPrefix(data, playerName);
     const settlementName = playerSettlementName(data, playerName);
-    syncIdentityTags(player, settlementName, prefix);
-    syncIdentityProperties(player, settlementName, prefix);
+    const identityKey = `${settlementName ?? ""}|${prefix ?? ""}`;
+    if (playerIdentityCache.get(playerName) !== identityKey) {
+      syncIdentityTags(player, settlementName, prefix);
+      syncIdentityProperties(player, settlementName, prefix);
+      playerIdentityCache.set(playerName, identityKey);
+    }
 
     if (prefix) playerPrefixCache.set(playerName, prefix);
     else playerPrefixCache.delete(playerName);
-
-    applyPlayerPrefix(player, prefix);
   }
 
   for (const cachedName of playerPrefixCache.keys()) {
     if (!onlineNames.has(cachedName)) playerPrefixCache.delete(cachedName);
   }
-}
-
-function applyPlayerPrefix(player, prefix) {
-  const playerName = getPlayerName(player);
-
-  clearDirectChatPrefix(player);
-  removePlayerPrefixLabel(player);
-  try {
-    if (player.nameTag !== playerName) player.nameTag = playerName;
-  } catch (_error) {
-    // Prefix Reloaded handles display via kw_s/kw_r tags synced above.
+  for (const cachedName of playerIdentityCache.keys()) {
+    if (!onlineNames.has(cachedName)) playerIdentityCache.delete(cachedName);
   }
 }
 

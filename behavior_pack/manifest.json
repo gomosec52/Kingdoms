@@ -2,12 +2,12 @@
   "format_version": 2,
   "header": {
     "name": "KW Build",
-    "description": "v1.12.3 — chunk capture flag textures and entity_placer fix",
+    "description": "v1.12.4 — fix prefix nametag flicker with Prefix Reloaded",
     "uuid": "35da6754-77fe-403f-98e0-6e6702d1c764",
     "version": [
       1,
       12,
-      3
+      4
     ],
     "min_engine_version": [
       1,
@@ -22,7 +22,7 @@
       "version": [
         1,
         12,
-        3
+        4
       ]
     },
     {
@@ -33,7 +33,7 @@
       "version": [
         1,
         12,
-        3
+        4
       ]
     }
   ],
@@ -43,7 +43,7 @@
       "version": [
         1,
         12,
-        3
+        4
       ]
     },
     {
