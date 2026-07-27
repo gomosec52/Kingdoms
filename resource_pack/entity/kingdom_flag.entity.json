@@ -7,7 +7,7 @@
         "default": "entity_alphatest"
       },
       "textures": {
-        "default": "textures/blocks/kingdom_flag"
+        "default": "textures/entity/kingdom_flag"
       },
       "geometry": {
         "default": "geometry.kingdoms_flag"

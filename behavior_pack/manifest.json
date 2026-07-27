@@ -2,12 +2,12 @@
   "format_version": 2,
   "header": {
     "name": "KW Build",
-    "description": "v1.3.7 — flag from original model.geo + atlas",
-    "uuid": "89128714-64fa-4b4f-b012-46ac986ffe0b",
+    "description": "v1.3.8 — flag: original geo, no nested pivot shift",
+    "uuid": "3f39a33f-1106-4dad-9451-112e253c431c",
     "version": [
       1,
       3,
-      7
+      8
     ],
     "min_engine_version": [
       1,
@@ -18,32 +18,32 @@
   "modules": [
     {
       "type": "data",
-      "uuid": "f6bb03ad-e58e-404d-90a6-fcd1f8ca4895",
+      "uuid": "47bcb7ea-89eb-4016-b018-9ade57be61ba",
       "version": [
         1,
         3,
-        7
+        8
       ]
     },
     {
       "type": "script",
       "language": "javascript",
-      "uuid": "fc80f166-ca9d-445b-8b61-b87cf36b48b4",
+      "uuid": "48308ae4-6f51-4a56-843f-167b84205ead",
       "entry": "scripts/main.js",
       "version": [
         1,
         3,
-        7
+        8
       ]
     }
   ],
   "dependencies": [
     {
-      "uuid": "a74db77b-1d19-4d91-b615-42b62268b500",
+      "uuid": "4b89a2ca-569d-4f12-86dd-69df4e653d87",
       "version": [
         1,
         3,
-        7
+        8
       ]
     },
     {
