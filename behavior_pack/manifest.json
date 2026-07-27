@@ -2,12 +2,12 @@
   "format_version": 2,
   "header": {
     "name": "KW Build",
-    "description": "v1.4.1 — filled atlas from uploaded texture files",
-    "uuid": "42bb35b8-216f-455e-b61e-cb0180222332",
+    "description": "v1.4.2 — manual cube flag styled like reference screenshot",
+    "uuid": "1d2b6e8b-3545-46bd-b28a-7383f533f9ce",
     "version": [
       1,
       4,
-      1
+      2
     ],
     "min_engine_version": [
       1,
@@ -18,32 +18,32 @@
   "modules": [
     {
       "type": "data",
-      "uuid": "03b9cd49-4118-4464-9434-bcbfa4ad903c",
+      "uuid": "f9a92467-d4e5-4af8-a13d-c77e194dfc7e",
       "version": [
         1,
         4,
-        1
+        2
       ]
     },
     {
       "type": "script",
       "language": "javascript",
-      "uuid": "020f8a3d-8b72-441d-8cff-d7d46a2294c4",
+      "uuid": "15ec5e41-0884-402b-b042-4605f5c5d358",
       "entry": "scripts/main.js",
       "version": [
         1,
         4,
-        1
+        2
       ]
     }
   ],
   "dependencies": [
     {
-      "uuid": "9c501d3e-efea-4079-b104-5d0b644868fc",
+      "uuid": "7b74e14a-aa26-4921-8f17-99643f426e31",
       "version": [
         1,
         4,
-        1
+        2
       ]
     },
     {
