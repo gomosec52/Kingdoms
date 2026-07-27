@@ -670,7 +670,7 @@ async function openSettlementMenu(player, settlementId, page = SETTLEMENT_MENU_P
   if (page === SETTLEMENT_MENU_PAGE.ARMY) {
     form
       .button("Армия", "textures/ui/kingdoms/icon_war")
-      .button("«", "textures/ui/kingdoms/icon_disband");
+      .button(" ", "textures/ui/kingdoms/page_prev");
   } else {
     form
       .button(upgradeLabel, "textures/ui/kingdoms/icon_upgrade")
@@ -682,25 +682,27 @@ async function openSettlementMenu(player, settlementId, page = SETTLEMENT_MENU_P
       .button("Налог", "textures/ui/kingdoms/icon_tax")
       .button("Строительство", "textures/ui/kingdoms/icon_build")
       .button("Расформировать", "textures/ui/kingdoms/icon_disband")
-      .button("»", "textures/ui/kingdoms/icon_info");
+      .button(" ", "textures/ui/kingdoms/page_next");
   }
 
   const response = await showForm(player, form);
   if (response.canceled) return;
 
+  const selection = Number(response.selection);
+
   if (page === SETTLEMENT_MENU_PAGE.ARMY) {
-    if (response.selection === 0) return openArmyMenu(player, settlementId);
-    if (response.selection === 1) {
+    if (selection === 0) return openArmyMenu(player, settlementId);
+    if (selection === 1) {
       return openSettlementMenu(player, settlementId, SETTLEMENT_MENU_PAGE.MAIN, false);
     }
     return undefined;
   }
 
-  if (response.selection === 9) {
+  if (selection === 9) {
     return openSettlementMenu(player, settlementId, SETTLEMENT_MENU_PAGE.ARMY, true);
   }
 
-  switch (response.selection) {
+  switch (selection) {
     case 0:
       return upgradeSettlement(player, settlementId);
     case 1:
