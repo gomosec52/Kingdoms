@@ -107,10 +107,21 @@ function validateChunkCapture(player, clickedBlock) {
   return { data, settlement, cx, cz, dimensionId };
 }
 
+function dropChunkCaptureFlagItem(marker) {
+  if (!marker?.isValid) return;
+  try {
+    marker.dimension.spawnItem(new ItemStack(CHUNK_CAPTURE_FLAG_ITEM, 1), marker.location);
+  } catch (_error) {
+    // Ignore drop failures.
+  }
+}
+
 function scheduleChunkMarkerExpiry(marker) {
   if (!marker?.isValid) return;
   system.runTimeout(() => {
-    if (marker?.isValid) marker.remove();
+    if (!marker?.isValid) return;
+    dropChunkCaptureFlagItem(marker);
+    marker.remove();
   }, CHUNK_MARKER_LIFETIME_TICKS);
 }
 
