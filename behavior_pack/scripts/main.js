@@ -12,10 +12,7 @@ import {
   dismissArmiesForSettlement,
   formatArmyPowerLine,
   formatArmyPageBody,
-  hasActiveArmy,
-  openArmyOrdersMenu,
-  openKnightShop,
-  openSummonArmyMenu,
+  openArmyMenu,
   ensureSettlementArmyData
 } from "./army.js";
 
@@ -669,14 +666,9 @@ async function openSettlementMenu(player, settlementId, page = SETTLEMENT_MENU_P
     .body(page === SETTLEMENT_MENU_PAGE.ARMY ? formatArmyPageBody(settlement) : settlementInfo(data, settlement));
 
   if (page === SETTLEMENT_MENU_PAGE.ARMY) {
-    ensureSettlementArmyData(settlement);
     form
-      .button("Купить рыцаря", "textures/ui/kingdoms/icon_war")
-      .button("Созвать армию", "textures/ui/kingdoms/icon_war");
-    if (hasActiveArmy(player)) {
-      form.button("Приказы", "textures/ui/kingdoms/icon_info");
-    }
-    form.button("Назад", "");
+      .button("Армия", "textures/ui/kingdoms/icon_war")
+      .button("«", "textures/ui/kingdoms/icon_disband");
   } else {
     form
       .button(upgradeLabel, "textures/ui/kingdoms/icon_upgrade")
@@ -688,18 +680,15 @@ async function openSettlementMenu(player, settlementId, page = SETTLEMENT_MENU_P
       .button("Налог", "textures/ui/kingdoms/icon_tax")
       .button("Строительство", "textures/ui/kingdoms/icon_build")
       .button("Расформировать", "textures/ui/kingdoms/icon_disband")
-      .button("Далее", "");
+      .button("»", "textures/ui/kingdoms/icon_info");
   }
 
   const response = await showForm(player, form);
   if (response.canceled) return;
 
   if (page === SETTLEMENT_MENU_PAGE.ARMY) {
-    let armyIndex = 0;
-    if (response.selection === armyIndex++) return openKnightShop(player, settlementId);
-    if (response.selection === armyIndex++) return openSummonArmyMenu(player, settlementId);
-    if (hasActiveArmy(player) && response.selection === armyIndex++) return openArmyOrdersMenu(player);
-    if (response.selection === armyIndex) {
+    if (response.selection === 0) return openArmyMenu(player, settlementId);
+    if (response.selection === 1) {
       return openSettlementMenu(player, settlementId, SETTLEMENT_MENU_PAGE.MAIN, false);
     }
     return undefined;
@@ -1104,7 +1093,7 @@ const BUILDINGS = {
   barracks: {
     id: "barracks",
     name: "Казармы",
-    description: "Казармы позволяют нанимать рыцарей. На каждую казарму — 1 рыцарь в штате.",
+    description: "Казармы позволяют нанимать рыцарей (5 слотов на казарму). Постройте здание на территории.",
     taxBonus: 0,
     maxPerSettlement: 10,
     minTypeIndex: 0,

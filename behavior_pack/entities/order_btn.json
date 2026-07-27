@@ -1,0 +1,49 @@
+{
+  "format_version": "1.20.80",
+  "minecraft:entity": {
+    "description": {
+      "identifier": "kingdoms:order_btn",
+      "is_spawnable": false,
+      "is_summonable": true,
+      "is_experimental": false
+    },
+    "components": {
+      "minecraft:type_family": {
+        "family": [
+          "kingdoms_order_btn"
+        ]
+      },
+      "minecraft:collision_box": {
+        "width": 0.55,
+        "height": 0.55
+      },
+      "minecraft:nameable": {
+        "always_show": true,
+        "allow_name_tag_renaming": false
+      },
+      "minecraft:physics": {
+        "has_collision": true,
+        "has_gravity": false
+      },
+      "minecraft:pushable": {
+        "is_pushable": false,
+        "is_pushable_by_piston": false
+      },
+      "minecraft:damage_sensor": {
+        "triggers": {
+          "cause": "all",
+          "deals_damage": false
+        }
+      },
+      "minecraft:interact": {
+        "interactions": [
+          {
+            "interact_text": "Выбрать"
+          }
+        ]
+      },
+      "minecraft:persistent": {},
+      "minecraft:fire_immune": true
+    }
+  }
+}

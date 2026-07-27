@@ -1,5 +1,7 @@
 {
   "ui_defs": [
-    "ui/server_form.json"
+    "ui/server_form.json",
+    "ui/kingdoms_army_hud.json",
+    "ui/hud_screen.json"
   ]
 }

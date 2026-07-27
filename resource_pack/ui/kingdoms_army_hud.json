@@ -1,0 +1,89 @@
+{
+  "namespace": "kingdoms_army_hud",
+  "army_orders_panel": {
+    "type": "panel",
+    "size": [
+      118,
+      92
+    ],
+    "offset": [
+      6,
+      0
+    ],
+    "anchor_from": "left_middle",
+    "anchor_to": "left_middle",
+    "layer": 80,
+    "bindings": [
+      {
+        "binding_type": "view",
+        "source_property_name": "(q.player_has_tag('kingdoms_army_hud'))",
+        "target_property_name": "#visible"
+      }
+    ],
+    "controls": [
+      {
+        "bg": {
+          "type": "image",
+          "texture": "textures/ui/kingdoms/info_panel",
+          "alpha": 0.78,
+          "size": [
+            "100%",
+            "100%"
+          ],
+          "nineslice_size": 4,
+          "layer": 1
+        }
+      },
+      {
+        "title": {
+          "type": "label",
+          "text": "ПРИКАЗЫ",
+          "font_size": "normal",
+          "font_scale_factor": 1.05,
+          "shadow": true,
+          "color": [
+            0.95,
+            0.85,
+            0.55
+          ],
+          "size": [
+            "100% - 6px",
+            "default"
+          ],
+          "offset": [
+            0,
+            4
+          ],
+          "anchor_from": "top_middle",
+          "anchor_to": "top_middle",
+          "layer": 2
+        }
+      },
+      {
+        "hint": {
+          "type": "label",
+          "text": "Удар / ПКМ по кнопкам",
+          "font_size": "normal",
+          "font_scale_factor": 0.92,
+          "shadow": true,
+          "color": [
+            0.92,
+            0.92,
+            0.92
+          ],
+          "size": [
+            "100% - 8px",
+            "default"
+          ],
+          "offset": [
+            0,
+            18
+          ],
+          "anchor_from": "top_middle",
+          "anchor_to": "top_middle",
+          "layer": 2
+        }
+      }
+    ]
+  }
+}

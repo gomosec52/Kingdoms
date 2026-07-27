@@ -1,0 +1,16 @@
+{
+  "namespace": "hud",
+  "hud_screen": {
+    "modifications": [
+      {
+        "array_name": "controls",
+        "operation": "insert_front",
+        "value": [
+          {
+            "kingdoms_army_orders@kingdoms_army_hud.army_orders_panel": {}
+          }
+        ]
+      }
+    ]
+  }
+}
