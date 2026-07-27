@@ -209,14 +209,13 @@ function getBodyRightVector(player) {
   };
 }
 
-function getMenuPosition(player, index) {
-  const right = getBodyRightVector(player);
+function getMenuPosition(player, index, menuRightVector) {
   const base = player.location;
   const horizontalDist = 3.2;
   return {
-    x: base.x + right.x * horizontalDist,
+    x: base.x + menuRightVector.x * horizontalDist,
     y: base.y + 1.85 - index * 0.62,
-    z: base.z + right.z * horizontalDist
+    z: base.z + menuRightVector.z * horizontalDist
   };
 }
 
@@ -275,7 +274,7 @@ function tickOrderButtons() {
       const btn = state.orderBtnIds[i];
       const entity = deps.world.getEntity(btn.id);
       if (!entity?.isValid) continue;
-      const pos = getMenuPosition(player, i);
+      const pos = getMenuPosition(player, i, state.menuRightVector);
       try {
         entity.teleport(pos, { dimension: player.dimension });
       } catch (_error) {
@@ -319,14 +318,14 @@ function updateOrderButtonLabels(player, state) {
   }
 }
 
-function spawnOrderButtons(player) {
+function spawnOrderButtons(player, menuRightVector) {
   const dimension = player.dimension;
   const ownerTag = orderBtnTag(player.id);
   const ids = [];
 
   for (let i = 0; i < ORDER_BUTTONS.length; i += 1) {
     const def = ORDER_BUTTONS[i];
-    const pos = getMenuPosition(player, i);
+    const pos = getMenuPosition(player, i, menuRightVector);
     try {
       const entity = dimension.spawnEntity(ORDER_BTN_ENTITY, pos);
       entity.addTag("kingdoms_order_btn");
@@ -588,16 +587,18 @@ function summonArmy(player, settlement, count) {
 
   if (!knightIds.length) return;
 
+  const menuRightVector = getBodyRightVector(player);
   const state = {
     settlementId: settlement.id,
     knightType: DEFAULT_KNIGHT_TYPE,
     knightIds,
     orderBtnIds: [],
-    mode: ORDER_MODES.FOLLOW
+    mode: ORDER_MODES.FOLLOW,
+    menuRightVector
   };
 
   activeArmies.set(player.id, state);
-  state.orderBtnIds = spawnOrderButtons(player);
+  state.orderBtnIds = spawnOrderButtons(player, menuRightVector);
   setKnightsMode(state, ORDER_MODES.FOLLOW, player);
   updateOrderButtonLabels(player, state);
 }
