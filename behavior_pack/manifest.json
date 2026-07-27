@@ -2,12 +2,12 @@
   "format_version": 2,
   "header": {
     "name": "KW Build",
-    "description": "v1.3.4 — Bedrock Reimagined server_form compat",
-    "uuid": "5b184e13-ab55-4230-8c4a-d35af28d394c",
+    "description": "v1.3.5 — new custom flag model + atlas texture",
+    "uuid": "9973a742-7398-4236-a6bd-29701e9f9549",
     "version": [
       1,
       3,
-      4
+      5
     ],
     "min_engine_version": [
       1,
@@ -18,32 +18,32 @@
   "modules": [
     {
       "type": "data",
-      "uuid": "fb7de888-f438-4568-84b0-3b14836cdf0d",
+      "uuid": "c919b477-21cd-4d0b-83aa-dced4849f026",
       "version": [
         1,
         3,
-        4
+        5
       ]
     },
     {
       "type": "script",
       "language": "javascript",
-      "uuid": "c065eba6-9b93-440e-a50d-a6beba0cd375",
+      "uuid": "02f6d7e3-dac6-4e1e-a1dc-05c9ff53271e",
       "entry": "scripts/main.js",
       "version": [
         1,
         3,
-        4
+        5
       ]
     }
   ],
   "dependencies": [
     {
-      "uuid": "804efe98-9334-4427-9074-bddfcfbe30df",
+      "uuid": "5501330a-f7db-4425-a050-a3530497b9d5",
       "version": [
         1,
         3,
-        4
+        5
       ]
     },
     {
