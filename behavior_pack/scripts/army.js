@@ -614,7 +614,7 @@ export async function openSummonArmyMenu(player, settlementId, sessionToken) {
   const count = Math.max(1, Math.min(maxCount, Math.round(Number(response.formValues?.[0] ?? 1))));
   summonArmy(player, settlement, count);
   player.sendMessage(`§aСозвано ${count} рыцарей. Приказы справа — удар или ПКМ по тексту.`);
-  return backToExtraPage(player, settlementId);
+  return backToExtraPage(player, settlementId, sessionToken);
 }
 
 function summonArmy(player, settlement, count) {

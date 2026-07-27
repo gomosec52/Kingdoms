@@ -27,15 +27,6 @@ export function bindSpawnGuardSystem(dependencies) {
     if (event.block.typeId !== SPAWN_GUARD_BLOCK) return;
     handleSpawnGuardBreak(event.player, event.block, event);
   });
-
-  deps.world.afterEvents.playerInteractWithBlock?.subscribe((event) => {
-    if (event.block.typeId !== SPAWN_GUARD_BLOCK) return;
-    handleSpawnGuardInteract(event.player, event.block);
-  });
-}
-
-function blockKey(dimensionId, location) {
-  return `${dimensionId}:${Math.floor(location.x)}:${Math.floor(location.y)}:${Math.floor(location.z)}`;
 }
 
 function ensureSpawnGuards(data) {

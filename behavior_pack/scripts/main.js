@@ -1339,10 +1339,11 @@ async function openConstructionMenu(player, settlementId, sessionToken) {
 
   const selected = buildings[response.selection];
   if (!selected) return;
-  return openBuildingDetails(player, settlementId, selected.id);
+  return openBuildingDetails(player, settlementId, selected.id, sessionToken);
 }
 
-async function openBuildingDetails(player, settlementId, buildingId) {
+async function openBuildingDetails(player, settlementId, buildingId, sessionToken) {
+  if (!assertSettlementMenuSession(player, settlementId, sessionToken)) return;
   const data = loadData();
   const settlement = getSettlement(data, settlementId);
   if (!settlement || !requireOwner(player, settlement)) return;
@@ -1386,10 +1387,11 @@ async function openBuildingDetails(player, settlementId, buildingId) {
     return openConstructionMenu(player, settlementId, sessionToken);
   }
 
-  return purchaseBuilding(player, settlementId, buildingId);
+  return purchaseBuilding(player, settlementId, buildingId, sessionToken);
 }
 
-function purchaseBuilding(player, settlementId, buildingId) {
+function purchaseBuilding(player, settlementId, buildingId, sessionToken) {
+  if (!assertSettlementMenuSession(player, settlementId, sessionToken)) return;
   const data = loadData();
   const settlement = getSettlement(data, settlementId);
   const def = getBuildingDef(buildingId);
@@ -1834,7 +1836,7 @@ function notifyPlayerAboutAddon(player) {
   if (loadedNoticeShown.has(playerName)) return;
   loadedNoticeShown.add(playerName);
 
-  player.sendMessage("§6[KW Build] §fv1.3.4 — BR compat (RP выше Bedrock Reimagined)");
+  player.sendMessage("§6[KW Build] §fv1.10.2 — монеты, защита спавна, армия");
   player.sendMessage(`§7Флаг — сущность. Кликните предметом по блоку. Нужно ${formatCopperValue(CREATION_COST)}.`);
 }
 

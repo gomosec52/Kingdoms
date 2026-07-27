@@ -116,29 +116,18 @@ export function takeItem(player, typeId, amount) {
 }
 
 export function takeCopperValue(player, copperAmount) {
-  if (countCopperValue(player) < copperAmount) return false;
+  const total = countCopperValue(player);
+  if (total < copperAmount) return false;
 
-  let remaining = copperAmount;
-  const goldNeeded = Math.floor(remaining / COPPER_PER_GOLD);
-  const goldHave = countItem(player, COIN_GOLD);
-  const goldTake = Math.min(goldNeeded, goldHave);
-  if (goldTake > 0) {
-    takeItem(player, COIN_GOLD, goldTake);
-    remaining -= goldTake * COPPER_PER_GOLD;
-  }
+  const copperHeld = countItem(player, COIN_COPPER);
+  const silverHeld = countItem(player, COIN_SILVER);
+  const goldHeld = countItem(player, COIN_GOLD);
 
-  const silverNeeded = Math.ceil(remaining / COPPER_PER_SILVER);
-  const silverHave = countItem(player, COIN_SILVER);
-  const silverTake = Math.min(silverNeeded, silverHave);
-  if (silverTake > 0) {
-    takeItem(player, COIN_SILVER, silverTake);
-    remaining -= silverTake * COPPER_PER_SILVER;
-  }
+  if (copperHeld > 0) takeItem(player, COIN_COPPER, copperHeld);
+  if (silverHeld > 0) takeItem(player, COIN_SILVER, silverHeld);
+  if (goldHeld > 0) takeItem(player, COIN_GOLD, goldHeld);
 
-  if (remaining > 0) {
-    if (!takeItem(player, COIN_COPPER, remaining)) return false;
-  }
-
+  giveCopperValue(player, total - copperAmount);
   return true;
 }
 
