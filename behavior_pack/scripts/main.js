@@ -31,7 +31,9 @@ import {
   replaceEmeraldCosts,
   takeCopperValue,
   takeMixedCost,
-  getMissingCoinCost
+  getMissingCoinCost,
+  describeCostShortage,
+  reportCostShortage
 } from "./economy.js";
 import {
   bindArmySystem,
@@ -187,6 +189,8 @@ bindArmySystem({
   buildingCostCopper,
   getMissingCoinCost,
   takeMixedCost,
+  describeCostShortage,
+  reportCostShortage,
   countInventoryItem,
   canBuyKnights,
   canCommandArmy,
@@ -1707,9 +1711,7 @@ function purchaseBuilding(player, settlementId, buildingId, sessionToken) {
     return openConstructionMenu(player, settlementId, sessionToken);
   }
 
-  const missing = getMissingBuildingCost(player, def);
-  if (missing.length) {
-    player.sendMessage(`§cНе хватает материалов: ${missing.join(", ")}`);
+  if (reportBuildingCostShortage(player, def)) {
     return openConstructionMenu(player, settlementId, sessionToken);
   }
 
@@ -1731,7 +1733,12 @@ function purchaseBuilding(player, settlementId, buildingId, sessionToken) {
 }
 
 function getMissingBuildingCost(player, def) {
-  return getMissingCoinCost(player, def.cost || []);
+  const missing = describeCostShortage(player, def.cost || []).missing;
+  return missing;
+}
+
+function reportBuildingCostShortage(player, def) {
+  return reportCostShortage(player, def.cost || []);
 }
 
 function takeBuildingCost(player, def) {

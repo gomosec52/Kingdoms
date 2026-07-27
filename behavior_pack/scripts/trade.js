@@ -198,10 +198,17 @@ function canFitCoins(player, copperAmount) {
 
 function parseCoinPrice(formValues) {
   const strings = getModalTextFieldValues(formValues);
-  const copper = Math.max(0, Math.floor(Number(strings[0] ?? 0)));
-  const silver = Math.max(0, Math.floor(Number(strings[1] ?? 0)));
-  const gold = Math.max(0, Math.floor(Number(strings[2] ?? 0)));
+  const copper = parseCoinField(strings[0]);
+  const silver = parseCoinField(strings[1]);
+  const gold = parseCoinField(strings[2]);
+  if (copper === null || silver === null || gold === null) return Number.NaN;
   return copper + silver * COPPER_PER_SILVER + gold * COPPER_PER_GOLD;
+}
+
+function parseCoinField(value) {
+  const parsed = Number(String(value ?? "").trim());
+  if (!Number.isFinite(parsed) || parsed < 0) return null;
+  return Math.floor(parsed);
 }
 
 export async function openTradeHub(player, settlementId, sessionToken) {
@@ -277,8 +284,8 @@ async function openCreateTradeOffer(player, settlementId, sessionToken) {
     .textField("Золотые монеты", "0", { defaultValue: "0" }));
   if (priceResponse.canceled) return openCreateTradeOffer(player, settlementId, sessionToken);
   const pricePerUnit = parseCoinPrice(priceResponse.formValues);
-  if (pricePerUnit < 1) {
-    player.sendMessage("§cУкажите цену хотя бы в 1 медной монете.");
+  if (!Number.isFinite(pricePerUnit) || pricePerUnit < 1) {
+    player.sendMessage("§cУкажите цену хотя бы в 1 медной монете (только числа).");
     return openCreateTradeOffer(player, settlementId, sessionToken);
   }
   const totalCopper = pricePerUnit * quantity;

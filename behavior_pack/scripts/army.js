@@ -551,9 +551,7 @@ export async function openKnightDetails(player, settlementId, knightId, sessionT
     }))
   };
 
-  const missing = deps.getMissingBuildingCost(player, batchDef);
-  if (missing.length) {
-    player.sendMessage(`§cНе хватает материалов: ${missing.join(", ")}`);
+  if (deps.reportCostShortage(player, batchDef.cost)) {
     return backToExtraPage(player, settlementId, sessionToken);
   }
   if (!deps.takeBuildingCost(player, batchDef)) {
