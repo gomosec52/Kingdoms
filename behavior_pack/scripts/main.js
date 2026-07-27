@@ -183,6 +183,18 @@ let dynamicPropertiesRegistered = false;
 import { bindFlagSystem, setFlagPlacementHandler, setWildFlagSpawnHandler } from "./flag.js";
 import { bindChunkCaptureSystem, cleanupChunkMarkersForSettlement } from "./chunk_flag.js";
 import { bindTerritoryBorderSystem, clearSettlementBorders, refreshSettlementBorders, scheduleRefreshAllSettlementBorders, scheduleRefreshSettlementBorders } from "./territory_border.js";
+import {
+  canDeclareWarOnTarget,
+  canTargetSettlementType,
+  ensureWarCooldownData,
+  formatCooldownTicks,
+  getAllowedTargetTypeNames,
+  getWarDeclareCooldownRemaining,
+  getWeakWarCooldownRemaining,
+  recordWarDeclaration,
+  recordWeakVictoryCooldown,
+  SETTLEMENT_TYPE_NAMES
+} from "./war.js";
 import { processPendingTradePayouts, processPendingTradeItemReturns } from "./trade.js";
 
 bindArmySystem({
@@ -1487,15 +1499,24 @@ async function openWarMenu(player, settlementId, sessionToken) {
   }
 
   ensureWarInitiatedAgainst(settlement);
+  ensureWarCooldownData(settlement);
   const activeInitiatedWars = (settlement.warInitiatedAgainst || [])
     .map((id) => getSettlement(data, id))
     .filter(Boolean);
+  const globalCooldown = getWarDeclareCooldownRemaining(settlement, system.currentTick);
+  const allowedTypes = getAllowedTargetTypeNames(settlement.typeIndex);
 
   const form = new ActionFormData()
     .title(kingdomsMenuTitle(KINGDOMS_MENU_PAGE.MAIN))
-    .body(activeInitiatedWars.length
-      ? `Активные войны, объявленные вами: ${activeInitiatedWars.map((entry) => entry.name).join(", ")}`
-      : "Объявите войну равному поселению, на один тип ниже или выше.")
+    .body([
+      activeInitiatedWars.length
+        ? `Активные войны, объявленные вами: ${activeInitiatedWars.map((entry) => entry.name).join(", ")}`
+        : "Выберите действие.",
+      `Доступные цели: ${allowedTypes}.`,
+      globalCooldown > 0
+        ? `Кулдаун объявления войны: ${formatCooldownTicks(globalCooldown)}.`
+        : "Кулдаун объявления войны: готов."
+    ].join("\n"))
     .button("Объявить войну", "textures/ui/kingdoms/icon_war")
     .button("Прекратить войну", "textures/ui/kingdoms/icon_disband")
     .button("Назад", "textures/ui/kingdoms/icon_disband");
@@ -1512,21 +1533,26 @@ async function declareWarMenu(player, settlementId, sessionToken) {
   const data = loadData();
   const settlement = getSettlement(data, settlementId);
   if (!settlement) return;
+  ensureWarCooldownData(settlement);
 
   const targets = data.settlements.filter((candidate) => {
     if (candidate.id === settlement.id) return false;
     if (areAllied(data, candidate.id, settlement.id)) return false;
     if (isAtWar(settlement, candidate.id)) return false;
-    return Math.abs(candidate.typeIndex - settlement.typeIndex) <= 1;
+    return canTargetSettlementType(settlement.typeIndex, candidate.typeIndex);
   });
 
   if (!targets.length) {
-    player.sendMessage("§7Нет подходящих целей: войну можно объявить равному типу поселения, на один тип ниже или на один тип выше.");
+    player.sendMessage(`§7Нет подходящих целей. Ваш тип: ${settlementType(settlement).name}. Доступно: ${getAllowedTargetTypeNames(settlement.typeIndex)}.`);
     return openWarMenu(player, settlementId, sessionToken);
   }
 
   const pick = await pickFromActionList(player, "Объявить войну", "Выберите цель:", targets, {
-    getLabel: (candidate) => `${settlementType(candidate).name} "${candidate.name}" (${candidate.creatorName})`,
+    getLabel: (candidate) => {
+      const weakCooldown = getWeakWarCooldownRemaining(settlement, candidate.typeIndex, system.currentTick);
+      const suffix = weakCooldown > 0 ? ` §7(кулдаун ${formatCooldownTicks(weakCooldown)})` : "";
+      return `${settlementType(candidate).name} "${candidate.name}" (${candidate.creatorName})${suffix}`;
+    },
     icon: "textures/ui/kingdoms/icon_war"
   });
   if (pick.canceled) {
@@ -1535,10 +1561,24 @@ async function declareWarMenu(player, settlementId, sessionToken) {
   }
 
   const target = pick.item;
+  const check = canDeclareWarOnTarget(settlement, target, system.currentTick);
+  if (!check.ok) {
+    if (check.reason === "global") {
+      player.sendMessage(`§cОбъявить войну можно через ${formatCooldownTicks(check.remaining)}.`);
+    } else if (check.reason === "weak") {
+      const typeName = SETTLEMENT_TYPE_NAMES[check.targetTypeIndex] ?? "?";
+      player.sendMessage(`§cПосле победы над слабым противником кулдаун 48 ч. на войну с типом «${typeName}»: ${formatCooldownTicks(check.remaining)}.`);
+    } else {
+      player.sendMessage(`§cНельзя объявить войну этому типу поселения. Доступно: ${getAllowedTargetTypeNames(settlement.typeIndex)}.`);
+    }
+    return declareWarMenu(player, settlementId, sessionToken);
+  }
+
   settlement.wars.push(target.id);
   target.wars.push(settlement.id);
   ensureWarInitiatedAgainst(settlement);
   if (!settlement.warInitiatedAgainst.includes(target.id)) settlement.warInitiatedAgainst.push(target.id);
+  recordWarDeclaration(settlement, system.currentTick);
   settlement.morale = Math.max(0, settlement.morale - 6);
   target.morale = Math.max(0, target.morale - 6);
   saveData(data);
@@ -2089,6 +2129,8 @@ function handleWarVictory(data, winner, loser, attackerPlayer) {
   }
 
   winner.morale = Math.min(100, (winner.morale ?? 75) + 12);
+  ensureWarCooldownData(winner);
+  recordWeakVictoryCooldown(winner, loser, system.currentTick);
   data.lootZones.push({
     name: loser.name,
     dimensionId: loser.dimensionId,
@@ -2545,6 +2587,7 @@ function loadData() {
       if (!settlement.members) settlement.members = {};
       if (!Array.isArray(settlement.wars)) settlement.wars = [];
       if (!Array.isArray(settlement.warInitiatedAgainst)) settlement.warInitiatedAgainst = [];
+      ensureWarCooldownData(settlement);
       if (!Array.isArray(settlement.buildings)) settlement.buildings = [];
       if (!Array.isArray(settlement.borderBlocks)) settlement.borderBlocks = [];
       ensureSettlementArmyData(settlement);
