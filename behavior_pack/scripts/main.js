@@ -63,20 +63,18 @@ import {
   isSettlementOwner
 } from "./permissions.js";
 import { bindTradeSystem, ensureSettlementTradeData, openTradeHub } from "./trade.js";
+import {
+  KINGDOMS_MENU_PAGE,
+  SETTLEMENT_MENU_PAGE,
+  formatResidentsListTwoRows,
+  kingdomsMenuTitle,
+  settlementMenuTitle,
+  stripColorCodes
+} from "./ui.js";
 
 const { BlockPermutation, EquipmentSlot, ItemStack, system, world } = server;
 const STORE_KEY = "kingdoms:data:v1";
 const STORE_LIMIT = 32767;
-const SETTLEMENT_MENU_TITLE = "kingdoms:settlement";
-const SETTLEMENT_MENU_PAGE = {
-  MAIN: "main",
-  EXTRA: "extra"
-};
-
-function settlementMenuTitle(page = SETTLEMENT_MENU_PAGE.MAIN, animate = false) {
-  const animSuffix = animate ? "|anim=1" : "";
-  return `${SETTLEMENT_MENU_TITLE}|page=${page}${animSuffix}`;
-}
 const CREATION_COST = CREATION_COST_COPPER;
 const DAY_TICKS = 24000;
 const TAX_COOLDOWN_TICKS = 25 * 60 * 20;
@@ -210,6 +208,8 @@ bindTradeSystem({
   assertSettlementMenuSession,
   openSettlementMenu,
   SETTLEMENT_MENU_PAGE,
+  KINGDOMS_MENU_PAGE,
+  kingdomsMenuTitle,
   getCurrentDay
 });
 
@@ -546,15 +546,15 @@ async function runSettlementCreationFlow(player, context) {
     return;
   }
 
-  const form = new ModalFormData()
-    .title("Создание поселения")
-    .textField(
-      `Название поселения (${formatCopperValue(CREATION_COST)})`,
-      "Например: Новгород",
-      { defaultValue: `Поселение ${playerName}` }
-    );
   const warning = getTerritoryPlacementWarning(loadData(), territoryCenter, dimensionId);
-  if (warning) player.sendMessage(warning);
+  const form = new ModalFormData()
+    .title(kingdomsMenuTitle(KINGDOMS_MENU_PAGE.CREATE));
+  if (warning) form.label(stripColorCodes(warning));
+  form.textField(
+    `Название поселения (${formatCopperValue(CREATION_COST)})`,
+    "Например: Новгород",
+    { defaultValue: `Поселение ${playerName}` }
+  );
   const response = await showForm(player, form);
   if (response.canceled) {
     player.sendMessage("§7Создание поселения отменено.");
@@ -986,12 +986,13 @@ async function openResidentsMenu(player, settlementId, sessionToken) {
     return;
   }
 
+  const residentList = formatResidentsListTwoRows(settlement.creatorName, settlement.members);
   const response = await showForm(player, new ActionFormData()
-    .title("Жители")
-    .body("Добавляйте игроков в поселение или исключайте их из списка жителей.")
-    .button("Добавить игрока")
-    .button("Исключить игрока")
-    .button("Назад"));
+    .title(kingdomsMenuTitle(KINGDOMS_MENU_PAGE.RESIDENTS))
+    .body(`Жители поселения:\n${residentList}`)
+    .button("Добавить игрока", "textures/ui/icon_multiplayer")
+    .button("Исключить игрока", "textures/ui/icon_multiplayer")
+    .button("Назад", "textures/ui/kingdoms/icon_disband"));
   if (response.canceled) return;
   if (response.selection === 0) return deferMenu(player, () => addResident(player, settlementId, sessionToken));
   if (response.selection === 1) return deferMenu(player, () => removeResident(player, settlementId, sessionToken));
@@ -1013,7 +1014,8 @@ async function addResident(player, settlementId, sessionToken) {
   }
 
   const pick = await pickFromActionList(player, "Добавить жителя", "Выберите игрока:", candidates, {
-    getLabel: (name) => name
+    getLabel: (name) => name,
+    menuPage: KINGDOMS_MENU_PAGE.PICK
   });
   if (pick.canceled) {
     if (pick.back) return openResidentsMenu(player, settlementId, sessionToken);
@@ -1041,7 +1043,8 @@ async function removeResident(player, settlementId, sessionToken) {
   }
 
   const pick = await pickFromActionList(player, "Исключить жителя", "Выберите жителя:", members, {
-    getLabel: (name) => name
+    getLabel: (name) => name,
+    menuPage: KINGDOMS_MENU_PAGE.PICK
   });
   if (pick.canceled) {
     if (pick.back) return openResidentsMenu(player, settlementId, sessionToken);
@@ -1149,7 +1152,7 @@ async function openDiplomacyMenu(player, settlementId, sessionToken) {
   ].join("\n");
 
   const form = new ActionFormData()
-    .title("Дипломатия")
+    .title(kingdomsMenuTitle(KINGDOMS_MENU_PAGE.DIPLOMACY))
     .body(data.alliances.length ? body : `${body}\n\nПока нет созданных альянсов.`)
     .button("Создать альянс", "textures/ui/kingdoms/icon_alliance")
     .button(ownAlliance ? "Расформировать альянс" : "Расформировать альянс", "textures/ui/kingdoms/icon_disband")
@@ -1176,7 +1179,8 @@ async function listAlliancesMenu(player, settlementId, sessionToken) {
       const members = alliance.members.map((id) => getSettlement(data, id)?.name).filter(Boolean).join(", ");
       return `${alliance.name} (${members})`;
     },
-    icon: "textures/ui/kingdoms/icon_alliance"
+    icon: "textures/ui/kingdoms/icon_alliance",
+    menuPage: KINGDOMS_MENU_PAGE.PICK
   });
   if (pick.canceled) {
     if (pick.back) return openDiplomacyMenu(player, settlementId, sessionToken);
@@ -2441,12 +2445,13 @@ async function pickFromActionList(player, title, body, items, options = {}) {
     getLabel = (item) => String(item),
     icon = "textures/ui/icon_multiplayer",
     backLabel = "Назад",
-    showBack = true
+    showBack = true,
+    menuPage
   } = options;
 
   if (!items.length) return { canceled: true, empty: true };
 
-  const form = new ActionFormData().title(title);
+  const form = new ActionFormData().title(menuPage ? kingdomsMenuTitle(menuPage) : title);
   if (body) form.body(body);
   for (const item of items) form.button(getLabel(item), icon);
   if (showBack) form.button(backLabel, "textures/ui/kingdoms/icon_disband");

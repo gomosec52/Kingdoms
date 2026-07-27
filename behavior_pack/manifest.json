@@ -2,12 +2,12 @@
   "format_version": 2,
   "header": {
     "name": "KW Build",
-    "description": "v1.11.1 — fix flag menu crash (missing imports)",
+    "description": "v1.11.2 — custom trade/residents/diplomacy menus, trade slider & coin price",
     "uuid": "35da6754-77fe-403f-98e0-6e6702d1c764",
     "version": [
       1,
       11,
-      1
+      2
     ],
     "min_engine_version": [
       1,
@@ -22,7 +22,7 @@
       "version": [
         1,
         11,
-        0
+        2
       ]
     },
     {
@@ -33,7 +33,7 @@
       "version": [
         1,
         11,
-        0
+        2
       ]
     }
   ],
@@ -43,7 +43,7 @@
       "version": [
         1,
         11,
-        0
+        2
       ]
     },
     {

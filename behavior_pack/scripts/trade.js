@@ -1,5 +1,5 @@
 import { ItemStack } from "@minecraft/server";
-import { formatCopperValue, giveCopperValue, takeCopperValue, countCopperValue } from "./economy.js";
+import { formatCopperValue, giveCopperValue, takeCopperValue, countCopperValue, COPPER_PER_SILVER, COPPER_PER_GOLD } from "./economy.js";
 import { canAccessTrade, canWithdrawTradeCoins } from "./permissions.js";
 
 /** @type {object | undefined} */
@@ -184,6 +184,13 @@ function canFitCoins(player, copperAmount) {
   return canFitItem(player, "kingdoms:coin_copper", 1) || canFitItem(player, "kingdoms:coin_silver", 1) || canFitItem(player, "kingdoms:coin_gold", 1) || copperAmount === 0;
 }
 
+function parseCoinPrice(formValues) {
+  const copper = Math.max(0, Math.floor(Number(formValues?.[0] ?? 0)));
+  const silver = Math.max(0, Math.floor(Number(formValues?.[1] ?? 0)));
+  const gold = Math.max(0, Math.floor(Number(formValues?.[2] ?? 0)));
+  return copper + silver * COPPER_PER_SILVER + gold * COPPER_PER_GOLD;
+}
+
 export async function openTradeHub(player, settlementId, sessionToken) {
   if (!deps.assertSettlementMenuSession(player, settlementId, sessionToken)) return;
   const data = deps.loadData();
@@ -196,7 +203,7 @@ export async function openTradeHub(player, settlementId, sessionToken) {
 
   const body = formatTradeInfo(data, settlement);
   const form = new deps.ActionFormData()
-    .title("Торговля")
+    .title(deps.kingdomsMenuTitle(deps.KINGDOMS_MENU_PAGE.TRADE))
     .body(body)
     .button("Торговля", "textures/ui/icon_best3")
     .button("Почта", "textures/ui/icon_map")
@@ -230,32 +237,37 @@ async function openCreateTradeOffer(player, settlementId, sessionToken) {
 
   const itemPick = await deps.pickFromActionList(player, "Торговля", "Выберите предмет:", uniqueItems, {
     getLabel: (entry) => `${entry.name} (${entry.amount})`,
-    icon: "textures/ui/icon_best3"
+    icon: "textures/ui/icon_best3",
+    menuPage: deps.KINGDOMS_MENU_PAGE.TRADE_SELL
   });
   if (itemPick.canceled) {
     if (itemPick.back) return openTradeHub(player, settlementId, sessionToken);
     return;
   }
   const selectedItem = itemPick.item;
+  const maxQty = selectedItem.amount;
 
-  const qtyPick = await deps.pickFromActionList(
-    player,
-    "Количество",
-    `Сколько продать? (макс. ${selectedItem.amount})`,
-    Array.from({ length: Math.min(selectedItem.amount, 64) }, (_, index) => index + 1),
-    { getLabel: (value) => String(value), showBack: true }
-  );
-  if (qtyPick.canceled) {
-    if (qtyPick.back) return openCreateTradeOffer(player, settlementId, sessionToken);
-    return;
-  }
-  const quantity = qtyPick.item;
+  const qtyResponse = await deps.showFormDeferred(player, new deps.ModalFormData()
+    .title(deps.kingdomsMenuTitle(deps.KINGDOMS_MENU_PAGE.TRADE_SELL))
+    .slider(`Количество (макс. ${maxQty})`, 1, maxQty, {
+      valueStep: 1,
+      defaultValue: 1
+    }));
+  if (qtyResponse.canceled) return openCreateTradeOffer(player, settlementId, sessionToken);
+  const quantity = Math.max(1, Math.min(maxQty, Math.round(Number(qtyResponse.formValues?.[0] ?? 1))));
 
   const priceResponse = await deps.showFormDeferred(player, new deps.ModalFormData()
-    .title("Цена за штуку")
-    .textField("Медные монеты за 1 шт.", "Например: 5", { defaultValue: "1" }));
+    .title(deps.kingdomsMenuTitle(deps.KINGDOMS_MENU_PAGE.TRADE_SELL))
+    .label(`Цена за 1 шт. (${selectedItem.name})`)
+    .textField("Медные монеты", "0", { defaultValue: "0" })
+    .textField("Серебряные монеты", "0", { defaultValue: "0" })
+    .textField("Золотые монеты", "0", { defaultValue: "0" }));
   if (priceResponse.canceled) return openCreateTradeOffer(player, settlementId, sessionToken);
-  const pricePerUnit = Math.max(1, Math.floor(Number(priceResponse.formValues?.[0] ?? 1)));
+  const pricePerUnit = parseCoinPrice(priceResponse.formValues);
+  if (pricePerUnit < 1) {
+    player.sendMessage("§cУкажите цену хотя бы в 1 медной монете.");
+    return openCreateTradeOffer(player, settlementId, sessionToken);
+  }
   const totalCopper = pricePerUnit * quantity;
 
   const targets = data.settlements.filter((candidate) => candidate.id !== settlement.id);
@@ -266,7 +278,8 @@ async function openCreateTradeOffer(player, settlementId, sessionToken) {
 
   const targetPick = await deps.pickFromActionList(player, "Покупатель", "Кому отправить предложение?", targets, {
     getLabel: (candidate) => `${candidate.name} (${candidate.creatorName})`,
-    icon: "textures/ui/kingdoms/icon_alliance"
+    icon: "textures/ui/kingdoms/icon_alliance",
+    menuPage: deps.KINGDOMS_MENU_PAGE.TRADE_SELL
   });
   if (targetPick.canceled) {
     if (targetPick.back) return openCreateTradeOffer(player, settlementId, sessionToken);
@@ -312,7 +325,8 @@ async function openTradeInbox(player, settlementId, sessionToken) {
       const from = deps.getSettlement(data, offer.fromSettlementId);
       return `${from?.name ?? "?"}: ${offer.itemAmount} x ${offer.itemTypeId.replace("minecraft:", "")} за ${formatCopperValue(offer.totalCopper)}`;
     },
-    icon: "textures/ui/icon_map"
+    icon: "textures/ui/icon_map",
+    menuPage: deps.KINGDOMS_MENU_PAGE.TRADE_MAIL
   });
   if (pick.canceled) {
     if (pick.back) return openTradeHub(player, settlementId, sessionToken);
@@ -320,11 +334,11 @@ async function openTradeInbox(player, settlementId, sessionToken) {
   }
 
   const offer = pick.item;
-  const accept = await deps.showFormDeferred(player, new deps.MessageFormData()
-    .title("Принять сделку?")
+  const accept = await deps.showFormDeferred(player, new deps.ActionFormData()
+    .title(deps.kingdomsMenuTitle(deps.KINGDOMS_MENU_PAGE.TRADE_MAIL))
     .body(`Купить ${offer.itemAmount} x ${offer.itemTypeId.replace("minecraft:", "")} за ${formatCopperValue(offer.totalCopper)}?`)
-    .button1("Да")
-    .button2("Нет"));
+    .button("Да", "textures/ui/check")
+    .button("Нет", "textures/ui/cancel"));
   if (accept.canceled || accept.selection !== 0) return openTradeInbox(player, settlementId, sessionToken);
 
   if (!canFitItem(player, offer.itemTypeId, offer.itemAmount)) {
@@ -373,11 +387,11 @@ async function openTradeWithdraw(player, settlementId, sessionToken) {
   }
 
   const amount = settlement.trade.balanceCopper;
-  const response = await deps.showFormDeferred(player, new deps.MessageFormData()
-    .title("Забрать монеты")
+  const response = await deps.showFormDeferred(player, new deps.ActionFormData()
+    .title(deps.kingdomsMenuTitle(deps.KINGDOMS_MENU_PAGE.TRADE_COINS))
     .body(`Вы желаете забрать монеты (${formatCopperValue(amount)})?`)
-    .button1("Да")
-    .button2("Нет"));
+    .button("Да", "textures/ui/check")
+    .button("Нет", "textures/ui/cancel"));
   if (response.canceled || response.selection !== 0) return openTradeHub(player, settlementId, sessionToken);
 
   if (!giveStoredCoins(player, amount)) {
