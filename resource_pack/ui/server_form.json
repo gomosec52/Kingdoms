@@ -1146,17 +1146,16 @@
   "kingdoms_page_arrow_next": {
     "type": "panel",
     "size": [
-      24,
-      132
+      22,
+      160
     ],
     "offset": [
-      -8,
-      44
+      0,
+      67
     ],
     "anchor_from": "top_right",
     "anchor_to": "top_right",
-    "layer": 12,
-    "collection_index": 9,
+    "layer": 20,
     "bindings": [
       {
         "binding_name": "#title_text"
@@ -1199,6 +1198,7 @@
             0,
             0
           ],
+          "collection_index": 9,
           "layer": 2,
           "bindings": [
             {
@@ -1213,17 +1213,16 @@
   "kingdoms_page_arrow_prev": {
     "type": "panel",
     "size": [
-      24,
-      132
+      22,
+      160
     ],
     "offset": [
-      -8,
-      44
+      0,
+      67
     ],
     "anchor_from": "top_right",
     "anchor_to": "top_right",
-    "layer": 12,
-    "collection_index": 1,
+    "layer": 20,
     "bindings": [
       {
         "binding_name": "#title_text"
@@ -1266,6 +1265,7 @@
             0,
             0
           ],
+          "collection_index": 1,
           "layer": 2,
           "bindings": [
             {
@@ -1347,7 +1347,12 @@
     "bindings": [
       {
         "binding_name": "#form_button_contents",
-        "binding_name_override": "#collection_length"
+        "binding_type": "global"
+      },
+      {
+        "binding_type": "view",
+        "source_property_name": "(#form_button_contents - 1)",
+        "target_property_name": "#collection_length"
       }
     ]
   },
@@ -1357,18 +1362,6 @@
     "size": [
       "100%",
       27
-    ],
-    "bindings": [
-      {
-        "binding_name": "#form_button_texture",
-        "binding_type": "collection",
-        "binding_collection_name": "form_buttons"
-      },
-      {
-        "binding_type": "view",
-        "source_property_name": "(not ((#form_button_texture = 'textures/ui/kingdoms/page_next') or (#form_button_texture = 'textures/ui/kingdoms/page_prev')))",
-        "target_property_name": "#visible"
-      }
     ],
     "controls": [
       {
