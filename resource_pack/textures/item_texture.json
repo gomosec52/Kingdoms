@@ -6,7 +6,10 @@
       "textures": "textures/items/kingdom_flag"
     },
     "kingdoms_chunk_capture_flag": {
-      "textures": "textures/items/kingdom_flag"
+      "textures": "textures/items/chunk_capture_flag"
+    },
+    "kingdoms:chunk_capture_flag": {
+      "textures": "textures/items/chunk_capture_flag"
     },
     "kingdoms:flag_item": {
       "textures": "textures/items/kingdom_flag"

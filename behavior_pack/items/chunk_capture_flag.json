@@ -10,14 +10,14 @@
     },
     "components": {
       "minecraft:display_name": {
-        "value": "Флаг захвата чанка"
+        "value": "item.kingdoms:chunk_capture_flag.name"
       },
       "minecraft:icon": "kingdoms_chunk_capture_flag",
       "minecraft:max_stack_size": 16,
       "minecraft:interact_button": "Захватить чанк",
-      "minecraft:custom_components": [
-        "kingdoms:chunk_capture_placer"
-      ]
+      "minecraft:entity_placer": {
+        "entity": "kingdoms:chunk_marker"
+      }
     }
   }
 }

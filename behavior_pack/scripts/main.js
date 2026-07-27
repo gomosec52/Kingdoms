@@ -269,7 +269,8 @@ bindChunkCaptureSystem(world, {
   canCaptureChunks,
   giveItemStack,
   getDimensionId,
-  blockPosition
+  blockPosition,
+  findNearestPlayer
 });
 
 world.beforeEvents?.worldInitialize?.subscribe((event) => {

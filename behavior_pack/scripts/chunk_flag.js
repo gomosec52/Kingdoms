@@ -11,7 +11,7 @@ import {
 export const CHUNK_CAPTURE_FLAG_ITEM = "kingdoms:chunk_capture_flag";
 export const CHUNK_MARKER_ENTITY = "kingdoms:chunk_marker";
 export const CHUNK_MARKER_TAG = "kingdoms_chunk_marker";
-export const CHUNK_CAPTURE_USE_COMPONENT = "kingdoms:chunk_capture_placer";
+export const CHUNK_MARKER_PENDING_TAG = "kingdoms_chunk_pending";
 
 /** @type {object | undefined} */
 let deps;
@@ -23,7 +23,7 @@ function placementKey(player, block) {
   return `${player.name}:${Math.floor(location.x)}:${Math.floor(location.y)}:${Math.floor(location.z)}:${system.currentTick}`;
 }
 
-function queueChunkCapturePlacement(player, block, origin = "script") {
+function queueChunkCapturePlacement(player, block) {
   if (!player || !block) return;
 
   const key = placementKey(player, block);
@@ -33,7 +33,7 @@ function queueChunkCapturePlacement(player, block, origin = "script") {
 
   system.run(() => {
     try {
-      handleChunkCaptureUse(player, block, origin);
+      handleChunkCaptureUse(player, block);
     } catch (error) {
       player.sendMessage(`§c[Королевства] Ошибка захвата чанка: ${error}`);
     }
@@ -58,28 +58,6 @@ function resolveBlock(event) {
   }
 }
 
-/** @type {import("@minecraft/server").ItemCustomComponent} */
-const chunkCapturePlacerComponent = {
-  onUseOn(event) {
-    const player = event.source;
-    if (event.itemStack?.typeId !== CHUNK_CAPTURE_FLAG_ITEM) return;
-    if (player?.typeId !== "minecraft:player") return;
-
-    const block = resolveBlock(event);
-    if (!block) return;
-
-    queueChunkCapturePlacement(player, block, "component");
-  }
-};
-
-let registered = false;
-
-function registerChunkCaptureComponent(registry) {
-  if (registered || !registry?.registerCustomComponent) return;
-  registry.registerCustomComponent(CHUNK_CAPTURE_USE_COMPONENT, chunkCapturePlacerComponent);
-  registered = true;
-}
-
 function bindUseOnHandler(event) {
   if (event.itemStack?.typeId !== CHUNK_CAPTURE_FLAG_ITEM) return;
 
@@ -89,22 +67,133 @@ function bindUseOnHandler(event) {
   const block = resolveBlock(event);
   if (!block) return;
 
-  queueChunkCapturePlacement(player, block, "itemUseOn");
+  queueChunkCapturePlacement(player, block);
+}
+
+function restoreChunkCaptureFlag(player) {
+  if (!player?.isValid || typeof deps?.giveItemStack !== "function") return;
+  deps.giveItemStack(player, new ItemStack(CHUNK_CAPTURE_FLAG_ITEM, 1));
+}
+
+function validateChunkCapture(player, clickedBlock) {
+  if (!player?.isValid || !clickedBlock || !deps) {
+    return { error: "§cНе удалось обработать захват чанка." };
+  }
+
+  const data = deps.loadData();
+  const playerName = deps.getPlayerName(player);
+  const settlement = deps.getPlayerSettlement(data, playerName);
+  if (!settlement) {
+    return { error: "§cЗахват чанков доступен только жителям Империи." };
+  }
+  if (!deps.canCaptureChunks(data, playerName, settlement)) {
+    return { error: "§cСтавить флаг захвата могут создатель и Советник." };
+  }
+
+  const dimensionId = deps.getDimensionId(clickedBlock.dimension);
+  if (settlement.dimensionId !== dimensionId) {
+    return { error: "§cЗахватывать можно только в своём измерении." };
+  }
+
+  const { cx, cz } = chunkFromLocation(clickedBlock.location);
+  const error = canCaptureChunk(data, settlement, cx, cz);
+  if (error) return { error, data, settlement, cx, cz };
+
+  return { data, settlement, cx, cz, dimensionId };
+}
+
+function finalizeChunkCapture(player, clickedBlock, settlement, cx, cz, existingMarker) {
+  const data = deps.loadData();
+  const freshSettlement = deps.getSettlement(data, settlement.id) ?? settlement;
+  const recheck = canCaptureChunk(data, freshSettlement, cx, cz);
+  if (recheck) {
+    if (existingMarker?.isValid) existingMarker.remove();
+    restoreChunkCaptureFlag(player);
+    player.sendMessage(recheck);
+    return;
+  }
+
+  captureChunk(freshSettlement, cx, cz);
+  const marker = existingMarker?.isValid
+    ? existingMarker
+    : spawnChunkMarker(clickedBlock, cx, cz, freshSettlement.id);
+
+  if (marker?.isValid) {
+    marker.removeTag(CHUNK_MARKER_PENDING_TAG);
+    marker.addTag(CHUNK_MARKER_TAG);
+    marker.addTag(`kingdoms_id_${freshSettlement.id}`);
+    marker.addTag(`kingdoms_chunk_${chunkKey(cx, cz)}`);
+    marker.nameTag = "§6Флаг чанка";
+    try {
+      marker.teleport({
+        x: cx * 16 + 8,
+        y: Math.floor(clickedBlock.location.y) + 1,
+        z: cz * 16 + 8
+      });
+    } catch (_error) {
+      // Keep marker at current location if teleport fails.
+    }
+  }
+
+  deps.saveData(data);
+  player.sendMessage(`§aЧанк [${cx}, ${cz}] захвачен! (${countCapturedChunks(freshSettlement)}/${MAX_EMPIRE_CAPTURED_CHUNKS})`);
+}
+
+function handleChunkMarkerSpawn(entity) {
+  if (!entity?.isValid || entity.typeId !== CHUNK_MARKER_ENTITY) return;
+  if (entity.hasTag(CHUNK_MARKER_TAG)) return;
+
+  const player = typeof deps?.findNearestPlayer === "function"
+    ? deps.findNearestPlayer(entity, 10)
+    : undefined;
+  if (!player) {
+    entity.addTag(CHUNK_MARKER_PENDING_TAG);
+    return;
+  }
+
+  let clickedBlock;
+  try {
+    clickedBlock = entity.dimension.getBlock({
+      x: Math.floor(entity.location.x),
+      y: Math.floor(entity.location.y) - 1,
+      z: Math.floor(entity.location.z)
+    });
+  } catch (_error) {
+    clickedBlock = undefined;
+  }
+
+  if (!clickedBlock) {
+    entity.remove();
+    restoreChunkCaptureFlag(player);
+    player.sendMessage("§cНе удалось поставить флаг захвата.");
+    return;
+  }
+
+  const result = validateChunkCapture(player, clickedBlock);
+  if (result.error) {
+    entity.remove();
+    restoreChunkCaptureFlag(player);
+    player.sendMessage(result.error);
+    return;
+  }
+
+  entity.addTag(CHUNK_MARKER_PENDING_TAG);
+  finalizeChunkCapture(player, clickedBlock, result.settlement, result.cx, result.cz, entity);
 }
 
 export function bindChunkCaptureSystem(world, dependencies) {
   deps = dependencies;
 
-  system.beforeEvents.startup.subscribe((event) => {
-    registerChunkCaptureComponent(event.itemComponentRegistry);
-  });
-
-  world.beforeEvents?.worldInitialize?.subscribe((event) => {
-    registerChunkCaptureComponent(event.itemComponentRegistry);
-  });
-
+  // itemUseOn fallback for runtimes where entity_placer is delayed or unavailable.
   world.afterEvents?.itemUseOn?.subscribe((event) => bindUseOnHandler(event));
   world.beforeEvents?.itemUseOn?.subscribe((event) => bindUseOnHandler(event));
+
+  world.afterEvents?.entitySpawn?.subscribe((event) => {
+    if (event.entity?.typeId !== CHUNK_MARKER_ENTITY) return;
+    if (event.entity.hasTag(CHUNK_MARKER_TAG)) return;
+
+    system.run(() => handleChunkMarkerSpawn(event.entity));
+  });
 
   world.afterEvents?.entityDie?.subscribe((event) => {
     if (event.deadEntity?.typeId !== CHUNK_MARKER_ENTITY) return;
@@ -118,29 +207,9 @@ export function bindChunkCaptureSystem(world, dependencies) {
 }
 
 function handleChunkCaptureUse(player, clickedBlock) {
-  if (!player?.isValid || !clickedBlock || !deps) return;
-
-  const data = deps.loadData();
-  const settlement = deps.getPlayerSettlement(data, deps.getPlayerName(player));
-  if (!settlement) {
-    player.sendMessage("§cЗахват чанков доступен только жителям Империи.");
-    return;
-  }
-  if (!deps.canCaptureChunks(data, deps.getPlayerName(player), settlement)) {
-    player.sendMessage("§cСтавить флаг захвата могут создатель и Советник.");
-    return;
-  }
-
-  const dimensionId = deps.getDimensionId(clickedBlock.dimension);
-  if (settlement.dimensionId !== dimensionId) {
-    player.sendMessage("§cЗахватывать можно только в своём измерении.");
-    return;
-  }
-
-  const { cx, cz } = chunkFromLocation(clickedBlock.location);
-  const error = canCaptureChunk(data, settlement, cx, cz);
-  if (error) {
-    player.sendMessage(error);
+  const result = validateChunkCapture(player, clickedBlock);
+  if (result.error) {
+    player.sendMessage(result.error);
     return;
   }
 
@@ -164,10 +233,7 @@ function handleChunkCaptureUse(player, clickedBlock) {
     return;
   }
 
-  captureChunk(settlement, cx, cz);
-  spawnChunkMarker(clickedBlock, cx, cz, settlement.id);
-  deps.saveData(data);
-  player.sendMessage(`§aЧанк [${cx}, ${cz}] захвачен! (${countCapturedChunks(settlement)}/${MAX_EMPIRE_CAPTURED_CHUNKS})`);
+  finalizeChunkCapture(player, clickedBlock, result.settlement, result.cx, result.cz);
 }
 
 function spawnChunkMarker(clickedBlock, cx, cz, settlementId) {
@@ -184,7 +250,8 @@ function spawnChunkMarker(clickedBlock, cx, cz, settlementId) {
     marker.addTag(`kingdoms_id_${settlementId}`);
     marker.addTag(`kingdoms_chunk_${chunkKey(cx, cz)}`);
     marker.nameTag = "§6Флаг чанка";
+    return marker;
   } catch (_error) {
-    // Marker is optional visual.
+    return undefined;
   }
 }

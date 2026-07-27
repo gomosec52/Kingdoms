@@ -7,7 +7,7 @@
         "default": "entity_alphatest"
       },
       "textures": {
-        "default": "textures/entity/kingdom_flag"
+        "default": "textures/entity/chunk_capture_flag"
       },
       "geometry": {
         "default": "geometry.kingdoms_flag"

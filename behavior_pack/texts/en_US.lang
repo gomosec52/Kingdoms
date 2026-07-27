@@ -1,4 +1,5 @@
 item.kingdoms:flag.name=Settlement Flag
+item.kingdoms:chunk_capture_flag.name=Chunk Capture Flag
 block.kingdoms.flag.name=Settlement Flag
 item.kingdoms:coin_copper.name=Copper Coin
 item.kingdoms:coin_silver.name=Silver Coin
