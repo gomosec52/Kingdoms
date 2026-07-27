@@ -7,7 +7,17 @@ import {
   LEGACY_FLAG_BLOCK,
   PENDING_SETUP_TAG
 } from "./constants.js";
-import { bindFlagSystem, setFlagPlacementHandler, setWildFlagSpawnHandler } from "./flag.js";
+import {
+  bindArmySystem,
+  dismissArmiesForSettlement,
+  formatArmyPowerLine,
+  formatArmyPageBody,
+  hasActiveArmy,
+  openArmyOrdersMenu,
+  openKnightShop,
+  openSummonArmyMenu,
+  ensureSettlementArmyData
+} from "./army.js";
 
 const { BlockPermutation, ItemStack, system, world } = server;
 const STORE_KEY = "kingdoms:data:v1";
@@ -106,6 +116,30 @@ const chatPrefixNoticeShown = new Set();
 const loadedNoticeShown = new Set();
 let directChatPrefixAvailable = false;
 let dynamicPropertiesRegistered = false;
+
+import { bindFlagSystem, setFlagPlacementHandler, setWildFlagSpawnHandler } from "./flag.js";
+
+bindArmySystem({
+  world,
+  system,
+  ActionFormData,
+  ModalFormData,
+  loadData,
+  saveData,
+  getSettlement,
+  showForm,
+  getPlayerName,
+  playerDisplayPrefix,
+  countBuildingsOfType,
+  getPopulation,
+  requireOwner,
+  getMissingBuildingCost,
+  takeBuildingCost,
+  settlementMenuTitle,
+  openSettlementMenu,
+  SETTLEMENT_MENU_PAGE,
+  samePlayerName
+});
 
 bindFlagSystem(world);
 setFlagPlacementHandler(beginSettlementCreationFromItem);
@@ -632,12 +666,17 @@ async function openSettlementMenu(player, settlementId, page = SETTLEMENT_MENU_P
   const upgradeLabel = nextType ? `Улучшить до: ${nextType.name} (${nextType.upgradeCost} изумрудов)` : "Максимум развития";
   const form = new ActionFormData()
     .title(settlementMenuTitle(page, animate))
-    .body(settlementInfo(data, settlement));
+    .body(page === SETTLEMENT_MENU_PAGE.ARMY ? formatArmyPageBody(settlement) : settlementInfo(data, settlement));
 
   if (page === SETTLEMENT_MENU_PAGE.ARMY) {
+    ensureSettlementArmyData(settlement);
     form
-      .button("Армия", "textures/ui/kingdoms/icon_war")
-      .button("« Назад", "textures/ui/kingdoms/page_prev");
+      .button("Купить рыцаря", "textures/ui/kingdoms/icon_war")
+      .button("Созвать армию", "textures/ui/kingdoms/icon_war");
+    if (hasActiveArmy(player)) {
+      form.button("Приказы", "textures/ui/kingdoms/icon_info");
+    }
+    form.button("Назад", "");
   } else {
     form
       .button(upgradeLabel, "textures/ui/kingdoms/icon_upgrade")
@@ -649,18 +688,19 @@ async function openSettlementMenu(player, settlementId, page = SETTLEMENT_MENU_P
       .button("Налог", "textures/ui/kingdoms/icon_tax")
       .button("Строительство", "textures/ui/kingdoms/icon_build")
       .button("Расформировать", "textures/ui/kingdoms/icon_disband")
-      .button("Армия »", "textures/ui/kingdoms/page_next");
+      .button("Далее", "");
   }
 
   const response = await showForm(player, form);
   if (response.canceled) return;
 
   if (page === SETTLEMENT_MENU_PAGE.ARMY) {
-    if (response.selection === 1) {
-      return openSettlementMenu(player, settlementId, SETTLEMENT_MENU_PAGE.MAIN, true);
-    }
-    if (response.selection === 0) {
-      return openArmyMenu(player, settlementId);
+    let armyIndex = 0;
+    if (response.selection === armyIndex++) return openKnightShop(player, settlementId);
+    if (response.selection === armyIndex++) return openSummonArmyMenu(player, settlementId);
+    if (hasActiveArmy(player) && response.selection === armyIndex++) return openArmyOrdersMenu(player);
+    if (response.selection === armyIndex) {
+      return openSettlementMenu(player, settlementId, SETTLEMENT_MENU_PAGE.MAIN, false);
     }
     return undefined;
   }
@@ -691,20 +731,6 @@ async function openSettlementMenu(player, settlementId, page = SETTLEMENT_MENU_P
     default:
       return undefined;
   }
-}
-
-async function openArmyMenu(player, settlementId) {
-  const data = loadData();
-  const settlement = getSettlement(data, settlementId);
-  if (!settlement || !requireOwner(player, settlement)) return;
-
-  const response = await showForm(player, new ActionFormData()
-    .title(settlementMenuTitle(SETTLEMENT_MENU_PAGE.ARMY))
-    .body("Раздел армии в разработке.\n\nЗдесь появятся найм, снаряжение и походы.")
-    .button("Назад", "textures/ui/kingdoms/icon_disband"));
-
-  if (response.canceled) return;
-  return openSettlementMenu(player, settlementId, SETTLEMENT_MENU_PAGE.ARMY, false);
 }
 
 async function upgradeSettlement(player, settlementId) {
@@ -1074,6 +1100,21 @@ const BUILDINGS = {
       { itemId: "minecraft:glass", amount: 8, label: "стекло" },
       { itemId: "minecraft:oak_log", amount: 16, label: "дубовые брёвна" }
     ]
+  },
+  barracks: {
+    id: "barracks",
+    name: "Казармы",
+    description: "Казармы позволяют нанимать рыцарей. На каждую казарму — 1 рыцарь в штате.",
+    taxBonus: 0,
+    maxPerSettlement: 10,
+    minTypeIndex: 0,
+    cost: [
+      { itemId: "minecraft:emerald", amount: 20, label: "изумруды" },
+      { itemId: "minecraft:oak_log", amount: 24, label: "дубовые брёвна" },
+      { itemId: "minecraft:cobblestone", amount: 32, label: "булыжник" },
+      { itemId: "minecraft:iron_ingot", amount: 6, label: "железо" },
+      { itemId: "minecraft:iron_sword", amount: 1, label: "железный меч" }
+    ]
   }
 };
 
@@ -1324,6 +1365,19 @@ function handleWarVictory(data, winnerId, loserId) {
   world.sendMessage(`§4[Война] §f${settlementDisplayName(data, winner)} победило. Поселение ${loser.name} распалось. Победители могут мародёрить бывшую территорию 5 минут.`);
 }
 
+function cleanupSettlementKnights(settlement) {
+  const dimension = safeDimension(settlement.dimensionId);
+  if (!dimension) return;
+  const tag = `kingdoms_settlement_${settlement.id}`;
+  try {
+    for (const entity of dimension.getEntities({ type: "kingdoms:knight", tags: [tag] })) {
+      entity.remove();
+    }
+  } catch (_error) {
+    // Ignore cleanup failures.
+  }
+}
+
 function disbandSettlement(data, settlementId, reason, announce = true) {
   const settlement = getSettlement(data, settlementId);
   if (!settlement) return;
@@ -1348,6 +1402,8 @@ function disbandSettlement(data, settlementId, reason, announce = true) {
 
   removeFlagBlock(settlement);
   removeFlagLabel(settlement);
+  dismissArmiesForSettlement(settlement.id);
+  cleanupSettlementKnights(settlement);
   data.settlements = data.settlements.filter((entry) => entry.id !== settlement.id);
   updatePlayerPrefixDisplays(data);
   if (announce) world.sendMessage(`§6[Королевства] §f${settlement.name} распалось: ${reason}.`);
@@ -1436,6 +1492,7 @@ function settlementInfo(data, settlement) {
     `Радиус: ${getTerritoryRadius(settlement)}`,
     `Налог: ${type.tax} эм./25м`,
     formatExtraIncomeLine(settlement),
+    formatArmyPowerLine(settlement),
     `Итого налог: ${type.tax + getExtraIncomeBonus(settlement)} эм.`,
     `Создание: ${CREATION_COST} эм.`,
     `Улучш.: ${nextType ? `${nextType.upgradeCost} эм.` : "нет"}`,
@@ -1698,6 +1755,7 @@ function loadData() {
       if (!settlement.members) settlement.members = {};
       if (!Array.isArray(settlement.wars)) settlement.wars = [];
       if (!Array.isArray(settlement.buildings)) settlement.buildings = [];
+      ensureSettlementArmyData(settlement);
       if (typeof settlement.morale !== "number") settlement.morale = 75;
       if (typeof settlement.territoryBonus !== "number") settlement.territoryBonus = 0;
     }
