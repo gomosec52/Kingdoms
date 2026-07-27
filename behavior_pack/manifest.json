@@ -2,12 +2,12 @@
   "format_version": 2,
   "header": {
     "name": "KW Build",
-    "description": "v1.4.6 — nearest-neighbor atlas, no blur artifacts",
-    "uuid": "3d064aae-123e-4f05-bfcc-033bdbb63547",
+    "description": "v1.4.7 — wider cloth and larger flag scale",
+    "uuid": "a1db9ddd-fed3-4229-9993-5092d80f4eee",
     "version": [
       1,
       4,
-      6
+      7
     ],
     "min_engine_version": [
       1,
@@ -18,32 +18,32 @@
   "modules": [
     {
       "type": "data",
-      "uuid": "189343b9-4a2b-4704-9a82-ea41caa88205",
+      "uuid": "e7ee417e-7342-4eca-a097-92b8f52c0807",
       "version": [
         1,
         4,
-        6
+        7
       ]
     },
     {
       "type": "script",
       "language": "javascript",
-      "uuid": "bb9eb869-38b3-4715-a027-a83a510b5ff2",
+      "uuid": "9c6fd2c0-9266-459d-938f-d20590beb233",
       "entry": "scripts/main.js",
       "version": [
         1,
         4,
-        6
+        7
       ]
     }
   ],
   "dependencies": [
     {
-      "uuid": "5a52f70b-037d-45ab-a088-b2e71b5223c5",
+      "uuid": "283b1bf0-2e3f-4972-a302-3c98c659396f",
       "version": [
         1,
         4,
-        6
+        7
       ]
     },
     {

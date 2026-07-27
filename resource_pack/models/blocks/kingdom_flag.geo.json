@@ -6,11 +6,11 @@
         "identifier": "geometry.kingdoms_flag",
         "texture_width": 256,
         "texture_height": 256,
-        "visible_bounds_width": 4,
-        "visible_bounds_height": 4,
+        "visible_bounds_width": 5,
+        "visible_bounds_height": 5,
         "visible_bounds_offset": [
           0,
-          2,
+          2.4,
           0
         ]
       },
@@ -31,7 +31,7 @@
               ],
               "size": [
                 2,
-                36,
+                40,
                 2
               ],
               "uv": [
@@ -42,13 +42,13 @@
             {
               "origin": [
                 0,
-                33,
-                -0.5
+                36.5,
+                -0.6
               ],
               "size": [
-                14,
-                1,
-                1
+                16,
+                1.2,
+                1.2
               ],
               "uv": [
                 0,
@@ -57,14 +57,14 @@
             },
             {
               "origin": [
-                7,
-                29,
-                -0.35
+                8,
+                31.5,
+                -0.4
               ],
               "size": [
-                1,
-                5,
-                0.7
+                1.2,
+                5.5,
+                0.8
               ],
               "uv": [
                 0,
@@ -73,20 +73,20 @@
             },
             {
               "origin": [
-                4,
-                10,
-                -0.12
+                4.0,
+                11.0,
+                -0.14
               ],
               "size": [
-                8,
-                22,
-                0.24
+                10.0,
+                24.0,
+                0.28
               ],
               "uv": {
                 "north": {
                   "uv": [
                     64,
-                    0
+                    16
                   ],
                   "uv_size": [
                     96,
@@ -96,7 +96,7 @@
                 "south": {
                   "uv": [
                     64,
-                    0
+                    16
                   ],
                   "uv_size": [
                     96,

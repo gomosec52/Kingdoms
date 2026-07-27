@@ -14,8 +14,8 @@
         ]
       },
       "minecraft:collision_box": {
-        "width": 1.1,
-        "height": 2.4
+        "width": 1.3,
+        "height": 2.8
       },
       "minecraft:nameable": {
         "always_show": true,
