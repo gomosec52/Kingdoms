@@ -815,21 +815,21 @@ async function openSettlementMenu(player, settlementId, page = SETTLEMENT_MENU_P
     case 0:
       return upgradeSettlement(player, settlementId, sessionToken);
     case 1:
-      return openResidentsMenu(player, settlementId, sessionToken);
+      return deferMenu(player, () => openResidentsMenu(player, settlementId, sessionToken));
     case 2:
-      return openPrefixesMenu(player, settlementId, sessionToken);
+      return deferMenu(player, () => openPrefixesMenu(player, settlementId, sessionToken));
     case 3:
-      return openPrefixInfo(player, settlementId, sessionToken);
+      return deferMenu(player, () => openPrefixInfo(player, settlementId, sessionToken));
     case 4:
-      return openAllianceMenu(player, settlementId, sessionToken);
+      return deferMenu(player, () => openAllianceMenu(player, settlementId, sessionToken));
     case 5:
-      return openWarMenu(player, settlementId, sessionToken);
+      return deferMenu(player, () => openWarMenu(player, settlementId, sessionToken));
     case 6:
       return claimTax(player, settlementId, sessionToken);
     case 7:
-      return openConstructionMenu(player, settlementId, sessionToken);
+      return deferMenu(player, () => openConstructionMenu(player, settlementId, sessionToken));
     case 8:
-      return confirmDisband(player, settlementId, sessionToken);
+      return deferMenu(player, () => confirmDisband(player, settlementId, sessionToken));
     default:
       return undefined;
   }
@@ -882,12 +882,13 @@ async function openResidentsMenu(player, settlementId, sessionToken) {
     .button("Исключить игрока")
     .button("Назад"));
   if (response.canceled) return;
-  if (response.selection === 0) return addResident(player, settlementId);
-  if (response.selection === 1) return removeResident(player, settlementId);
+  if (response.selection === 0) return deferMenu(player, () => addResident(player, settlementId, sessionToken));
+  if (response.selection === 1) return deferMenu(player, () => removeResident(player, settlementId, sessionToken));
   return openSettlementMenu(player, settlementId, SETTLEMENT_MENU_PAGE.MAIN, false, sessionToken);
 }
 
-async function addResident(player, settlementId) {
+async function addResident(player, settlementId, sessionToken) {
+  if (!assertSettlementMenuSession(player, settlementId, sessionToken)) return;
   const data = loadData();
   const settlement = getSettlement(data, settlementId);
   if (!settlement || !requireOwner(player, settlement)) return;
@@ -897,21 +898,27 @@ async function addResident(player, settlementId) {
     .filter((name) => name !== settlement.creatorName && !settlement.members[name]);
   if (!candidates.length) {
     player.sendMessage("§7Нет онлайн-игроков, которых можно добавить.");
+    return openResidentsMenu(player, settlementId, sessionToken);
+  }
+
+  const pick = await pickFromActionList(player, "Добавить жителя", "Выберите игрока:", candidates, {
+    getLabel: (name) => name
+  });
+  if (pick.canceled) {
+    if (pick.back) return openResidentsMenu(player, settlementId, sessionToken);
     return;
   }
 
-  const form = new ModalFormData().title("Добавить жителя").dropdown("Игрок", candidates, 0);
-  const response = await showForm(player, form);
-  if (response.canceled) return;
-
-  const name = candidates[response.formValues?.[0] ?? 0];
+  const name = pick.item;
   settlement.members[name] = { prefix: PREFIXES[0].name, joinedTick: system.currentTick };
   saveData(data);
   updatePlayerPrefixDisplays(data);
   world.sendMessage(`§6[Королевства] §f${name} теперь житель ${settlementDisplayName(data, settlement)}.`);
+  return openResidentsMenu(player, settlementId, sessionToken);
 }
 
-async function removeResident(player, settlementId) {
+async function removeResident(player, settlementId, sessionToken) {
+  if (!assertSettlementMenuSession(player, settlementId, sessionToken)) return;
   const data = loadData();
   const settlement = getSettlement(data, settlementId);
   if (!settlement || !requireOwner(player, settlement)) return;
@@ -919,18 +926,23 @@ async function removeResident(player, settlementId) {
   const members = Object.keys(settlement.members);
   if (!members.length) {
     player.sendMessage("§7В поселении пока нет жителей.");
+    return openResidentsMenu(player, settlementId, sessionToken);
+  }
+
+  const pick = await pickFromActionList(player, "Исключить жителя", "Выберите жителя:", members, {
+    getLabel: (name) => name
+  });
+  if (pick.canceled) {
+    if (pick.back) return openResidentsMenu(player, settlementId, sessionToken);
     return;
   }
 
-  const form = new ModalFormData().title("Исключить жителя").dropdown("Житель", members, 0);
-  const response = await showForm(player, form);
-  if (response.canceled) return;
-
-  const name = members[response.formValues?.[0] ?? 0];
+  const name = pick.item;
   delete settlement.members[name];
   saveData(data);
   updatePlayerPrefixDisplays(data);
   world.sendMessage(`§6[Королевства] §f${name} исключён(а) из ${settlementDisplayName(data, settlement)}.`);
+  return openResidentsMenu(player, settlementId, sessionToken);
 }
 
 async function openPrefixesMenu(player, settlementId, sessionToken) {
@@ -942,22 +954,39 @@ async function openPrefixesMenu(player, settlementId, sessionToken) {
   const members = Object.keys(settlement.members);
   if (!members.length) {
     player.sendMessage("§7Сначала добавьте жителей.");
+    return openSettlementMenu(player, settlementId, SETTLEMENT_MENU_PAGE.MAIN, false, sessionToken);
+  }
+
+  const memberPick = await pickFromActionList(player, "Префиксы", "Выберите жителя:", members, {
+    getLabel: (name) => name,
+    icon: "textures/ui/kingdoms/icon_prefixes"
+  });
+  if (memberPick.canceled) {
+    if (memberPick.back) return openSettlementMenu(player, settlementId, SETTLEMENT_MENU_PAGE.MAIN, false, sessionToken);
+    return;
+  }
+  const memberName = memberPick.item;
+
+  const prefixPick = await pickFromActionList(
+    player,
+    `Префикс для ${memberName}`,
+    "Выберите статус:",
+    PREFIXES,
+    {
+      getLabel: (prefix) => prefix.name,
+      icon: "textures/ui/kingdoms/icon_prefixes"
+    }
+  );
+  if (prefixPick.canceled) {
+    if (prefixPick.back) return openPrefixesMenu(player, settlementId, sessionToken);
     return;
   }
 
-  const memberResponse = await showForm(player, new ModalFormData().title("Префиксы").dropdown("Житель", members, 0));
-  if (memberResponse.canceled) return;
-  const memberName = members[memberResponse.formValues?.[0] ?? 0];
-
-  const prefixResponse = await showForm(player, new ModalFormData()
-    .title(`Префикс для ${memberName}`)
-    .dropdown("Статус", PREFIXES.map((prefix) => prefix.name), 0));
-  if (prefixResponse.canceled) return;
-
-  settlement.members[memberName].prefix = PREFIXES[prefixResponse.formValues?.[0] ?? 0].name;
+  settlement.members[memberName].prefix = prefixPick.item.name;
   saveData(data);
   updatePlayerPrefixDisplays(data);
   player.sendMessage(`§a${memberName}: ${settlement.members[memberName].prefix}.`);
+  return openPrefixesMenu(player, settlementId, sessionToken);
 }
 
 async function openPrefixInfo(player, settlementId, sessionToken) {
@@ -976,18 +1005,23 @@ async function openAllianceMenu(player, settlementId, sessionToken) {
   const targets = data.settlements.filter((candidate) => candidate.id !== settlement.id && !areAllied(data, candidate.id, settlement.id));
   if (!targets.length) {
     player.sendMessage("§7Нет поселений для нового альянса.");
+    return openSettlementMenu(player, settlementId, SETTLEMENT_MENU_PAGE.MAIN, false, sessionToken);
+  }
+
+  const pick = await pickFromActionList(player, "Создать альянс", "Выберите поселение:", targets, {
+    getLabel: (candidate) => `${settlementDisplayName(data, candidate)} (${candidate.creatorName})`,
+    icon: "textures/ui/kingdoms/icon_alliance"
+  });
+  if (pick.canceled) {
+    if (pick.back) return openSettlementMenu(player, settlementId, SETTLEMENT_MENU_PAGE.MAIN, false, sessionToken);
     return;
   }
 
-  const labels = targets.map((candidate) => `${settlementDisplayName(data, candidate)} | Создатель: ${candidate.creatorName}`);
-  const response = await showForm(player, new ModalFormData().title("Создать альянс").dropdown("Поселение", labels, 0));
-  if (response.canceled) return;
-
-  const target = targets[response.formValues?.[0] ?? 0];
-  const targetOwner = world.getPlayers().find((online) => getPlayerName(online) === target.creatorName);
+  const target = pick.item;
+  const targetOwner = world.getPlayers().find((online) => samePlayerName(getPlayerName(online), target.creatorName));
   if (!targetOwner) {
     player.sendMessage("§cСоздатель выбранного поселения должен быть онлайн, чтобы принять альянс.");
-    return;
+    return openSettlementMenu(player, settlementId, SETTLEMENT_MENU_PAGE.MAIN, false, sessionToken);
   }
 
   pendingAllianceOffers.set(targetOwner.id, {
@@ -996,7 +1030,7 @@ async function openAllianceMenu(player, settlementId, sessionToken) {
     targetSettlementId: target.id
   });
 
-  const answer = await showForm(targetOwner, new MessageFormData()
+  const answer = await showFormDeferred(targetOwner, new MessageFormData()
     .title("Предложение альянса")
     .body(`${settlement.creatorName} предлагает объединить территории: ${settlementDisplayName(data, settlement)} + ${settlementDisplayName(data, target)}. Если принять, инициатор выберет общее название альянса, которое будет отображаться у поселений.`)
     .button1("Принять")
@@ -1005,35 +1039,39 @@ async function openAllianceMenu(player, settlementId, sessionToken) {
   if (answer.canceled || answer.selection !== 0) {
     pendingAllianceOffers.delete(targetOwner.id);
     player.sendMessage("§7Альянс отклонён.");
-    return;
+    return openSettlementMenu(player, settlementId, SETTLEMENT_MENU_PAGE.MAIN, false, sessionToken);
   }
 
   const offer = pendingAllianceOffers.get(targetOwner.id);
   pendingAllianceOffers.delete(targetOwner.id);
   if (!offer || offer.fromPlayerId !== player.id || offer.fromSettlementId !== settlement.id || offer.targetSettlementId !== target.id) {
     player.sendMessage("§cПредложение альянса устарело. Попробуйте снова.");
-    return;
+    return openSettlementMenu(player, settlementId, SETTLEMENT_MENU_PAGE.MAIN, false, sessionToken);
   }
 
-  const nameResponse = await showForm(player, new ModalFormData()
+  const nameResponse = await showFormDeferred(player, new ModalFormData()
     .title("Название альянса")
     .textField(
       "Название альянса",
       "Например: Северная корона",
       { defaultValue: `${settlement.name} и ${target.name}` }
     ));
-  if (nameResponse.canceled) return;
+  if (nameResponse.canceled) {
+    return openSettlementMenu(player, settlementId, SETTLEMENT_MENU_PAGE.MAIN, false, sessionToken);
+  }
 
   const name = cleanName(nameResponse.formValues?.[0]);
   if (!name) {
     player.sendMessage("§cНазвание альянса не может быть пустым.");
-    return;
+    return openSettlementMenu(player, settlementId, SETTLEMENT_MENU_PAGE.MAIN, false, sessionToken);
   }
 
   const fresh = loadData();
   const ownFresh = getSettlement(fresh, settlement.id);
   const targetFresh = getSettlement(fresh, target.id);
-  if (!ownFresh || !targetFresh || areAllied(fresh, ownFresh.id, targetFresh.id)) return;
+  if (!ownFresh || !targetFresh || areAllied(fresh, ownFresh.id, targetFresh.id)) {
+    return openSettlementMenu(player, settlementId, SETTLEMENT_MENU_PAGE.MAIN, false, sessionToken);
+  }
 
   const alliance = { id: nextAllianceId(fresh), name, members: [ownFresh.id, targetFresh.id], createdTick: system.currentTick };
   fresh.alliances.push(alliance);
@@ -1043,6 +1081,7 @@ async function openAllianceMenu(player, settlementId, sessionToken) {
   targetFresh.morale = Math.min(100, targetFresh.morale + 4);
   saveData(fresh);
   world.sendMessage(`§6[Королевства] §fСоздан альянс "${name}" между ${ownFresh.name} и ${targetFresh.name}. Их территории объединены.`);
+  return openSettlementMenu(player, settlementId, SETTLEMENT_MENU_PAGE.MAIN, false, sessionToken);
 }
 
 async function openWarMenu(player, settlementId, sessionToken) {
@@ -1060,20 +1099,26 @@ async function openWarMenu(player, settlementId, sessionToken) {
 
   if (!targets.length) {
     player.sendMessage("§7Нет подходящих целей: войну можно объявить равному типу поселения, на один тип ниже или на один тип выше.");
+    return openSettlementMenu(player, settlementId, SETTLEMENT_MENU_PAGE.MAIN, false, sessionToken);
+  }
+
+  const pick = await pickFromActionList(player, "Объявить войну", "Выберите цель:", targets, {
+    getLabel: (candidate) => `${settlementType(candidate).name} "${candidate.name}" (${candidate.creatorName})`,
+    icon: "textures/ui/kingdoms/icon_war"
+  });
+  if (pick.canceled) {
+    if (pick.back) return openSettlementMenu(player, settlementId, SETTLEMENT_MENU_PAGE.MAIN, false, sessionToken);
     return;
   }
 
-  const labels = targets.map((candidate) => `${settlementType(candidate).name} "${candidate.name}" | ${candidate.creatorName}`);
-  const response = await showForm(player, new ModalFormData().title("Объявить войну").dropdown("Цель", labels, 0));
-  if (response.canceled) return;
-
-  const target = targets[response.formValues?.[0] ?? 0];
+  const target = pick.item;
   settlement.wars.push(target.id);
   target.wars.push(settlement.id);
   settlement.morale = Math.max(0, settlement.morale - 6);
   target.morale = Math.max(0, target.morale - 6);
   saveData(data);
   world.sendMessage(`§4[Война] §f${settlementDisplayName(data, settlement)} объявило войну ${settlementDisplayName(data, target)}. Победа достигается уничтожением вражеского флага.`);
+  return openSettlementMenu(player, settlementId, SETTLEMENT_MENU_PAGE.MAIN, false, sessionToken);
 }
 
 function claimTax(player, settlementId, sessionToken) {
@@ -2095,6 +2140,51 @@ async function showForm(player, form) {
   } finally {
     formBusyPlayers.delete(player.id);
   }
+}
+
+const FORM_CHAIN_DELAY_TICKS = 3;
+
+function deferMenu(player, fn) {
+  system.runTimeout(() => {
+    if (!player?.isValid) return;
+    fn();
+  }, FORM_CHAIN_DELAY_TICKS);
+}
+
+async function showFormDeferred(player, form, delayTicks = FORM_CHAIN_DELAY_TICKS) {
+  return new Promise((resolve) => {
+    system.runTimeout(async () => {
+      if (!player?.isValid) {
+        resolve({ canceled: true });
+        return;
+      }
+      resolve(await showForm(player, form));
+    }, delayTicks);
+  });
+}
+
+async function pickFromActionList(player, title, body, items, options = {}) {
+  const {
+    getLabel = (item) => String(item),
+    icon = "textures/ui/icon_multiplayer",
+    backLabel = "Назад",
+    showBack = true
+  } = options;
+
+  if (!items.length) return { canceled: true, empty: true };
+
+  const form = new ActionFormData().title(title);
+  if (body) form.body(body);
+  for (const item of items) form.button(getLabel(item), icon);
+  if (showBack) form.button(backLabel, "textures/ui/kingdoms/icon_disband");
+
+  const response = await showFormDeferred(player, form);
+  if (response.canceled) return { canceled: true };
+  const selection = Number(response.selection);
+  if (Number.isNaN(selection)) return { canceled: true };
+  if (showBack && selection >= items.length) return { canceled: true, back: true };
+  if (selection < 0 || selection >= items.length) return { canceled: true };
+  return { canceled: false, index: selection, item: items[selection] };
 }
 
 function giveCurrency(player, copperAmount) {
