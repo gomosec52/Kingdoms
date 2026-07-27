@@ -1836,7 +1836,7 @@ function notifyPlayerAboutAddon(player) {
   if (loadedNoticeShown.has(playerName)) return;
   loadedNoticeShown.add(playerName);
 
-  player.sendMessage("§6[KW Build] §fv1.10.2 — монеты, защита спавна, армия");
+  player.sendMessage("§6[KW Build] §fv1.10.3 — монеты, защита спавна, армия");
   player.sendMessage(`§7Флаг — сущность. Кликните предметом по блоку. Нужно ${formatCopperValue(CREATION_COST)}.`);
 }
 
