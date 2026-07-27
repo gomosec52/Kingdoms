@@ -1,0 +1,20 @@
+{
+  "format_version": "1.10.0",
+  "minecraft:client_entity": {
+    "description": {
+      "identifier": "kingdoms:chunk_marker",
+      "materials": {
+        "default": "entity_alphatest"
+      },
+      "textures": {
+        "default": "textures/entity/kingdom_flag"
+      },
+      "geometry": {
+        "default": "geometry.kingdoms_flag"
+      },
+      "render_controllers": [
+        "controller.render.kingdoms_flag"
+      ]
+    }
+  }
+}

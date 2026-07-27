@@ -13,6 +13,10 @@
           "kingdoms_chunk_marker"
         ]
       },
+      "minecraft:nameable": {
+        "always_show": true,
+        "allow_name_tag_renaming": false
+      },
       "minecraft:collision_box": {
         "width": 0.4,
         "height": 1.2

@@ -12,7 +12,7 @@
       "minecraft:display_name": {
         "value": "Флаг захвата чанка"
       },
-      "minecraft:icon": "kingdoms_flag_item",
+      "minecraft:icon": "kingdoms_chunk_capture_flag",
       "minecraft:max_stack_size": 16,
       "minecraft:interact_button": "Захватить чанк",
       "minecraft:custom_components": [

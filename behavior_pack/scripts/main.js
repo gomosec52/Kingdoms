@@ -169,7 +169,6 @@ const flagInteractionCooldown = new Map();
 const flagPlacementCooldown = new Map();
 const pendingPlacementLocks = new Set();
 const playerPrefixCache = new Map();
-const playerPrefixDisplayMode = new Map();
 const playerIdByName = new Map();
 const chatPrefixNoticeShown = new Set();
 const loadedNoticeShown = new Set();
@@ -317,7 +316,6 @@ world.afterEvents.playerLeave?.subscribe((event) => {
   }
   if (event.playerId) {
     removePlayerPrefixLabelById(event.playerId);
-    playerPrefixDisplayMode.delete(event.playerId);
   }
 });
 
@@ -973,6 +971,10 @@ async function openSettlementMenu(player, settlementId, page = SETTLEMENT_MENU_P
     return;
   }
 
+  const playerName = getPlayerName(player);
+  const isOwner = isSettlementOwner(playerName, settlement);
+  const isResident = isMember(settlement, playerName) && !isOwner;
+
   const nextType = SETTLEMENT_TYPES[settlement.typeIndex + 1];
   const upgradeLabel = formatUpgradeButtonLabel(nextType);
   const form = new ActionFormData()
@@ -994,7 +996,7 @@ async function openSettlementMenu(player, settlementId, page = SETTLEMENT_MENU_P
       .button("Объявить войну", "textures/ui/kingdoms/icon_war")
       .button("Налог", "textures/ui/kingdoms/icon_tax")
       .button("Строительство", "textures/ui/kingdoms/icon_build")
-      .button("Расформировать", "textures/ui/kingdoms/icon_disband")
+      .button(isResident ? "Покинуть поселение" : "Расформировать", "textures/ui/kingdoms/icon_disband")
       .button("Далее", "textures/ui/kingdoms/icon_war");
   }
 
@@ -1036,7 +1038,10 @@ async function openSettlementMenu(player, settlementId, page = SETTLEMENT_MENU_P
     case 7:
       return deferMenu(player, () => openConstructionMenu(player, settlementId, sessionToken));
     case 8:
-      return deferMenu(player, () => confirmDisband(player, settlementId, sessionToken));
+      if (isOwner) return deferMenu(player, () => confirmDisband(player, settlementId, sessionToken));
+      if (isResident) return deferMenu(player, () => confirmLeaveSettlement(player, settlementId, sessionToken));
+      player.sendMessage("§cЭто действие недоступно.");
+      return;
     default:
       return undefined;
   }
@@ -1612,6 +1617,34 @@ function claimTax(player, settlementId, sessionToken) {
       ? `§aНалог собран: ${payout} §7(база + доп. заработок ${formatCopperValue(buildingCostCopper(extra))}).`
       : `§aНалог собран: ${payout}.`
   );
+}
+
+async function confirmLeaveSettlement(player, settlementId, sessionToken) {
+  if (!assertSettlementMenuSession(player, settlementId, sessionToken)) return;
+  const data = loadData();
+  const settlement = getSettlement(data, settlementId);
+  const playerName = getPlayerName(player);
+  if (!settlement || !isMember(settlement, playerName) || isSettlementOwner(playerName, settlement)) {
+    player.sendMessage("§cПокинуть поселение могут только жители (не создатель).");
+    return;
+  }
+
+  const response = await showForm(player, new MessageFormData()
+    .title("Покинуть поселение")
+    .body("Вы точно хотите покинуть поселение?")
+    .button1("Да")
+    .button2("Нет"));
+  if (response.canceled || response.selection !== 0) {
+    return openSettlementMenu(player, settlementId, SETTLEMENT_MENU_PAGE.MAIN, false, sessionToken);
+  }
+
+  const memberName = Object.keys(settlement.members || {}).find((name) => samePlayerName(name, playerName));
+  if (memberName) delete settlement.members[memberName];
+  saveData(data);
+  updatePlayerPrefixDisplays(data);
+  settlementMenuSessions.delete(player.id);
+  world.sendMessage(`§6[Королевства] §f${playerName} покинул(а) ${settlementDisplayName(data, settlement)}.`);
+  player.sendMessage("§eВы покинули поселение.");
 }
 
 async function confirmDisband(player, settlementId, sessionToken) {
@@ -2277,33 +2310,36 @@ function playerSettlementName(data, playerName) {
 }
 
 /**
- * Remove tags/properties used by external prefix packs so they do not fight our nameTag.
+ * Bridge identity to Prefix Reloaded / Kingdoms Prefixes via player tags.
  */
-function clearPrefixBridgeData(player) {
+function syncIdentityTags(player, settlementName, prefix) {
+  const wantSettlement = settlementName ? `kw_s:${settlementName}` : undefined;
+  const wantRole = prefix ? `kw_r:${prefix}` : undefined;
   try {
     for (const tag of player.getTags()) {
-      if (tag.startsWith("kw_s:") || tag.startsWith("kw_r:")) player.removeTag(tag);
+      if (tag.startsWith("kw_s:") && tag !== wantSettlement) player.removeTag(tag);
+      if (tag.startsWith("kw_r:") && tag !== wantRole) player.removeTag(tag);
     }
+    if (wantSettlement && !player.hasTag(wantSettlement)) player.addTag(wantSettlement);
+    if (wantRole && !player.hasTag(wantRole)) player.addTag(wantRole);
   } catch (_error) {
-    // Ignore tag cleanup failures.
-  }
-
-  try {
-    player.setDynamicProperty("kingdoms:role", "");
-    player.setDynamicProperty("kingdoms:settlement", "");
-  } catch (_error) {
-    // Player dynamic properties may be unavailable on older runtimes.
+    // Ignore tag sync failures; Prefix Reloaded can still try dynamic properties.
   }
 }
 
-function resolvePrefixDisplayMode(player, formattedPrefix) {
-  const cached = playerPrefixDisplayMode.get(player.id);
-  if (cached) return cached;
-
-  const mode = formattedPrefix && tryApplyDirectChatPrefix(player, formattedPrefix) ? "chat" : "label";
-  playerPrefixDisplayMode.set(player.id, mode);
-  if (mode === "chat") directChatPrefixAvailable = true;
-  return mode;
+function syncIdentityProperties(player, settlementName, prefix) {
+  try {
+    const nextRole = prefix ?? "";
+    const nextSettlement = settlementName ?? "";
+    if (player.getDynamicProperty("kingdoms:role") !== nextRole) {
+      player.setDynamicProperty("kingdoms:role", nextRole);
+    }
+    if (player.getDynamicProperty("kingdoms:settlement") !== nextSettlement) {
+      player.setDynamicProperty("kingdoms:settlement", nextSettlement);
+    }
+  } catch (_error) {
+    // Older runtimes without player dynamic properties still get tags.
+  }
 }
 
 function updatePlayerPrefixDisplays(knownData) {
@@ -2316,7 +2352,9 @@ function updatePlayerPrefixDisplays(knownData) {
     playerIdByName.set(playerName, player.id);
 
     const prefix = playerDisplayPrefix(data, playerName);
-    clearPrefixBridgeData(player);
+    const settlementName = playerSettlementName(data, playerName);
+    syncIdentityTags(player, settlementName, prefix);
+    syncIdentityProperties(player, settlementName, prefix);
 
     if (prefix) playerPrefixCache.set(playerName, prefix);
     else playerPrefixCache.delete(playerName);
@@ -2331,40 +2369,13 @@ function updatePlayerPrefixDisplays(knownData) {
 
 function applyPlayerPrefix(player, prefix) {
   const playerName = getPlayerName(player);
-  const formattedPrefix = prefix ? `§7[§6${prefix}§7] ` : "";
-
-  clearPrefixBridgeData(player);
-
-  if (!prefix) {
-    playerPrefixDisplayMode.delete(player.id);
-    clearDirectChatPrefix(player);
-    removePlayerPrefixLabel(player);
-    try {
-      if (player.nameTag !== playerName) player.nameTag = playerName;
-    } catch (_error) {
-      // Ignore nameTag reset failures.
-    }
-    return;
-  }
-
-  const mode = resolvePrefixDisplayMode(player, formattedPrefix);
-  if (mode === "chat") {
-    tryApplyDirectChatPrefix(player, formattedPrefix);
-    removePlayerPrefixLabel(player);
-    try {
-      if (player.nameTag !== playerName) player.nameTag = playerName;
-    } catch (_error) {
-      // Ignore nameTag reset failures.
-    }
-    return;
-  }
 
   clearDirectChatPrefix(player);
-  updatePlayerPrefixLabel(player, prefix);
+  removePlayerPrefixLabel(player);
   try {
-    if (player.nameTag !== "") player.nameTag = "";
+    if (player.nameTag !== playerName) player.nameTag = playerName;
   } catch (_error) {
-    // Ignore nameTag reset failures.
+    // Prefix Reloaded handles display via kw_s/kw_r tags synced above.
   }
 }
 
@@ -2494,10 +2505,7 @@ function notifyPlayerAboutPrefixes(player) {
   if (!prefix) return;
 
   chatPrefixNoticeShown.add(playerName);
-  const chatHint = directChatPrefixAvailable
-    ? "Префикс в чате активен (chatNamePrefix)."
-    : "Префикс над головой активен. Для чата нужен обновлённый Script API (beta).";
-  player.sendMessage(`§7[Королевства] Ваш префикс: §6${prefix}§7. ${chatHint}`);
+  player.sendMessage(`§7[Королевства] Ваш префикс: §6${prefix}§7. Отображение через Prefix Reloaded.`);
 }
 
 function settlementDisplayName(data, settlement) {
