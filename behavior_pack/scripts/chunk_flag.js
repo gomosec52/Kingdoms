@@ -16,6 +16,7 @@ export const CHUNK_CAPTURE_FLAG_ITEM = "kingdoms:chunk_capture_flag";
 export const CHUNK_MARKER_ENTITY = "kingdoms:chunk_marker";
 export const CHUNK_MARKER_TAG = "kingdoms_chunk_marker";
 export const CHUNK_MARKER_PENDING_TAG = "kingdoms_chunk_pending";
+export const CHUNK_MARKER_LIFETIME_TICKS = 40;
 
 /** @type {object | undefined} */
 let deps;
@@ -106,6 +107,13 @@ function validateChunkCapture(player, clickedBlock) {
   return { data, settlement, cx, cz, dimensionId };
 }
 
+function scheduleChunkMarkerExpiry(marker) {
+  if (!marker?.isValid) return;
+  system.runTimeout(() => {
+    if (marker?.isValid) marker.remove();
+  }, CHUNK_MARKER_LIFETIME_TICKS);
+}
+
 function finalizeChunkCapture(player, clickedBlock, settlement, cx, cz, existingMarker) {
   const data = deps.loadData();
   const freshSettlement = deps.getSettlement(data, settlement.id) ?? settlement;
@@ -147,6 +155,7 @@ function finalizeChunkCapture(player, clickedBlock, settlement, cx, cz, existing
     } catch (_error) {
       // Keep marker at current location if teleport fails.
     }
+    scheduleChunkMarkerExpiry(marker);
   }
 
   deps.saveData(data);
