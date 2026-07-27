@@ -1147,14 +1147,14 @@
     "type": "panel",
     "size": [
       22,
-      160
+      48
     ],
     "offset": [
-      0,
-      67
+      -10,
+      -10
     ],
-    "anchor_from": "top_right",
-    "anchor_to": "top_right",
+    "anchor_from": "bottom_right",
+    "anchor_to": "bottom_right",
     "layer": 20,
     "bindings": [
       {
@@ -1214,14 +1214,14 @@
     "type": "panel",
     "size": [
       22,
-      160
+      48
     ],
     "offset": [
-      0,
-      67
+      -10,
+      -10
     ],
-    "anchor_from": "top_right",
-    "anchor_to": "top_right",
+    "anchor_from": "bottom_right",
+    "anchor_to": "bottom_right",
     "layer": 20,
     "bindings": [
       {
@@ -1347,12 +1347,7 @@
     "bindings": [
       {
         "binding_name": "#form_button_contents",
-        "binding_type": "global"
-      },
-      {
-        "binding_type": "view",
-        "source_property_name": "(#form_button_contents - 1)",
-        "target_property_name": "#collection_length"
+        "binding_name_override": "#collection_length"
       }
     ]
   },
@@ -1362,6 +1357,18 @@
     "size": [
       "100%",
       27
+    ],
+    "bindings": [
+      {
+        "binding_name": "#form_button_texture",
+        "binding_type": "collection",
+        "binding_collection_name": "form_buttons"
+      },
+      {
+        "binding_type": "view",
+        "source_property_name": "(not ((#form_button_texture = 'textures/ui/kingdoms/page_next') or (#form_button_texture = 'textures/ui/kingdoms/page_prev')))",
+        "target_property_name": "#visible"
+      }
     ],
     "controls": [
       {
