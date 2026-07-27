@@ -9,6 +9,15 @@ let deps;
 export function bindSpawnGuardSystem(dependencies) {
   deps = dependencies;
 
+  deps.system.beforeEvents.startup.subscribe(({ blockComponentRegistry }) => {
+    blockComponentRegistry.registerCustomComponent("kingdoms:spawn_guard_interact", {
+      onPlayerInteract(event) {
+        if (!event.player) return;
+        deps.system.run(() => handleSpawnGuardInteract(event.player, event.block));
+      }
+    });
+  });
+
   deps.world.afterEvents.playerPlaceBlock?.subscribe((event) => {
     if (event.block.typeId !== SPAWN_GUARD_BLOCK) return;
     registerSpawnGuard(event.player, event.block);
@@ -105,10 +114,17 @@ function handleSpawnGuardBreak(player, block, event) {
 }
 
 async function handleSpawnGuardInteract(player, block) {
-  const data = deps.loadData();
-  const record = findSpawnGuardRecord(data, block.location, deps.getDimensionId(block.dimension));
+  if (!player?.isValid || !block) return;
+
+  let data = deps.loadData();
+  let record = findSpawnGuardRecord(data, block.location, deps.getDimensionId(block.dimension));
   if (!record) {
-    player.sendMessage("§cЯдро не зарегистрировано. Поставьте блок заново.");
+    registerSpawnGuard(player, block);
+    data = deps.loadData();
+    record = findSpawnGuardRecord(data, block.location, deps.getDimensionId(block.dimension));
+  }
+  if (!record) {
+    player.sendMessage("§cНе удалось зарегистрировать ядро. Поставьте блок заново.");
     return;
   }
 

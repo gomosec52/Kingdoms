@@ -328,32 +328,9 @@ function tickOrderButtons() {
           // Ignore teleport failures.
         }
       }
-
-      entity.nameTag = "";
-      if (deps.system.currentTick % 12 === i % 12) {
-        try {
-          player.spawnParticle("minecraft:villager_happy", {
-            x: next.x,
-            y: next.y + 0.55,
-            z: next.z
-          });
-        } catch (_error) {
-          // Ignore particle failures.
-        }
-      }
     }
 
-    if (deps.system.currentTick % 20 === 0) {
-      const labels = ORDER_BUTTONS.map((btn) => {
-        const active = btn.id === "dismiss" ? false : btn.id === state.mode;
-        return active ? `§a${btn.label}` : `§7${btn.label}`;
-      }).join(" §8| ");
-      try {
-        player.onScreenDisplay.setActionBar(`§eПриказы: ${labels} §8— ПКМ по меткам справа`);
-      } catch (_error) {
-        // Ignore action bar failures.
-      }
-    }
+    updateOrderButtonLabels(player, state);
   }
 }
 
@@ -380,8 +357,15 @@ function formatOrderLabel(label, active) {
   return active ? `§a▶ ${label}` : `§7  ${label}`;
 }
 
-function updateOrderButtonLabels(_player, _state) {
-  // Labels are shown only to the summoner via action bar.
+function updateOrderButtonLabels(player, state) {
+  for (const btn of state.orderBtnIds || []) {
+    const entity = deps.world.getEntity(btn.id);
+    if (!entity?.isValid) continue;
+    const def = ORDER_BUTTONS.find((entry) => entry.id === btn.orderId);
+    if (!def) continue;
+    const active = btn.orderId === "dismiss" ? false : btn.orderId === state.mode;
+    entity.nameTag = formatOrderLabel(def.label, active);
+  }
 }
 
 function spawnOrderButtons(player, menuRightVector) {
@@ -398,7 +382,7 @@ function spawnOrderButtons(player, menuRightVector) {
       entity.addTag(ownerTag);
       entity.addTag(knightTag(player.id));
       entity.addTag(`kingdoms_order_${def.id}`);
-      entity.nameTag = "";
+      entity.nameTag = formatOrderLabel(def.label, def.id === ORDER_MODES.FOLLOW);
       ids.push({ id: entity.id, orderId: def.id });
     } catch (_error) {
       // Ignore spawn failures.
@@ -490,7 +474,7 @@ export async function openArmyMenu(player, settlementId, sessionToken) {
   ];
 
   if (hasActiveArmy(player)) {
-    lines.push("", "§aПриказы§r — метки справа (видны только вам), ПКМ по ним.");
+    lines.push("", "§aПриказы справа§r — удар или ПКМ по тексту.");
   }
 
   const form = new deps.ActionFormData()
@@ -629,7 +613,7 @@ export async function openSummonArmyMenu(player, settlementId, sessionToken) {
 
   const count = Math.max(1, Math.min(maxCount, Math.round(Number(response.formValues?.[0] ?? 1))));
   summonArmy(player, settlement, count);
-  player.sendMessage(`§aСозвано ${count} рыцарей. Приказы справа — ПКМ по меткам (видны только вам).`);
+  player.sendMessage(`§aСозвано ${count} рыцарей. Приказы справа — удар или ПКМ по тексту.`);
   return backToExtraPage(player, settlementId);
 }
 
@@ -681,7 +665,7 @@ export async function openArmyOrdersMenu(player) {
     player.sendMessage("§cАрмия не созвана.");
     return undefined;
   }
-  player.sendMessage("§7Приказы справа от вас: ПКМ по меткам (видны только вам).");
+  player.sendMessage("§7Приказы справа от вас: удар или ПКМ по тексту.");
   return undefined;
 }
 

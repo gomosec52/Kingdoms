@@ -1,5 +1,5 @@
 {
-  "format_version": "1.21.40",
+  "format_version": "1.21.90",
   "minecraft:block": {
     "description": {
       "identifier": "kingdoms:spawn_guard",
@@ -22,7 +22,8 @@
           "render_method": "opaque"
         }
       },
-      "minecraft:map_color": "#2A78B0"
+      "minecraft:map_color": "#2A78B0",
+      "kingdoms:spawn_guard_interact": {}
     }
   }
 }

@@ -176,6 +176,7 @@ bindArmySystem({
 
 bindSpawnGuardSystem({
   world,
+  system,
   loadData,
   saveData,
   showForm,
