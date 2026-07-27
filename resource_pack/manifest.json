@@ -2,12 +2,12 @@
   "format_version": 2,
   "header": {
     "name": "KW Build Resources",
-    "description": "v1.11.5 — revert player nick above settlement label",
+    "description": "v1.11.6 — fix flickering player prefix label",
     "uuid": "0319ea31-7410-4887-be2d-2d52676a4a6d",
     "version": [
       1,
       11,
-      5
+      6
     ],
     "min_engine_version": [
       1,
@@ -22,7 +22,7 @@
       "version": [
         1,
         11,
-        4
+        5
       ]
     }
   ]

@@ -146,6 +146,7 @@ const flagInteractionCooldown = new Map();
 const flagPlacementCooldown = new Map();
 const pendingPlacementLocks = new Set();
 const playerPrefixCache = new Map();
+const playerPrefixDisplayMode = new Map();
 const playerIdByName = new Map();
 const chatPrefixNoticeShown = new Set();
 const loadedNoticeShown = new Set();
@@ -274,7 +275,10 @@ world.afterEvents.playerLeave?.subscribe((event) => {
     playerIdByName.delete(event.playerName);
     chatPrefixNoticeShown.delete(event.playerName);
   }
-  if (event.playerId) removePlayerPrefixLabelById(event.playerId);
+  if (event.playerId) {
+    removePlayerPrefixLabelById(event.playerId);
+    playerPrefixDisplayMode.delete(event.playerId);
+  }
 });
 
 world.afterEvents.playerPlaceBlock?.subscribe((event) => {
@@ -1987,37 +1991,33 @@ function playerSettlementName(data, playerName) {
 }
 
 /**
- * Bridge identity to Kingdoms Prefixes via player tags.
- * Tags are reliable across packs; DPs alone often are not.
+ * Remove tags/properties used by external prefix packs so they do not fight our nameTag.
  */
-function syncIdentityTags(player, settlementName, prefix) {
-  const wantSettlement = settlementName ? `kw_s:${settlementName}` : undefined;
-  const wantRole = prefix ? `kw_r:${prefix}` : undefined;
+function clearPrefixBridgeData(player) {
   try {
     for (const tag of player.getTags()) {
-      if (tag.startsWith("kw_s:") && tag !== wantSettlement) player.removeTag(tag);
-      if (tag.startsWith("kw_r:") && tag !== wantRole) player.removeTag(tag);
+      if (tag.startsWith("kw_s:") || tag.startsWith("kw_r:")) player.removeTag(tag);
     }
-    if (wantSettlement && !player.hasTag(wantSettlement)) player.addTag(wantSettlement);
-    if (wantRole && !player.hasTag(wantRole)) player.addTag(wantRole);
   } catch (_error) {
-    // Ignore tag sync failures; Prefixes can still try DPs / world store.
+    // Ignore tag cleanup failures.
+  }
+
+  try {
+    player.setDynamicProperty("kingdoms:role", "");
+    player.setDynamicProperty("kingdoms:settlement", "");
+  } catch (_error) {
+    // Player dynamic properties may be unavailable on older runtimes.
   }
 }
 
-function syncIdentityProperties(player, settlementName, prefix) {
-  try {
-    const nextRole = prefix ?? "";
-    const nextSettlement = settlementName ?? "";
-    if (player.getDynamicProperty("kingdoms:role") !== nextRole) {
-      player.setDynamicProperty("kingdoms:role", nextRole);
-    }
-    if (player.getDynamicProperty("kingdoms:settlement") !== nextSettlement) {
-      player.setDynamicProperty("kingdoms:settlement", nextSettlement);
-    }
-  } catch (_error) {
-    // Older runtimes without player dynamic properties still get tags.
-  }
+function resolvePrefixDisplayMode(player, formattedPrefix) {
+  const cached = playerPrefixDisplayMode.get(player.id);
+  if (cached) return cached;
+
+  const mode = formattedPrefix && tryApplyDirectChatPrefix(player, formattedPrefix) ? "chat" : "label";
+  playerPrefixDisplayMode.set(player.id, mode);
+  if (mode === "chat") directChatPrefixAvailable = true;
+  return mode;
 }
 
 function updatePlayerPrefixDisplays(knownData) {
@@ -2030,9 +2030,7 @@ function updatePlayerPrefixDisplays(knownData) {
     playerIdByName.set(playerName, player.id);
 
     const prefix = playerDisplayPrefix(data, playerName);
-    const settlementName = playerSettlementName(data, playerName);
-    syncIdentityTags(player, settlementName, prefix);
-    syncIdentityProperties(player, settlementName, prefix);
+    clearPrefixBridgeData(player);
 
     if (prefix) playerPrefixCache.set(playerName, prefix);
     else playerPrefixCache.delete(playerName);
@@ -2049,7 +2047,10 @@ function applyPlayerPrefix(player, prefix) {
   const playerName = getPlayerName(player);
   const formattedPrefix = prefix ? `§7[§6${prefix}§7] ` : "";
 
+  clearPrefixBridgeData(player);
+
   if (!prefix) {
+    playerPrefixDisplayMode.delete(player.id);
     clearDirectChatPrefix(player);
     removePlayerPrefixLabel(player);
     try {
@@ -2060,8 +2061,9 @@ function applyPlayerPrefix(player, prefix) {
     return;
   }
 
-  if (tryApplyDirectChatPrefix(player, formattedPrefix)) {
-    directChatPrefixAvailable = true;
+  const mode = resolvePrefixDisplayMode(player, formattedPrefix);
+  if (mode === "chat") {
+    tryApplyDirectChatPrefix(player, formattedPrefix);
     removePlayerPrefixLabel(player);
     try {
       if (player.nameTag !== playerName) player.nameTag = playerName;
@@ -2071,6 +2073,7 @@ function applyPlayerPrefix(player, prefix) {
     return;
   }
 
+  clearDirectChatPrefix(player);
   updatePlayerPrefixLabel(player, prefix);
   try {
     if (player.nameTag !== "") player.nameTag = "";
