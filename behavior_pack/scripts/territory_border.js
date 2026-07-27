@@ -58,26 +58,30 @@ function findSurfaceY(dimension, x, z, hintY) {
 function computeBorderPositions(settlement) {
   const keys = getAllSettlementChunkKeys(settlement);
   const owned = new Set(keys);
-  const positions = new Set();
+  /** @type {Map<string, { x: number, z: number, axis: "x" | "z" }>} */
+  const seen = new Map();
 
   for (const key of keys) {
     const { cx, cz } = parseChunkKey(key);
     const edges = [
-      { nx: cx, nz: cz - 1, x0: cx * 16, z0: cz * 16, dx: 1, dz: 0, len: 16 },
-      { nx: cx, nz: cz + 1, x0: cx * 16, z0: cz * 16 + 15, dx: 1, dz: 0, len: 16 },
-      { nx: cx - 1, nz: cz, x0: cx * 16, z0: cz * 16, dx: 0, dz: 1, len: 16 },
-      { nx: cx + 1, nz: cz, x0: cx * 16 + 15, z0: cz * 16, dx: 0, dz: 1, len: 16 }
+      { nx: cx, nz: cz - 1, x0: cx * 16, z0: cz * 16, dx: 1, dz: 0, len: 16, axis: "x" },
+      { nx: cx, nz: cz + 1, x0: cx * 16, z0: cz * 16 + 15, dx: 1, dz: 0, len: 16, axis: "x" },
+      { nx: cx - 1, nz: cz, x0: cx * 16, z0: cz * 16, dx: 0, dz: 1, len: 16, axis: "z" },
+      { nx: cx + 1, nz: cz, x0: cx * 16 + 15, z0: cz * 16, dx: 0, dz: 1, len: 16, axis: "z" }
     ];
 
     for (const edge of edges) {
       if (owned.has(chunkKey(edge.nx, edge.nz))) continue;
       for (let i = 0; i < edge.len; i += 1) {
-        positions.add(`${edge.x0 + edge.dx * i},${edge.z0 + edge.dz * i}`);
+        const x = edge.x0 + edge.dx * i;
+        const z = edge.z0 + edge.dz * i;
+        const posKey = `${x},${z}`;
+        if (!seen.has(posKey)) seen.set(posKey, { x, z, axis: edge.axis });
       }
     }
   }
 
-  return positions;
+  return [...seen.values()];
 }
 
 export function refreshSettlementBorders(data, settlement) {
@@ -92,13 +96,14 @@ export function refreshSettlementBorders(data, settlement) {
   const hintY = settlement.flag?.y ?? 64;
   const placed = [];
 
-  for (const xz of computeBorderPositions(settlement)) {
-    const [x, z] = xz.split(",").map(Number);
+  for (const { x, z, axis } of computeBorderPositions(settlement)) {
     const y = findSurfaceY(dimension, x, z, hintY);
     try {
       const block = dimension.getBlock({ x, y, z });
       if (!block || block.typeId !== "minecraft:air") continue;
-      block.setPermutation(BlockPermutation.resolve(TERRITORY_BORDER_BLOCK));
+      block.setPermutation(BlockPermutation.resolve(TERRITORY_BORDER_BLOCK, {
+        "kingdoms:stripe_axis": axis
+      }));
       placed.push(`${x},${y},${z}`);
     } catch (_error) {
       // Skip blocked positions.

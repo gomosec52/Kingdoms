@@ -39,22 +39,27 @@ export function getWeakWarCooldownRemaining(settlement, targetTypeIndex, current
   return Math.max(0, until - currentTick);
 }
 
+export function getWarBlockForTarget(settlement, target, currentTick) {
+  const globalRemaining = getWarDeclareCooldownRemaining(settlement, currentTick);
+  const weakRemaining = getWeakWarCooldownRemaining(settlement, target.typeIndex, currentTick);
+
+  if (weakRemaining > 0 && weakRemaining >= globalRemaining) {
+    return { ok: false, reason: "weak", remaining: weakRemaining, targetTypeIndex: target.typeIndex };
+  }
+  if (globalRemaining > 0) {
+    return { ok: false, reason: "global", remaining: globalRemaining };
+  }
+  if (weakRemaining > 0) {
+    return { ok: false, reason: "weak", remaining: weakRemaining, targetTypeIndex: target.typeIndex };
+  }
+  return { ok: true };
+}
+
 export function canDeclareWarOnTarget(settlement, target, currentTick) {
   if (!canTargetSettlementType(settlement.typeIndex, target.typeIndex)) {
     return { ok: false, reason: "type" };
   }
-
-  const globalRemaining = getWarDeclareCooldownRemaining(settlement, currentTick);
-  if (globalRemaining > 0) {
-    return { ok: false, reason: "global", remaining: globalRemaining };
-  }
-
-  const weakRemaining = getWeakWarCooldownRemaining(settlement, target.typeIndex, currentTick);
-  if (weakRemaining > 0) {
-    return { ok: false, reason: "weak", remaining: weakRemaining, targetTypeIndex: target.typeIndex };
-  }
-
-  return { ok: true };
+  return getWarBlockForTarget(settlement, target, currentTick);
 }
 
 export function recordWarDeclaration(settlement, currentTick) {

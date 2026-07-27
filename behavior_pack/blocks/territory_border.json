@@ -5,6 +5,11 @@
       "identifier": "kingdoms:territory_border",
       "menu_category": {
         "category": "none"
+      },
+      "states": {
+        "kingdoms:stripe_axis": {
+          "values": ["x", "z"]
+        }
       }
     },
     "components": {
@@ -28,6 +33,14 @@
       "minecraft:light_dampening": 0,
       "minecraft:collision_box": false,
       "minecraft:selection_box": false
-    }
+    },
+    "permutations": [
+      {
+        "condition": "q.block_state('kingdoms:stripe_axis') == 'z'",
+        "components": {
+          "minecraft:geometry": "geometry.kingdoms_territory_border_z"
+        }
+      }
+    ]
   }
 }

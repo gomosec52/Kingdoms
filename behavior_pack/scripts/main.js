@@ -1527,8 +1527,28 @@ async function openWarMenu(player, settlementId, sessionToken) {
   const activeInitiatedWars = (settlement.warInitiatedAgainst || [])
     .map((id) => getSettlement(data, id))
     .filter(Boolean);
-  const globalCooldown = getWarDeclareCooldownRemaining(settlement, system.currentTick);
+  const currentTick = system.currentTick;
+  const globalCooldown = getWarDeclareCooldownRemaining(settlement, currentTick);
   const allowedTypes = getAllowedTargetTypeNames(settlement.typeIndex);
+  const warTargets = data.settlements.filter((candidate) => {
+    if (candidate.id === settlement.id) return false;
+    if (areAllied(data, candidate.id, settlement.id)) return false;
+    return canTargetSettlementType(settlement.typeIndex, candidate.typeIndex);
+  });
+  const maxWeakCooldown = warTargets.reduce(
+    (max, candidate) => Math.max(max, getWeakWarCooldownRemaining(settlement, candidate.typeIndex, currentTick)),
+    0
+  );
+  const cooldownLines = [];
+  if (maxWeakCooldown > globalCooldown) {
+    cooldownLines.push(`Кулдаун на слабые типы (48 ч.): ${formatCooldownTicks(maxWeakCooldown)}.`);
+  } else if (globalCooldown > 0) {
+    cooldownLines.push(`Кулдаун объявления войны: ${formatCooldownTicks(globalCooldown)}.`);
+  } else if (maxWeakCooldown > 0) {
+    cooldownLines.push(`Кулдаун на слабые типы (48 ч.): ${formatCooldownTicks(maxWeakCooldown)}.`);
+  } else {
+    cooldownLines.push("Кулдаун объявления войны: готов.");
+  }
 
   const form = new ActionFormData()
     .title(kingdomsMenuTitle(KINGDOMS_MENU_PAGE.MAIN))
@@ -1537,9 +1557,7 @@ async function openWarMenu(player, settlementId, sessionToken) {
         ? `Активные войны, объявленные вами: ${activeInitiatedWars.map((entry) => entry.name).join(", ")}`
         : "Выберите действие.",
       `Доступные цели: ${allowedTypes}.`,
-      globalCooldown > 0
-        ? `Кулдаун объявления войны: ${formatCooldownTicks(globalCooldown)}.`
-        : "Кулдаун объявления войны: готов."
+      ...cooldownLines
     ].join("\n"))
     .button("Объявить войну", "textures/ui/kingdoms/icon_war")
     .button("Прекратить войну", "textures/ui/kingdoms/icon_disband")
