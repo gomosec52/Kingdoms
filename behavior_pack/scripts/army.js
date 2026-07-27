@@ -429,40 +429,12 @@ function dismissArmyForPlayerId(playerId, applyCooldown) {
   }
 }
 
+function backToArmyPage(player, settlementId) {
+  return deps.backToArmyPage(player, settlementId);
+}
+
 export async function openArmyMenu(player, settlementId) {
-  const data = deps.loadData();
-  const settlement = deps.getSettlement(data, settlementId);
-  if (!settlement) return;
-
-  ensureSettlementArmyData(settlement);
-  const lines = [
-    formatArmyPowerLine(settlement),
-    `Казармы: ${countBarracks(settlement)}/10`,
-    `Рыцари: ${getTotalOwnedKnights(settlement)}/${getKnightCapacity(settlement) || 0}`,
-    "",
-    "Купите казармы в «Строительстве».",
-    "Найм: сразу 5 рыцарей за покупку.",
-    "",
-    "Созыв доступен: Рыцарь, Советник, Создатель."
-  ];
-
-  if (hasActiveArmy(player)) {
-    lines.push("", "§aПриказы справа§r — удар или ПКМ по тексту.");
-  }
-
-  const form = new deps.ActionFormData()
-    .title(deps.settlementMenuTitle(deps.SETTLEMENT_MENU_PAGE.ARMY))
-    .body(lines.join("\n"))
-    .button("Купить рыцаря", "textures/ui/kingdoms/icon_war")
-    .button("Созвать армию", "textures/ui/kingdoms/icon_war")
-    .button("Назад", "textures/ui/kingdoms/icon_disband");
-
-  const response = await deps.showForm(player, form);
-  if (response.canceled) return;
-
-  if (response.selection === 0) return openKnightShop(player, settlementId);
-  if (response.selection === 1) return openSummonArmyMenu(player, settlementId);
-  return deps.openSettlementMenu(player, settlementId, deps.SETTLEMENT_MENU_PAGE.ARMY, false);
+  return backToArmyPage(player, settlementId);
 }
 
 export async function openKnightShop(player, settlementId) {
@@ -472,7 +444,7 @@ export async function openKnightShop(player, settlementId) {
 
   if (countBarracks(settlement) <= 0) {
     player.sendMessage("§cСначала купите казармы в разделе «Строительство».");
-    return openArmyMenu(player, settlementId);
+    return backToArmyPage(player, settlementId);
   }
 
   const def = getKnightDef(DEFAULT_KNIGHT_TYPE);
@@ -508,10 +480,10 @@ export async function openKnightDetails(player, settlementId, knightId) {
 
   const response = await deps.showForm(player, form);
   if (response.canceled) return;
-  if (response.selection !== 0) return openArmyMenu(player, settlementId);
+  if (response.selection !== 0) return backToArmyPage(player, settlementId);
   if (!canBuy) {
     player.sendMessage("§cНужно больше казарм или достигнут лимит рыцарей.");
-    return openArmyMenu(player, settlementId);
+    return backToArmyPage(player, settlementId);
   }
 
   const batchDef = {
@@ -525,11 +497,11 @@ export async function openKnightDetails(player, settlementId, knightId) {
   const missing = deps.getMissingBuildingCost(player, batchDef);
   if (missing.length) {
     player.sendMessage(`§cНе хватает материалов: ${missing.join(", ")}`);
-    return openArmyMenu(player, settlementId);
+    return backToArmyPage(player, settlementId);
   }
   if (!deps.takeBuildingCost(player, batchDef)) {
     player.sendMessage("§cНе удалось списать материалы.");
-    return openArmyMenu(player, settlementId);
+    return backToArmyPage(player, settlementId);
   }
 
   ensureSettlementArmyData(settlement);
@@ -541,7 +513,7 @@ export async function openKnightDetails(player, settlementId, knightId) {
   entry.count += KNIGHT_PURCHASE_BATCH;
   deps.saveData(data);
   player.sendMessage(`§aНанято ${KNIGHT_PURCHASE_BATCH} рыцарей! ${formatArmyPowerLine(settlement)}`);
-  return openArmyMenu(player, settlementId);
+  return backToArmyPage(player, settlementId);
 }
 
 export async function openSummonArmyMenu(player, settlementId) {
@@ -551,25 +523,25 @@ export async function openSummonArmyMenu(player, settlementId) {
 
   if (!canCommandArmy(data, player, settlement)) {
     player.sendMessage("§cСозывать армию могут только Создатель, Рыцарь или Советник.");
-    return openArmyMenu(player, settlementId);
+    return backToArmyPage(player, settlementId);
   }
 
   if (hasActiveArmy(player)) {
     player.sendMessage("§eАрмия уже созвана. Приказы справа — удар или ПКМ по тексту.");
-    return openArmyMenu(player, settlementId);
+    return backToArmyPage(player, settlementId);
   }
 
   const cooldownUntil = getDismissCooldownUntil(player);
   if (deps.system.currentTick < cooldownUntil) {
     const seconds = Math.ceil((cooldownUntil - deps.system.currentTick) / 20);
     player.sendMessage(`§cПовторный созыв через ${Math.ceil(seconds / 60)} мин.`);
-    return openArmyMenu(player, settlementId);
+    return backToArmyPage(player, settlementId);
   }
 
   const owned = countOwnedKnights(settlement, DEFAULT_KNIGHT_TYPE);
   if (owned <= 0) {
     player.sendMessage("§cНет нанятых рыцарей.");
-    return openArmyMenu(player, settlementId);
+    return backToArmyPage(player, settlementId);
   }
 
   const maxCount = Math.min(MAX_SUMMON_KNIGHTS, owned);
@@ -581,12 +553,12 @@ export async function openSummonArmyMenu(player, settlementId) {
     });
 
   const response = await deps.showForm(player, form);
-  if (response.canceled) return openArmyMenu(player, settlementId);
+  if (response.canceled) return backToArmyPage(player, settlementId);
 
   const count = Math.max(1, Math.min(maxCount, Math.round(Number(response.formValues?.[0] ?? 1))));
   summonArmy(player, settlement, count);
   player.sendMessage(`§aСозвано ${count} рыцарей. Приказы справа — удар или ПКМ по тексту.`);
-  return openArmyMenu(player, settlementId);
+  return backToArmyPage(player, settlementId);
 }
 
 function summonArmy(player, settlement, count) {

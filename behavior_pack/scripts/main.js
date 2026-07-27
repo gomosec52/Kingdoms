@@ -12,7 +12,8 @@ import {
   dismissArmiesForSettlement,
   formatArmyPowerLine,
   formatArmyPageBody,
-  openArmyMenu,
+  openKnightShop,
+  openSummonArmyMenu,
   ensureSettlementArmyData
 } from "./army.js";
 
@@ -668,9 +669,11 @@ async function openSettlementMenu(player, settlementId, page = SETTLEMENT_MENU_P
     .body(page === SETTLEMENT_MENU_PAGE.ARMY ? formatArmyPageBody(settlement) : settlementInfo(data, settlement));
 
   if (page === SETTLEMENT_MENU_PAGE.ARMY) {
+    ensureSettlementArmyData(settlement);
     form
-      .button("Армия", "textures/ui/kingdoms/icon_war")
-      .button(" ", "textures/ui/kingdoms/page_prev");
+      .button("Купить рыцаря", "textures/ui/kingdoms/icon_war")
+      .button("Созвать армию", "textures/ui/kingdoms/icon_war")
+      .button("Назад", "textures/ui/kingdoms/icon_disband");
   } else {
     form
       .button(upgradeLabel, "textures/ui/kingdoms/icon_upgrade")
@@ -682,24 +685,26 @@ async function openSettlementMenu(player, settlementId, page = SETTLEMENT_MENU_P
       .button("Налог", "textures/ui/kingdoms/icon_tax")
       .button("Строительство", "textures/ui/kingdoms/icon_build")
       .button("Расформировать", "textures/ui/kingdoms/icon_disband")
-      .button(" ", "textures/ui/kingdoms/page_next");
+      .button("Далее", "textures/ui/kingdoms/icon_war");
   }
 
   const response = await showForm(player, form);
   if (response.canceled) return;
 
   const selection = Number(response.selection);
+  if (Number.isNaN(selection)) return;
 
   if (page === SETTLEMENT_MENU_PAGE.ARMY) {
-    if (selection === 0) return openArmyMenu(player, settlementId);
-    if (selection === 1) {
+    if (selection === 0) return openKnightShop(player, settlementId);
+    if (selection === 1) return openSummonArmyMenu(player, settlementId);
+    if (selection === 2) {
       return openSettlementMenu(player, settlementId, SETTLEMENT_MENU_PAGE.MAIN, false);
     }
     return undefined;
   }
 
   if (selection === 9) {
-    return openSettlementMenu(player, settlementId, SETTLEMENT_MENU_PAGE.ARMY, true);
+    return openSettlementMenu(player, settlementId, SETTLEMENT_MENU_PAGE.ARMY, false);
   }
 
   switch (selection) {

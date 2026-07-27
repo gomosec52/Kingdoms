@@ -2,12 +2,12 @@
   "format_version": 2,
   "header": {
     "name": "KW Build",
-    "description": "v1.9.7 — restore settlement menu page arrows",
+    "description": "v1.9.8 — fix Далее opens army page directly",
     "uuid": "35da6754-77fe-403f-98e0-6e6702d1c764",
     "version": [
       1,
       9,
-      7
+      8
     ],
     "min_engine_version": [
       1,
@@ -22,7 +22,7 @@
       "version": [
         1,
         9,
-        6
+        8
       ]
     },
     {
@@ -33,7 +33,7 @@
       "version": [
         1,
         9,
-        6
+        8
       ]
     }
   ],
@@ -43,7 +43,7 @@
       "version": [
         1,
         9,
-        6
+        8
       ]
     },
     {
