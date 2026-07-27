@@ -422,21 +422,24 @@ world.beforeEvents.entityHurt?.subscribe((event) => {
     event.cancel = true;
     if (!attacker || attacker.typeId !== "minecraft:player") return;
 
-    const data = loadData();
-    const settlement = findSettlementByFlagEntity(data, victim);
-    if (!settlement) {
-      attacker.sendMessage("§cЭтот флаг не привязан к поселению.");
-      return;
-    }
+    system.run(() => {
+      if (!attacker?.isValid || !victim?.isValid) return;
+      const freshData = loadData();
+      const settlement = findSettlementByFlagEntity(freshData, victim);
+      if (!settlement) {
+        removeAllSettlementFlags(victim, undefined);
+        return;
+      }
 
-    const attackerSettlement = getPlayerSettlement(data, getPlayerName(attacker));
-    const isEnemyAtWar = attackerSettlement && isAtWar(settlement, attackerSettlement.id);
-    if (!isEnemyAtWar) {
-      attacker.sendMessage("§cФлаг можно бить только врагу во время объявленной войны.");
-      return;
-    }
+      const attackerSettlement = getPlayerSettlement(freshData, getPlayerName(attacker));
+      const isEnemyAtWar = attackerSettlement && isAtWar(settlement, attackerSettlement.id);
+      if (!isEnemyAtWar) {
+        attacker.sendMessage("§cФлаг можно бить только врагу во время объявленной войны.");
+        return;
+      }
 
-    damageFlag(data, settlement, attackerSettlement, attacker, victim);
+      damageFlag(freshData, settlement, attackerSettlement, attacker, victim);
+    });
     return;
   }
 
@@ -1750,9 +1753,22 @@ function formatUpgradeButtonLabel(nextType) {
   return `Улучшить до\n${name}\n(${cost})`;
 }
 
+function captureSettlementSnapshot(settlement) {
+  if (!settlement) return undefined;
+  return {
+    id: settlement.id,
+    dimensionId: settlement.dimensionId,
+    flag: {
+      x: settlement.flag.x,
+      y: settlement.flag.y,
+      z: settlement.flag.z
+    }
+  };
+}
+
 function damageFlag(data, target, attackerSettlement, player, flagEntity) {
   if (!getSettlement(data, target.id)) {
-    removeOrphanFlagEntity(flagEntity);
+    removeAllSettlementFlags(flagEntity, captureSettlementSnapshot(target));
     return;
   }
 
@@ -1761,10 +1777,15 @@ function damageFlag(data, target, attackerSettlement, player, flagEntity) {
   target.morale = Math.max(0, target.morale - 2);
 
   if (target.hp <= 0) {
-    handleWarVictory(data, attackerSettlement, target, player, flagEntity);
+    target.hp = 0;
+    const loserSnapshot = captureSettlementSnapshot(target);
+    handleWarVictory(data, attackerSettlement, target, player);
     if (!saveData(data)) {
       player.sendMessage("§cНе удалось сохранить результат войны: слишком много данных мира.");
     }
+    removeAllSettlementFlags(flagEntity, loserSnapshot);
+    system.run(() => removeAllSettlementFlags(undefined, loserSnapshot));
+    system.runTimeout(() => removeAllSettlementFlags(undefined, loserSnapshot), 20);
     return;
   }
 
@@ -1773,11 +1794,8 @@ function damageFlag(data, target, attackerSettlement, player, flagEntity) {
   player.sendMessage(`§cФлаг повреждён на ${damage}. Осталось HP: ${target.hp}/${getMaxHp(target)}.`);
 }
 
-function handleWarVictory(data, winner, loser, attackerPlayer, flagEntity) {
-  if (!winner || !loser || !getSettlement(data, loser.id)) {
-    removeOrphanFlagEntity(flagEntity);
-    return;
-  }
+function handleWarVictory(data, winner, loser, attackerPlayer) {
+  if (!winner || !loser || !getSettlement(data, loser.id)) return;
 
   const winnerLabel = settlementDisplayName(data, winner);
   const loserLabel = settlementDisplayName(data, loser);
@@ -1810,7 +1828,6 @@ function handleWarVictory(data, winner, loser, attackerPlayer, flagEntity) {
 
   world.sendMessage(`§4[Война] §f${winnerLabel} победило. Поселение ${loser.name} распалось. Победители могут мародёрить бывшую территорию 5 минут.`);
 
-  removeFlagEntity(flagEntity, loser);
   disbandSettlement(data, loser.id, `проиграло войну против ${winner.name}`, false);
   updateFlagLabelFor(winner, data);
 
@@ -1819,21 +1836,42 @@ function handleWarVictory(data, winner, loser, attackerPlayer, flagEntity) {
   }
 }
 
-function removeFlagEntity(flagEntity, settlement) {
+function removeAllSettlementFlags(flagEntity, settlementSnapshot) {
   try {
     if (flagEntity?.isValid) flagEntity.remove();
   } catch (_error) {
-    // Ignore direct removal failures.
+    // Ignore direct entity removal failures.
   }
-  if (settlement) removeFlagBlock(settlement);
+
+  if (!settlementSnapshot) return;
+
+  const dimension = safeDimension(settlementSnapshot.dimensionId);
+  if (!dimension) return;
+
+  const center = getFlagEntityLocation(settlementSnapshot.flag);
+  try {
+    for (const flag of dimension.getEntities({ type: FLAG_ENTITY, tags: [settlementTag(settlementSnapshot.id)] })) {
+      try { flag.remove(); } catch (_error) { /* continue */ }
+    }
+    for (const flag of dimension.getEntities({ type: FLAG_ENTITY, location: center, maxDistance: 4 })) {
+      try { flag.remove(); } catch (_error) { /* continue */ }
+    }
+  } catch (_error) {
+    // Ignore bulk entity query failures.
+  }
+
+  try {
+    const block = dimension.getBlock(settlementSnapshot.flag);
+    if (block?.typeId === LEGACY_FLAG_BLOCK) setBlockToAir(block);
+  } catch (_error) {
+    // Ignore legacy block cleanup failures.
+  }
+
+  removeFlagLabel(settlementSnapshot);
 }
 
 function removeOrphanFlagEntity(flagEntity) {
-  try {
-    if (flagEntity?.isValid) flagEntity.remove();
-  } catch (_error) {
-    // Ignore orphan cleanup failures.
-  }
+  removeAllSettlementFlags(flagEntity, undefined);
 }
 
 function cleanupSettlementKnights(settlement) {
@@ -1875,7 +1913,6 @@ function disbandSettlement(data, settlementId, reason, announce = true) {
 
   try {
     removeFlagBlock(settlement);
-    removeFlagLabel(settlement);
     dismissArmiesForSettlement(settlementId);
     cleanupSettlementKnights(settlement);
   } catch (_error) {
@@ -1928,7 +1965,28 @@ function cleanupExpiredLootZones() {
 
 function updateFlagLabels() {
   const data = loadData();
+  cleanupOrphanFlagEntities(data);
   for (const settlement of data.settlements) updateFlagLabelFor(settlement, data);
+}
+
+function cleanupOrphanFlagEntities(data) {
+  for (const dimensionId of ["overworld", "nether", "the_end"]) {
+    const dimension = safeDimension(dimensionId);
+    if (!dimension) continue;
+
+    let flags = [];
+    try {
+      flags = dimension.getEntities({ type: FLAG_ENTITY });
+    } catch (_error) {
+      continue;
+    }
+
+    for (const flag of flags) {
+      if (!flag?.isValid || flag.hasTag(PENDING_SETUP_TAG)) continue;
+      if (findSettlementByFlagEntity(data, flag)) continue;
+      try { flag.remove(); } catch (_error) { /* continue */ }
+    }
+  }
 }
 
 function updateFlagLabelFor(settlement, knownData) {
@@ -2576,15 +2634,7 @@ function removePlacedFlag(block, player) {
 }
 
 function removeFlagBlock(settlement) {
-  const dimension = safeDimension(settlement.dimensionId);
-  if (!dimension) return;
-  const block = dimension.getBlock(settlement.flag);
-  if (block?.typeId === LEGACY_FLAG_BLOCK) setBlockToAir(block);
-  try {
-    for (const flag of dimension.getEntities({ type: FLAG_ENTITY, tags: [settlementTag(settlement.id)] })) flag.remove();
-  } catch (_error) {
-    // Entity cleanup is best-effort; settlement data is still removed.
-  }
+  removeAllSettlementFlags(undefined, captureSettlementSnapshot(settlement));
 }
 
 function setBlockToAir(block) {

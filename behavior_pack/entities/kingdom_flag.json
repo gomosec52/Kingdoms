@@ -46,7 +46,6 @@
       "minecraft:knockback_resistance": {
         "value": 1.0
       },
-      "minecraft:persistent": {},
       "minecraft:fire_immune": true
     }
   }
