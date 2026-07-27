@@ -2,12 +2,12 @@
   "format_version": 2,
   "header": {
     "name": "KW Build",
-    "description": "v1.4.7 — wider cloth and larger flag scale",
-    "uuid": "a1db9ddd-fed3-4229-9993-5092d80f4eee",
+    "description": "v1.4.8 — reference-matched frame and wider cloth",
+    "uuid": "e147aa2a-8a21-45e7-9966-7ab6ea6b3eaa",
     "version": [
       1,
       4,
-      7
+      8
     ],
     "min_engine_version": [
       1,
@@ -18,32 +18,32 @@
   "modules": [
     {
       "type": "data",
-      "uuid": "e7ee417e-7342-4eca-a097-92b8f52c0807",
+      "uuid": "a8bc480d-8ba3-432c-8847-2d981873796b",
       "version": [
         1,
         4,
-        7
+        8
       ]
     },
     {
       "type": "script",
       "language": "javascript",
-      "uuid": "9c6fd2c0-9266-459d-938f-d20590beb233",
+      "uuid": "8bd516a4-e3b6-413a-858b-a332913336e2",
       "entry": "scripts/main.js",
       "version": [
         1,
         4,
-        7
+        8
       ]
     }
   ],
   "dependencies": [
     {
-      "uuid": "283b1bf0-2e3f-4972-a302-3c98c659396f",
+      "uuid": "e0f3f9ed-9aa5-426d-9295-cbb779741162",
       "version": [
         1,
         4,
-        7
+        8
       ]
     },
     {
