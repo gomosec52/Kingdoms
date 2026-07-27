@@ -2,12 +2,12 @@
   "format_version": 2,
   "header": {
     "name": "KW Build Resources",
-    "description": "v1.8.4 — fix missing action buttons, arrow bottom-right",
+    "description": "v1.8.5 — visible page arrow on actions column edge",
     "uuid": "0319ea31-7410-4887-be2d-2d52676a4a6d",
     "version": [
       1,
       8,
-      4
+      5
     ],
     "min_engine_version": [
       1,
@@ -22,7 +22,7 @@
       "version": [
         1,
         8,
-        4
+        5
       ]
     }
   ]

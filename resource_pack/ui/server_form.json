@@ -1072,18 +1072,18 @@
                             ],
                             "layer": 4
                           }
+                        },
+                        {
+                          "page_next@server_form.kingdoms_page_arrow_next": {}
+                        },
+                        {
+                          "page_prev@server_form.kingdoms_page_arrow_prev": {}
                         }
                       ]
                     }
                   }
                 ]
               }
-            },
-            {
-              "page_next@server_form.kingdoms_page_arrow_next": {}
-            },
-            {
-              "page_prev@server_form.kingdoms_page_arrow_prev": {}
             }
           ]
         }
@@ -1146,57 +1146,47 @@
   "kingdoms_page_arrow_next": {
     "type": "panel",
     "size": [
-      22,
-      48
+      28,
+      "100% - 28px"
     ],
     "offset": [
-      -10,
-      -10
+      0,
+      25
     ],
-    "anchor_from": "bottom_right",
-    "anchor_to": "bottom_right",
-    "layer": 20,
+    "anchor_from": "top_right",
+    "anchor_to": "top_right",
+    "layer": 50,
     "bindings": [
       {
-        "binding_name": "#title_text"
+        "binding_name": "#title_text",
+        "binding_type": "global"
       },
       {
         "binding_type": "view",
-        "source_property_name": "(((#title_text - 'page=army') = #title_text) and ((#title_text - 'kingdoms:settlement') != #title_text))",
+        "source_property_name": "((#title_text - 'page=army') = #title_text)",
         "target_property_name": "#visible"
       }
     ],
     "controls": [
       {
-        "arrow_image": {
-          "type": "image",
-          "texture": "textures/ui/kingdoms/page_next",
-          "size": [
-            "100%",
-            "100%"
-          ],
-          "layer": 1
-        }
-      },
-      {
-        "arrow_hit@common_buttons.light_text_button": {
+        "arrow_btn@common_buttons.light_text_button": {
           "$pressed_button_name": "button.form_button_click",
           "size": [
             "100%",
             "100%"
           ],
-          "$button_text": "",
-          "$default_button_texture": "textures/ui/kingdoms/transparent",
-          "$hover_button_texture": "textures/ui/kingdoms/transparent",
-          "$pressed_button_texture": "textures/ui/kingdoms/transparent",
-          "$locked_button_texture": "textures/ui/kingdoms/transparent",
+          "$button_text": "»",
+          "$default_button_texture": "textures/ui/kingdoms/page_next",
+          "$hover_button_texture": "textures/ui/kingdoms/page_next",
+          "$pressed_button_texture": "textures/ui/kingdoms/page_next",
+          "$locked_button_texture": "textures/ui/kingdoms/page_next",
           "$default_button_nine_slice_size": 0,
           "$hover_button_nine_slice_size": 0,
           "$pressed_button_nine_slice_size": 0,
           "$locked_button_nine_slice_size": 0,
           "$button_text_max_size": [
-            0,
-            0
+            20,
+            20
           ],
           "collection_index": 9,
           "layer": 2,
@@ -1213,19 +1203,20 @@
   "kingdoms_page_arrow_prev": {
     "type": "panel",
     "size": [
-      22,
-      48
+      28,
+      "100% - 28px"
     ],
     "offset": [
-      -10,
-      -10
+      0,
+      25
     ],
-    "anchor_from": "bottom_right",
-    "anchor_to": "bottom_right",
-    "layer": 20,
+    "anchor_from": "top_right",
+    "anchor_to": "top_right",
+    "layer": 50,
     "bindings": [
       {
-        "binding_name": "#title_text"
+        "binding_name": "#title_text",
+        "binding_type": "global"
       },
       {
         "binding_type": "view",
@@ -1235,35 +1226,24 @@
     ],
     "controls": [
       {
-        "arrow_image": {
-          "type": "image",
-          "texture": "textures/ui/kingdoms/page_prev",
-          "size": [
-            "100%",
-            "100%"
-          ],
-          "layer": 1
-        }
-      },
-      {
-        "arrow_hit@common_buttons.light_text_button": {
+        "arrow_btn@common_buttons.light_text_button": {
           "$pressed_button_name": "button.form_button_click",
           "size": [
             "100%",
             "100%"
           ],
-          "$button_text": "",
-          "$default_button_texture": "textures/ui/kingdoms/transparent",
-          "$hover_button_texture": "textures/ui/kingdoms/transparent",
-          "$pressed_button_texture": "textures/ui/kingdoms/transparent",
-          "$locked_button_texture": "textures/ui/kingdoms/transparent",
+          "$button_text": "«",
+          "$default_button_texture": "textures/ui/kingdoms/page_prev",
+          "$hover_button_texture": "textures/ui/kingdoms/page_prev",
+          "$pressed_button_texture": "textures/ui/kingdoms/page_prev",
+          "$locked_button_texture": "textures/ui/kingdoms/page_prev",
           "$default_button_nine_slice_size": 0,
           "$hover_button_nine_slice_size": 0,
           "$pressed_button_nine_slice_size": 0,
           "$locked_button_nine_slice_size": 0,
           "$button_text_max_size": [
-            0,
-            0
+            20,
+            20
           ],
           "collection_index": 1,
           "layer": 2,
