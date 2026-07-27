@@ -1,0 +1,28 @@
+{
+  "format_version": "1.21.40",
+  "minecraft:block": {
+    "description": {
+      "identifier": "kingdoms:spawn_guard",
+      "menu_category": {
+        "category": "construction"
+      }
+    },
+    "components": {
+      "minecraft:display_name": "Ядро защиты спавна",
+      "minecraft:destructible_by_mining": {
+        "seconds_to_destroy": 99999
+      },
+      "minecraft:destructible_by_explosion": {
+        "explosion_resistance": 3600000
+      },
+      "minecraft:geometry": "minecraft:geometry.full_block",
+      "minecraft:material_instances": {
+        "*": {
+          "texture": "kingdoms_spawn_guard",
+          "render_method": "opaque"
+        }
+      },
+      "minecraft:map_color": "#2A78B0"
+    }
+  }
+}

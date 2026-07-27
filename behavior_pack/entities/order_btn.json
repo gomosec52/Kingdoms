@@ -35,7 +35,7 @@
         "allow_name_tag_renaming": false
       },
       "minecraft:physics": {
-        "has_collision": true,
+        "has_collision": false,
         "has_gravity": false
       },
       "minecraft:pushable": {

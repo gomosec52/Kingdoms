@@ -1,2 +1,6 @@
 item.kingdoms:flag.name=Settlement Flag
 block.kingdoms.flag.name=Settlement Flag
+item.kingdoms:coin_copper.name=Copper Coin
+item.kingdoms:coin_silver.name=Silver Coin
+item.kingdoms:coin_gold.name=Gold Coin
+tile.kingdoms:spawn_guard.name=Spawn Guard Core

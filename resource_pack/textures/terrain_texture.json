@@ -6,6 +6,9 @@
   "texture_data": {
     "kingdoms_flag": {
       "textures": "textures/blocks/flag_placeholder"
+    },
+    "kingdoms_spawn_guard": {
+      "textures": "textures/blocks/spawn_guard"
     }
   }
 }

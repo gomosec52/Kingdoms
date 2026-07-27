@@ -30,7 +30,7 @@ export const KNIGHTS = {
     description: "Крепкий воин в доспехах. Надёжная опора вашей армии на поле боя.",
     power: 80,
     cost: [
-      { itemId: "minecraft:emerald", amount: 25, label: "изумруды" },
+      { itemId: "kingdoms:coin_silver", amount: 25, label: "серебряные монеты" },
       { itemId: "minecraft:iron_ingot", amount: 10, label: "железо" },
       { itemId: "minecraft:iron_helmet", amount: 1, label: "шлем" },
       { itemId: "minecraft:iron_chestplate", amount: 1, label: "нагрудник" }
@@ -75,8 +75,9 @@ function handleOrderButtonTouch(source, target) {
   if (!target.hasTag("kingdoms_order_btn")) return;
 
   const player = /** @type {import("@minecraft/server").Player} */ (source);
+  if (source.id !== player.id) return;
   if (!hasActiveArmy(player)) return;
-  if (!target.hasTag(knightTag(player.id))) return;
+  if (!target.hasTag(orderBtnTag(player.id))) return;
 
   for (const btn of ORDER_BUTTONS) {
     if (target.hasTag(`kingdoms_order_${btn.id}`)) {
@@ -316,12 +317,41 @@ function tickOrderButtons() {
       const dx = target.x - current.x;
       const dy = target.y - current.y;
       const dz = target.z - current.z;
-      if ((dx * dx + dy * dy + dz * dz) < 0.0004) continue;
-      const next = lerpLocation(current, target, ORDER_MENU_LERP);
+      const next = (dx * dx + dy * dy + dz * dz) < 0.0004
+        ? current
+        : lerpLocation(current, target, ORDER_MENU_LERP);
+
+      if ((dx * dx + dy * dy + dz * dz) >= 0.0004) {
+        try {
+          entity.teleport(next, { dimension: player.dimension });
+        } catch (_error) {
+          // Ignore teleport failures.
+        }
+      }
+
+      entity.nameTag = "";
+      if (deps.system.currentTick % 12 === i % 12) {
+        try {
+          player.spawnParticle("minecraft:villager_happy", {
+            x: next.x,
+            y: next.y + 0.55,
+            z: next.z
+          });
+        } catch (_error) {
+          // Ignore particle failures.
+        }
+      }
+    }
+
+    if (deps.system.currentTick % 20 === 0) {
+      const labels = ORDER_BUTTONS.map((btn) => {
+        const active = btn.id === "dismiss" ? false : btn.id === state.mode;
+        return active ? `§a${btn.label}` : `§7${btn.label}`;
+      }).join(" §8| ");
       try {
-        entity.teleport(next, { dimension: player.dimension });
+        player.onScreenDisplay.setActionBar(`§eПриказы: ${labels} §8— ПКМ по меткам справа`);
       } catch (_error) {
-        // Ignore teleport failures.
+        // Ignore action bar failures.
       }
     }
   }
@@ -350,15 +380,8 @@ function formatOrderLabel(label, active) {
   return active ? `§a▶ ${label}` : `§7  ${label}`;
 }
 
-function updateOrderButtonLabels(player, state) {
-  for (const btn of state.orderBtnIds || []) {
-    const entity = deps.world.getEntity(btn.id);
-    if (!entity?.isValid) continue;
-    const def = ORDER_BUTTONS.find((entry) => entry.id === btn.orderId);
-    if (!def) continue;
-    const active = btn.orderId === "dismiss" ? false : btn.orderId === state.mode;
-    entity.nameTag = formatOrderLabel(def.label, active);
-  }
+function updateOrderButtonLabels(_player, _state) {
+  // Labels are shown only to the summoner via action bar.
 }
 
 function spawnOrderButtons(player, menuRightVector) {
@@ -375,7 +398,7 @@ function spawnOrderButtons(player, menuRightVector) {
       entity.addTag(ownerTag);
       entity.addTag(knightTag(player.id));
       entity.addTag(`kingdoms_order_${def.id}`);
-      entity.nameTag = formatOrderLabel(def.label, def.id === ORDER_MODES.FOLLOW);
+      entity.nameTag = "";
       ids.push({ id: entity.id, orderId: def.id });
     } catch (_error) {
       // Ignore spawn failures.
@@ -445,11 +468,11 @@ function dismissArmyForPlayerId(playerId, applyCooldown) {
   }
 }
 
-function backToExtraPage(player, settlementId) {
-  return deps.openSettlementMenu(player, settlementId, deps.SETTLEMENT_MENU_PAGE.ARMY, false);
+function backToExtraPage(player, settlementId, sessionToken) {
+  return deps.openSettlementMenu(player, settlementId, deps.SETTLEMENT_MENU_PAGE.ARMY, false, sessionToken);
 }
 
-export async function openArmyMenu(player, settlementId) {
+export async function openArmyMenu(player, settlementId, sessionToken) {
   const data = deps.loadData();
   const settlement = deps.getSettlement(data, settlementId);
   if (!settlement) return;
@@ -467,7 +490,7 @@ export async function openArmyMenu(player, settlementId) {
   ];
 
   if (hasActiveArmy(player)) {
-    lines.push("", "§aПриказы справа§r — удар или ПКМ по тексту.");
+    lines.push("", "§aПриказы§r — метки справа (видны только вам), ПКМ по ним.");
   }
 
   const form = new deps.ActionFormData()
@@ -481,26 +504,26 @@ export async function openArmyMenu(player, settlementId) {
   if (response.canceled) return;
 
   const selection = Number(response.selection);
-  if (selection === 0) return openKnightShop(player, settlementId);
-  if (selection === 1) return openSummonArmyMenu(player, settlementId);
-  return backToExtraPage(player, settlementId);
+  if (selection === 0) return openKnightShop(player, settlementId, sessionToken);
+  if (selection === 1) return openSummonArmyMenu(player, settlementId, sessionToken);
+  return backToExtraPage(player, settlementId, sessionToken);
 }
 
-export async function openKnightShop(player, settlementId) {
+export async function openKnightShop(player, settlementId, sessionToken) {
   const data = deps.loadData();
   const settlement = deps.getSettlement(data, settlementId);
   if (!settlement || !deps.requireOwner(player, settlement)) return;
 
   if (countBarracks(settlement) <= 0) {
     player.sendMessage("§cСначала купите казармы в разделе «Строительство».");
-    return backToExtraPage(player, settlementId);
+    return backToExtraPage(player, settlementId, sessionToken);
   }
 
   const def = getKnightDef(DEFAULT_KNIGHT_TYPE);
-  return openKnightDetails(player, settlementId, def.id);
+  return openKnightDetails(player, settlementId, def.id, sessionToken);
 }
 
-export async function openKnightDetails(player, settlementId, knightId) {
+export async function openKnightDetails(player, settlementId, knightId, sessionToken) {
   const data = deps.loadData();
   const settlement = deps.getSettlement(data, settlementId);
   if (!settlement || !deps.requireOwner(player, settlement)) return;
@@ -529,10 +552,10 @@ export async function openKnightDetails(player, settlementId, knightId) {
 
   const response = await deps.showForm(player, form);
   if (response.canceled) return;
-  if (response.selection !== 0) return backToExtraPage(player, settlementId);
+  if (response.selection !== 0) return backToExtraPage(player, settlementId, sessionToken);
   if (!canBuy) {
     player.sendMessage("§cНужно больше казарм или достигнут лимит рыцарей.");
-    return backToExtraPage(player, settlementId);
+    return backToExtraPage(player, settlementId, sessionToken);
   }
 
   const batchDef = {
@@ -546,11 +569,11 @@ export async function openKnightDetails(player, settlementId, knightId) {
   const missing = deps.getMissingBuildingCost(player, batchDef);
   if (missing.length) {
     player.sendMessage(`§cНе хватает материалов: ${missing.join(", ")}`);
-    return backToExtraPage(player, settlementId);
+    return backToExtraPage(player, settlementId, sessionToken);
   }
   if (!deps.takeBuildingCost(player, batchDef)) {
     player.sendMessage("§cНе удалось списать материалы.");
-    return backToExtraPage(player, settlementId);
+    return backToExtraPage(player, settlementId, sessionToken);
   }
 
   ensureSettlementArmyData(settlement);
@@ -562,35 +585,35 @@ export async function openKnightDetails(player, settlementId, knightId) {
   entry.count += KNIGHT_PURCHASE_BATCH;
   deps.saveData(data);
   player.sendMessage(`§aНанято ${KNIGHT_PURCHASE_BATCH} рыцарей! ${formatArmyPowerLine(settlement)}`);
-  return backToExtraPage(player, settlementId);
+  return backToExtraPage(player, settlementId, sessionToken);
 }
 
-export async function openSummonArmyMenu(player, settlementId) {
+export async function openSummonArmyMenu(player, settlementId, sessionToken) {
   const data = deps.loadData();
   const settlement = deps.getSettlement(data, settlementId);
   if (!settlement) return;
 
   if (!canCommandArmy(data, player, settlement)) {
     player.sendMessage("§cСозывать армию могут только Создатель, Рыцарь или Советник.");
-    return backToExtraPage(player, settlementId);
+    return backToExtraPage(player, settlementId, sessionToken);
   }
 
   if (hasActiveArmy(player)) {
     player.sendMessage("§eАрмия уже созвана. Приказы справа — удар или ПКМ по тексту.");
-    return backToExtraPage(player, settlementId);
+    return backToExtraPage(player, settlementId, sessionToken);
   }
 
   const cooldownUntil = getDismissCooldownUntil(player);
   if (deps.system.currentTick < cooldownUntil) {
     const seconds = Math.ceil((cooldownUntil - deps.system.currentTick) / 20);
     player.sendMessage(`§cПовторный созыв через ${Math.ceil(seconds / 60)} мин.`);
-    return backToExtraPage(player, settlementId);
+    return backToExtraPage(player, settlementId, sessionToken);
   }
 
   const owned = countOwnedKnights(settlement, DEFAULT_KNIGHT_TYPE);
   if (owned <= 0) {
     player.sendMessage("§cНет нанятых рыцарей.");
-    return backToExtraPage(player, settlementId);
+    return backToExtraPage(player, settlementId, sessionToken);
   }
 
   const maxCount = Math.min(MAX_SUMMON_KNIGHTS, owned);
@@ -602,11 +625,11 @@ export async function openSummonArmyMenu(player, settlementId) {
     });
 
   const response = await deps.showForm(player, form);
-  if (response.canceled) return backToExtraPage(player, settlementId);
+  if (response.canceled) return backToExtraPage(player, settlementId, sessionToken);
 
   const count = Math.max(1, Math.min(maxCount, Math.round(Number(response.formValues?.[0] ?? 1))));
   summonArmy(player, settlement, count);
-  player.sendMessage(`§aСозвано ${count} рыцарей. Приказы справа — удар или ПКМ по тексту.`);
+  player.sendMessage(`§aСозвано ${count} рыцарей. Приказы справа — ПКМ по меткам (видны только вам).`);
   return backToExtraPage(player, settlementId);
 }
 
@@ -658,7 +681,7 @@ export async function openArmyOrdersMenu(player) {
     player.sendMessage("§cАрмия не созвана.");
     return undefined;
   }
-  player.sendMessage("§7Приказы справа от вас: удар или ПКМ по тексту.");
+  player.sendMessage("§7Приказы справа от вас: ПКМ по меткам (видны только вам).");
   return undefined;
 }
 

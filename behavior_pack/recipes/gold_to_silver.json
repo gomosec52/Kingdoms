@@ -1,0 +1,19 @@
+{
+  "format_version": "1.20.10",
+  "minecraft:recipe_shapeless": {
+    "description": {
+      "identifier": "kingdoms:gold_to_silver"
+    },
+    "tags": ["crafting_table"],
+    "ingredients": [
+      {
+        "item": "kingdoms:coin_gold",
+        "count": 1
+      }
+    ],
+    "result": {
+      "item": "kingdoms:coin_silver",
+      "count": 32
+    }
+  }
+}

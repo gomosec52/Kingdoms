@@ -1,0 +1,29 @@
+{
+  "format_version": "1.20.10",
+  "minecraft:recipe_shaped": {
+    "description": {
+      "identifier": "kingdoms:spawn_guard_recipe"
+    },
+    "tags": ["crafting_table"],
+    "pattern": [
+      "DID",
+      "IEI",
+      "DID"
+    ],
+    "key": {
+      "D": {
+        "item": "minecraft:diamond"
+      },
+      "I": {
+        "item": "minecraft:iron_block"
+      },
+      "E": {
+        "item": "minecraft:emerald_block"
+      }
+    },
+    "result": {
+      "item": "kingdoms:spawn_guard",
+      "count": 1
+    }
+  }
+}

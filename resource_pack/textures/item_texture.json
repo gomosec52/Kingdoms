@@ -7,6 +7,15 @@
     },
     "kingdoms:flag_item": {
       "textures": "textures/items/kingdom_flag"
+    },
+    "kingdoms_coin_copper": {
+      "textures": "textures/items/coin_copper"
+    },
+    "kingdoms_coin_silver": {
+      "textures": "textures/items/coin_silver"
+    },
+    "kingdoms_coin_gold": {
+      "textures": "textures/items/coin_gold"
     }
   }
 }

@@ -1,2 +1,6 @@
 item.kingdoms:flag.name=Флаг поселения
 block.kingdoms.flag.name=Флаг поселения
+item.kingdoms:coin_copper.name=Медная монета
+item.kingdoms:coin_silver.name=Серебряная монета
+item.kingdoms:coin_gold.name=Золотая монета
+tile.kingdoms:spawn_guard.name=Ядро защиты спавна
