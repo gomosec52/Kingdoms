@@ -1041,8 +1041,8 @@
                           }
                         },
                         {
-                          "buttons_wrap": {
-                            "type": "panel",
+                          "button_scroll@common.scrolling_panel": {
+                            "$show_background": false,
                             "size": [
                               "100%",
                               "100% - 25px"
@@ -1053,81 +1053,37 @@
                             ],
                             "anchor_from": "top_left",
                             "anchor_to": "top_left",
-                            "propagate_alpha": true,
-                            "layer": 4,
-                            "anims": [
-                              "@server_form.kingdoms_btn_slide_out_left",
-                              "@server_form.kingdoms_btn_fade_out",
-                              "@server_form.kingdoms_btn_slide_in_right",
-                              "@server_form.kingdoms_btn_slide_in_left",
-                              "@server_form.kingdoms_btn_fade_in"
+                            "$scrolling_content": "server_form.kingdoms_buttons_content",
+                            "$scroll_size": [
+                              3,
+                              "100% - 4px"
                             ],
-                            "bindings": [
-                              {
-                                "binding_name": "#title_text"
-                              }
+                            "$scrolling_pane_size": [
+                              "100% - 5px",
+                              "100%"
                             ],
-                            "animate": [
-                              {
-                                "main_out@server_form.kingdoms_btn_slide_out_left": "((#title_text - 'page=army|anim=1') != #title_text)"
-                              },
-                              {
-                                "main_out_alpha@server_form.kingdoms_btn_fade_out": "((#title_text - 'page=army|anim=1') != #title_text)"
-                              },
-                              {
-                                "main_in@server_form.kingdoms_btn_slide_in_left": "((#title_text - 'page=main|anim=1') != #title_text)"
-                              },
-                              {
-                                "main_in_alpha@server_form.kingdoms_btn_fade_in": "((#title_text - 'page=main|anim=1') != #title_text)"
-                              },
-                              {
-                                "army_in@server_form.kingdoms_btn_slide_in_right": "((#title_text - 'page=army|anim=1') != #title_text)"
-                              },
-                              {
-                                "army_in_alpha@server_form.kingdoms_btn_fade_in": "((#title_text - 'page=army|anim=1') != #title_text)"
-                              }
+                            "$scrolling_pane_offset": [
+                              0,
+                              0
                             ],
-                            "controls": [
-                              {
-                                "button_scroll@common.scrolling_panel": {
-                                  "$show_background": false,
-                                  "size": [
-                                    "100%",
-                                    "100%"
-                                  ],
-                                  "$scrolling_content": "server_form.kingdoms_buttons_content",
-                                  "$scroll_size": [
-                                    3,
-                                    "100% - 4px"
-                                  ],
-                                  "$scrolling_pane_size": [
-                                    "100% - 5px",
-                                    "100%"
-                                  ],
-                                  "$scrolling_pane_offset": [
-                                    0,
-                                    0
-                                  ],
-                                  "$scroll_bar_right_padding_size": [
-                                    0,
-                                    0
-                                  ]
-                                }
-                              }
-                            ]
+                            "$scroll_bar_right_padding_size": [
+                              0,
+                              0
+                            ],
+                            "layer": 4
                           }
-                        },
-                        {
-                          "page_next@server_form.kingdoms_page_arrow_next": {}
-                        },
-                        {
-                          "page_prev@server_form.kingdoms_page_arrow_prev": {}
                         }
                       ]
                     }
                   }
                 ]
               }
+            },
+            {
+              "page_next@server_form.kingdoms_page_arrow_next": {}
+            },
+            {
+              "page_prev@server_form.kingdoms_page_arrow_prev": {}
             }
           ]
         }
@@ -1190,16 +1146,16 @@
   "kingdoms_page_arrow_next": {
     "type": "panel",
     "size": [
-      28,
-      100
+      24,
+      132
     ],
     "offset": [
-      1,
-      16
+      -8,
+      44
     ],
     "anchor_from": "top_right",
     "anchor_to": "top_right",
-    "layer": 30,
+    "layer": 12,
     "collection_index": 9,
     "bindings": [
       {
@@ -1257,16 +1213,16 @@
   "kingdoms_page_arrow_prev": {
     "type": "panel",
     "size": [
-      28,
-      100
+      24,
+      132
     ],
     "offset": [
-      1,
-      16
+      -8,
+      44
     ],
     "anchor_from": "top_right",
     "anchor_to": "top_right",
-    "layer": 30,
+    "layer": 12,
     "collection_index": 1,
     "bindings": [
       {
@@ -1401,6 +1357,18 @@
     "size": [
       "100%",
       27
+    ],
+    "bindings": [
+      {
+        "binding_name": "#form_button_texture",
+        "binding_type": "collection",
+        "binding_collection_name": "form_buttons"
+      },
+      {
+        "binding_type": "view",
+        "source_property_name": "(not ((#form_button_texture = 'textures/ui/kingdoms/page_next') or (#form_button_texture = 'textures/ui/kingdoms/page_prev')))",
+        "target_property_name": "#visible"
+      }
     ],
     "controls": [
       {
