@@ -2,12 +2,12 @@
   "format_version": 2,
   "header": {
     "name": "KW Build",
-    "description": "v1.9.4 — order menu follows player without rotating",
+    "description": "v1.9.5 — order button hitbox aligned with visible text",
     "uuid": "35da6754-77fe-403f-98e0-6e6702d1c764",
     "version": [
       1,
       9,
-      4
+      5
     ],
     "min_engine_version": [
       1,
@@ -22,7 +22,7 @@
       "version": [
         1,
         9,
-        3
+        5
       ]
     },
     {
@@ -33,7 +33,7 @@
       "version": [
         1,
         9,
-        3
+        5
       ]
     }
   ],
@@ -43,7 +43,7 @@
       "version": [
         1,
         9,
-        3
+        5
       ]
     },
     {
