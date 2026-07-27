@@ -2,12 +2,12 @@
   "format_version": 2,
   "header": {
     "name": "KW Build Resources",
-    "description": "v1.12.8 — upgrade expansion, flag HP, territory messages",
+    "description": "v1.12.9 — upgrade without expansion menu, cleaner creation form",
     "uuid": "0319ea31-7410-4887-be2d-2d52676a4a6d",
     "version": [
       1,
       12,
-      8
+      9
     ],
     "min_engine_version": [
       1,
@@ -22,7 +22,7 @@
       "version": [
         1,
         12,
-        7
+        9
       ]
     }
   ]

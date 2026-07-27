@@ -49,6 +49,7 @@ import {
   getTerritoryChunkCount,
   expandTerritoryOnVictory,
   applyUpgradeTerritory,
+  previewUpgradeTerritory,
   canCaptureChunk,
   captureChunk,
   countCapturedChunks,
@@ -815,32 +816,12 @@ function formatExtraPageBody(settlement) {
   ].join("\n");
 }
 
-function getMaxAchievableTypeIndex(data, center, dimensionId) {
-  let maxIndex = 0;
-  for (let typeIndex = SETTLEMENT_TYPES.length - 1; typeIndex >= 0; typeIndex -= 1) {
-    const radius = SETTLEMENT_TYPES[typeIndex].radius;
-    const overlap = findTerritoryOverlap(data, center, dimensionId, radius, undefined, undefined);
-    const spawnOverlap = wouldSettlementRadiusOverlapSpawnGuard(data, center, dimensionId, radius);
-    if (!overlap && !spawnOverlap) {
-      maxIndex = typeIndex;
-      break;
-    }
-  }
-  return maxIndex;
-}
-
 function getTerritoryPlacementWarning(data, center, dimensionId) {
-  const maxIndex = getMaxAchievableTypeIndex(data, center, dimensionId);
-  const maxType = SETTLEMENT_TYPES[maxIndex];
-  const absoluteMax = SETTLEMENT_TYPES[SETTLEMENT_TYPES.length - 1];
-  if (maxIndex >= SETTLEMENT_TYPES.length - 1) return undefined;
-
-  const empireRadius = absoluteMax.radius;
+  const empireRadius = SETTLEMENT_TYPES[SETTLEMENT_TYPES.length - 1].radius;
   if (wouldSettlementRadiusOverlapSpawnGuard(data, center, dimensionId, empireRadius)) {
     return `§eВ этом месте нельзя разместить флаг: радиус Империи (${empireRadius}) коснётся зоны защиты спавна. Отойдите подальше.`;
   }
-
-  return `§eВ этом месте вы можете максимум улучшиться до ${maxType.name}. До ${absoluteMax.name} не получится, т.к. мешает чужая территория. Посмотрите на карту в приложении и выберите место подальше.`;
+  return undefined;
 }
 
 function buildSettlementCreationForm(playerName, warning) {
@@ -1079,6 +1060,41 @@ async function openSettlementMenu(player, settlementId, page = SETTLEMENT_MENU_P
   }
 }
 
+function grantChunkCaptureFlagOnUpgrade(player, settlement) {
+  if (settlement.typeIndex < 1) return;
+  giveItemStack(player, new ItemStack("kingdoms:chunk_capture_flag", 1));
+  const maxChunks = getMaxCapturedChunks(settlement);
+  const costNote = chunkCaptureCostsCoins(settlement)
+    ? ` Стоимость захвата: ${formatCopperValue(CHUNK_CAPTURE_COST_COPPER)} за чанк.`
+    : " Захват чанков бесплатный.";
+  player.sendMessage(`§aВы получили §fФлаг захвата чанка§a (лимит: ${maxChunks}).${costNote}`);
+}
+
+function finishSettlementUpgrade(player, data, settlement, upgradeCost, options = {}) {
+  const { expandTerritory = true, overlap } = options;
+  settlement.typeIndex += 1;
+  settlement.creatorPrefix = creatorPrefixFor(settlement.typeIndex);
+  settlement.hp = getMaxHp(settlement);
+  settlement.morale = Math.min(100, settlement.morale + 10);
+
+  if (expandTerritory) {
+    const expansion = applyUpgradeTerritory(data, settlement, settlementType(settlement).radius);
+    if (overlap && expansion.addedAdjacent > 0) {
+      player.sendMessage(`§eТерритория пересекалась с ${settlementDisplayName(data, overlap)} — добавлено ${expansion.addedAdjacent} соседних свободных чанков.`);
+    }
+    scheduleRefreshSettlementBorders(data, settlement);
+    world.sendMessage(`§6[Королевства] §f${settlementDisplayName(data, settlement)} улучшено за ${formatCopperValue(upgradeCost)}. Мораль выросла.`);
+  } else {
+    player.sendMessage("§eТерритория не изменилась — улучшен только тип поселения.");
+    world.sendMessage(`§6[Королевства] §f${settlementDisplayName(data, settlement)} улучшено за ${formatCopperValue(upgradeCost)} без расширения территории. Мораль выросла.`);
+  }
+
+  grantChunkCaptureFlagOnUpgrade(player, settlement);
+  saveData(data);
+  updateFlagLabelFor(settlement);
+  updatePlayerPrefixDisplays(data);
+}
+
 async function upgradeSettlement(player, settlementId, sessionToken) {
   if (!assertSettlementMenuSession(player, settlementId, sessionToken)) return;
   const data = loadData();
@@ -1096,36 +1112,33 @@ async function upgradeSettlement(player, settlementId, sessionToken) {
   }
 
   const overlap = findTerritoryOverlap(data, settlement.flag, settlement.dimensionId, nextType.radius + (settlement.territoryBonus || 0), settlement.id, settlement.allianceId);
-
+  const expansionPreview = previewUpgradeTerritory(data, settlement, nextType.radius);
   const upgradeCost = buildingCostCopper(nextType.upgradeCost);
+  const costLabel = formatCopperValue(upgradeCost);
+
+  if (expansionPreview.blocked > 0 && expansionPreview.addedAdjacent === 0) {
+    const response = await showFormDeferred(player, new MessageFormData()
+      .title("Улучшение без расширения")
+      .body(`Вам некуда расшириться — соседние чанки заняты.${overlap ? `\n\nМешает: ${settlementDisplayName(data, overlap)}.` : ""}\n\nУлучшить до «${nextType.name}» за ${costLabel} без расширения территории?`)
+      .button1(`Улучшить (${costLabel})`)
+      .button2("Отмена"));
+    if (response.canceled || response.selection !== 0) {
+      return openSettlementMenu(player, settlementId, SETTLEMENT_MENU_PAGE.MAIN, false, sessionToken);
+    }
+    if (!takeCopperValueWithNotice(player, upgradeCost)) {
+      player.sendMessage(`§cДля улучшения до "${nextType.name}" нужно ${costLabel}.`);
+      return openSettlementMenu(player, settlementId, SETTLEMENT_MENU_PAGE.MAIN, false, sessionToken);
+    }
+    finishSettlementUpgrade(player, data, settlement, upgradeCost, { expandTerritory: false });
+    return openSettlementMenu(player, settlementId, SETTLEMENT_MENU_PAGE.MAIN, false, sessionToken);
+  }
+
   if (!takeCopperValueWithNotice(player, upgradeCost)) {
-    player.sendMessage(`§cДля улучшения до "${nextType.name}" нужно ${formatCopperValue(upgradeCost)}.`);
+    player.sendMessage(`§cДля улучшения до "${nextType.name}" нужно ${costLabel}.`);
     return;
   }
 
-  settlement.typeIndex += 1;
-  settlement.creatorPrefix = creatorPrefixFor(settlement.typeIndex);
-  settlement.hp = getMaxHp(settlement);
-  settlement.morale = Math.min(100, settlement.morale + 10);
-  const expansion = applyUpgradeTerritory(data, settlement, settlementType(settlement).radius);
-  if (overlap && expansion.addedAdjacent > 0) {
-    player.sendMessage(`§eТерритория пересекалась с ${settlementDisplayName(data, overlap)} — добавлено ${expansion.addedAdjacent} соседних свободных чанков.`);
-  } else if (overlap && expansion.addedAdjacent === 0) {
-    player.sendMessage(`§eТерритория пересекалась с ${settlementDisplayName(data, overlap)} — свободных соседних чанков не найдено.`);
-  }
-  if (settlement.typeIndex >= 1) {
-    giveItemStack(player, new ItemStack("kingdoms:chunk_capture_flag", 1));
-    const maxChunks = getMaxCapturedChunks(settlement);
-    const costNote = chunkCaptureCostsCoins(settlement)
-      ? ` Стоимость захвата: ${formatCopperValue(CHUNK_CAPTURE_COST_COPPER)} за чанк.`
-      : " Захват чанков бесплатный.";
-    player.sendMessage(`§aВы получили §fФлаг захвата чанка§a (лимит: ${maxChunks}).${costNote}`);
-  }
-  saveData(data);
-  updateFlagLabelFor(settlement);
-  updatePlayerPrefixDisplays(data);
-  scheduleRefreshSettlementBorders(data, settlement);
-  world.sendMessage(`§6[Королевства] §f${settlementDisplayName(data, settlement)} улучшено за ${formatCopperValue(upgradeCost)}. Мораль выросла.`);
+  finishSettlementUpgrade(player, data, settlement, upgradeCost, { expandTerritory: true, overlap });
 }
 
 async function openResidentsMenu(player, settlementId, sessionToken) {

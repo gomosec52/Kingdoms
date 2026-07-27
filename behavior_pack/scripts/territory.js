@@ -174,7 +174,7 @@ export function expandTerritoryOnVictory(data, winner, loser) {
   return additions.size;
 }
 
-export function applyUpgradeTerritory(data, settlement, newRadius) {
+function computeUpgradeTerritory(data, settlement, newRadius) {
   ensureSettlementChunks(settlement, 0);
   const idealNew = chunksInRadius(settlement.flag, newRadius);
   const nextChunks = new Set(settlement.chunks || []);
@@ -220,7 +220,17 @@ export function applyUpgradeTerritory(data, settlement, newRadius) {
     }
   }
 
-  settlement.chunks = [...nextChunks];
+  return { blocked, addedAdjacent, nextChunks: [...nextChunks] };
+}
+
+export function previewUpgradeTerritory(data, settlement, newRadius) {
+  const { blocked, addedAdjacent } = computeUpgradeTerritory(data, settlement, newRadius);
+  return { blocked, addedAdjacent };
+}
+
+export function applyUpgradeTerritory(data, settlement, newRadius) {
+  const { blocked, addedAdjacent, nextChunks } = computeUpgradeTerritory(data, settlement, newRadius);
+  settlement.chunks = nextChunks;
   return { blocked, addedAdjacent };
 }
 
