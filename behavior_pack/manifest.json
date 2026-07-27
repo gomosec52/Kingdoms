@@ -2,12 +2,12 @@
   "format_version": 2,
   "header": {
     "name": "KW Build",
-    "description": "v1.5.7 — model.geo_49b2 + lambert texture (axis fixed)",
-    "uuid": "8fd73088-04af-403c-84a8-4e29d5d51106",
+    "description": "v1.5.8 — model.geo_49b2 double-sided poly fix",
+    "uuid": "35da6754-77fe-403f-98e0-6e6702d1c764",
     "version": [
       1,
       5,
-      7
+      8
     ],
     "min_engine_version": [
       1,
@@ -18,32 +18,32 @@
   "modules": [
     {
       "type": "data",
-      "uuid": "24cbb2e3-1a30-42e0-a67f-31e8f5b3c38a",
+      "uuid": "85aa1b50-3187-42b5-81e7-a79d75242d9b",
       "version": [
         1,
         5,
-        7
+        8
       ]
     },
     {
       "type": "script",
       "language": "javascript",
-      "uuid": "757836a8-b982-4d00-adff-c2bdfad4d485",
+      "uuid": "ac9a2baa-958e-40dc-82e1-dc74916aded6",
       "entry": "scripts/main.js",
       "version": [
         1,
         5,
-        7
+        8
       ]
     }
   ],
   "dependencies": [
     {
-      "uuid": "c43fe74f-e7fd-4a8c-a152-27c875dfcabd",
+      "uuid": "0319ea31-7410-4887-be2d-2d52676a4a6d",
       "version": [
         1,
         5,
-        7
+        8
       ]
     },
     {
