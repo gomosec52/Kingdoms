@@ -1777,7 +1777,6 @@ function handleWarVictory(data, winner, loser, attackerPlayer, flagEntity) {
 
   const winnerLabel = settlementDisplayName(data, winner);
   const loserLabel = settlementDisplayName(data, loser);
-  const attackerName = attackerPlayer?.isValid ? getPlayerName(attackerPlayer) : winner.creatorName;
 
   winner.wars = (winner.wars || []).filter((id) => id !== loser.id);
 
@@ -1805,7 +1804,6 @@ function handleWarVictory(data, winner, loser, attackerPlayer, flagEntity) {
     expiresTick: system.currentTick + LOOT_WINDOW_TICKS
   });
 
-  world.sendMessage(`§4[Война] §f${attackerName} уничтожил(а) флаг ${loserLabel}!`);
   world.sendMessage(`§4[Война] §f${winnerLabel} победило. Поселение ${loser.name} распалось. Победители могут мародёрить бывшую территорию 5 минут.`);
 
   removeFlagEntity(flagEntity, loser);
@@ -1813,7 +1811,7 @@ function handleWarVictory(data, winner, loser, attackerPlayer, flagEntity) {
   updateFlagLabelFor(winner, data);
 
   if (attackerPlayer?.isValid) {
-    attackerPlayer.sendMessage(`§aВы уничтожили флаг ${loserLabel}. ${winnerLabel} победило!`);
+    attackerPlayer.sendMessage(`§a${winnerLabel} победило. Флаг ${loserLabel} уничтожен.`);
   }
 }
 
@@ -1964,8 +1962,7 @@ function settlementInfo(data, settlement) {
   return [
     `Тип: ${type.name}`,
     `Имя: ${settlement.name}`,
-    `Созд.: ${creatorPrefixFor(settlement.typeIndex)}`,
-    settlement.creatorName,
+    `Созд.: ${creatorPrefixFor(settlement.typeIndex)} ${settlement.creatorName}`,
     `HP: ${settlement.hp}/${getMaxHp(settlement)}`,
     `Мораль: ${settlement.morale}/100`,
     `Жители: ${getPopulation(settlement)}`,
@@ -1983,20 +1980,6 @@ function settlementInfo(data, settlement) {
 
 function settlementLabel(data, settlement) {
   return `${settlementDisplayName(data, settlement)}\n${creatorPrefixFor(settlement.typeIndex)} ${settlement.creatorName}\nHP ${settlement.hp}/${getMaxHp(settlement)} | Мораль ${settlement.morale}`;
-}
-
-function buildPlayerIdentityTag(data, playerName, rolePrefix) {
-  const settlement = getPlayerSettlement(data, playerName);
-  const lines = [`§f${playerName}`];
-  if (settlement) {
-    lines.push(`§7Поселение §6${settlement.name}`);
-    const alliance = getAlliance(data, settlement.allianceId);
-    if (alliance) lines.push(`§7Альянс: §6${alliance.name}`);
-  }
-  if (rolePrefix && settlement && !samePlayerName(settlement.creatorName, playerName)) {
-    lines.unshift(`§7[§6${rolePrefix}§7]`);
-  }
-  return lines.join("\n");
 }
 
 function playerSettlementName(data, playerName) {
@@ -2054,7 +2037,7 @@ function updatePlayerPrefixDisplays(knownData) {
     if (prefix) playerPrefixCache.set(playerName, prefix);
     else playerPrefixCache.delete(playerName);
 
-    applyPlayerIdentity(player, data, prefix);
+    applyPlayerPrefix(player, prefix);
   }
 
   for (const cachedName of playerPrefixCache.keys()) {
@@ -2062,12 +2045,11 @@ function updatePlayerPrefixDisplays(knownData) {
   }
 }
 
-function applyPlayerIdentity(player, data, prefix) {
+function applyPlayerPrefix(player, prefix) {
   const playerName = getPlayerName(player);
-  const identityTag = buildPlayerIdentityTag(data, playerName, prefix);
-  const chatPrefix = prefix ? `§7[§6${prefix}§7] ` : "";
+  const formattedPrefix = prefix ? `§7[§6${prefix}§7] ` : "";
 
-  if (!getPlayerSettlement(data, playerName)) {
+  if (!prefix) {
     clearDirectChatPrefix(player);
     removePlayerPrefixLabel(player);
     try {
@@ -2078,27 +2060,23 @@ function applyPlayerIdentity(player, data, prefix) {
     return;
   }
 
-  if (tryApplyDirectChatPrefix(player, `${chatPrefix}${identityTag.replace(/\n/g, " §8| ")}`)) {
+  if (tryApplyDirectChatPrefix(player, formattedPrefix)) {
     directChatPrefixAvailable = true;
-    updatePlayerIdentityLabel(player, identityTag);
+    removePlayerPrefixLabel(player);
     try {
-      if (player.nameTag !== "") player.nameTag = "";
+      if (player.nameTag !== playerName) player.nameTag = playerName;
     } catch (_error) {
       // Ignore nameTag reset failures.
     }
     return;
   }
 
-  updatePlayerIdentityLabel(player, identityTag);
+  updatePlayerPrefixLabel(player, prefix);
   try {
     if (player.nameTag !== "") player.nameTag = "";
   } catch (_error) {
     // Ignore nameTag reset failures.
   }
-}
-
-function applyPlayerPrefix(player, prefix) {
-  applyPlayerIdentity(player, loadData(), prefix);
 }
 
 function tryApplyDirectChatPrefix(player, formattedPrefix) {
@@ -2146,12 +2124,13 @@ function getPlayerPrefixLabelLocation(player) {
   };
 }
 
-function updatePlayerIdentityLabel(player, displayText) {
+function updatePlayerPrefixLabel(player, prefix) {
   const dimension = player.dimension;
   if (!dimension) return;
 
   const pidTag = playerPrefixLabelTag(player);
   const location = getPlayerPrefixLabelLocation(player);
+  const displayText = `§7[§6${prefix}§7] §f${getPlayerName(player)}`;
   let labels = [];
 
   try {
@@ -2172,10 +2151,6 @@ function updatePlayerIdentityLabel(player, displayText) {
   }
 
   for (const duplicate of labels.slice(1)) duplicate.remove();
-}
-
-function updatePlayerPrefixLabel(player, prefix) {
-  updatePlayerIdentityLabel(player, buildPlayerIdentityTag(loadData(), getPlayerName(player), prefix));
 }
 
 function removePlayerPrefixLabel(player) {
