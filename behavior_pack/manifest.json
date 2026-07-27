@@ -2,12 +2,12 @@
   "format_version": 2,
   "header": {
     "name": "KW Build",
-    "description": "v1.5.2 — restore stable flag rendering (no mesh explosion)",
-    "uuid": "3f9ecf6e-364d-4c67-9a95-0a5181286ce4",
+    "description": "v1.5.4 — direct model.geo_e209 wiring",
+    "uuid": "c8dbc5d1-d1ad-4ba5-b7d8-46b53df543ba",
     "version": [
       1,
       5,
-      2
+      4
     ],
     "min_engine_version": [
       1,
@@ -18,32 +18,32 @@
   "modules": [
     {
       "type": "data",
-      "uuid": "ac5fd597-9493-4a76-9efb-ff996706c675",
+      "uuid": "6b8c1e14-d18a-4efe-8aa7-b54afe8e14cb",
       "version": [
         1,
         5,
-        2
+        4
       ]
     },
     {
       "type": "script",
       "language": "javascript",
-      "uuid": "be5e26a1-d716-48bb-abcc-378dd0f29130",
+      "uuid": "dafc2c82-b6ae-45ea-84f9-67a55887dd70",
       "entry": "scripts/main.js",
       "version": [
         1,
         5,
-        2
+        4
       ]
     }
   ],
   "dependencies": [
     {
-      "uuid": "9a65a06a-f352-4392-a907-deb9c4c8b28b",
+      "uuid": "ef7e1e05-274a-4a17-a34f-3cd520bcb0f6",
       "version": [
         1,
         5,
-        2
+        4
       ]
     },
     {
