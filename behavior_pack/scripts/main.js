@@ -16,7 +16,7 @@ import {
   ensureSettlementArmyData
 } from "./army.js";
 
-const { BlockPermutation, ItemStack, system, world } = server;
+const { BlockPermutation, EquipmentSlot, ItemStack, system, world } = server;
 const STORE_KEY = "kingdoms:data:v1";
 const STORE_LIMIT = 32767;
 const SETTLEMENT_MENU_TITLE = "kingdoms:settlement";
@@ -121,6 +121,8 @@ bindArmySystem({
   system,
   ActionFormData,
   ModalFormData,
+  ItemStack,
+  EquipmentSlot,
   loadData,
   saveData,
   getSettlement,

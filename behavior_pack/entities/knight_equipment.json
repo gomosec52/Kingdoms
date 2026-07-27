@@ -1,0 +1,9 @@
+{
+  "format_version": "1.20.50",
+  "minecraft:equipment": {
+    "slot.weapon.mainhand": {
+      "item": "minecraft:iron_sword",
+      "quantity": 1
+    }
+  }
+}

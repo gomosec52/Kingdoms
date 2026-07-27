@@ -6,7 +6,8 @@ export const KNIGHTS_PER_BARRACKS = 5;
 export const KNIGHT_PURCHASE_BATCH = 5;
 export const ARMY_DISMISS_COOLDOWN_TICKS = 15 * 60 * 20;
 export const POWER_PER_RESIDENT = 15;
-export const DEFAULT_KNIGHT_TYPE = "plate_knight";
+export const ORDER_MENU_LERP = 0.22;
+export const ORDER_MENU_TICKS = 1;
 
 export const ORDER_MODES = {
   FOLLOW: "follow",
@@ -64,7 +65,7 @@ export function bindArmySystem(dependencies) {
   });
 
   deps.system.runInterval(() => tickArmies(), 20);
-  deps.system.runInterval(() => tickOrderButtons(), 4);
+  deps.system.runInterval(() => tickOrderButtons(), ORDER_MENU_TICKS);
 }
 
 function handleOrderButtonTouch(source, target) {
@@ -228,6 +229,15 @@ function tameKnight(knight, player) {
   }
 }
 
+function equipKnightWeapon(knight) {
+  try {
+    const equippable = knight.getComponent("minecraft:equippable");
+    equippable?.setEquipment(deps.EquipmentSlot.Mainhand, new deps.ItemStack("minecraft:iron_sword", 1));
+  } catch (_error) {
+    // Ignore when equippable is unavailable.
+  }
+}
+
 function setKnightsMode(state, mode, player) {
   for (const knightId of state.knightIds) {
     const knight = deps.world.getEntity(knightId);
@@ -265,6 +275,18 @@ function handleOwnerHurt(player, damagingEntity) {
   markAttackTarget(damagingEntity);
 }
 
+function lerpValue(from, to, t) {
+  return from + (to - from) * t;
+}
+
+function lerpLocation(from, to, t) {
+  return {
+    x: lerpValue(from.x, to.x, t),
+    y: lerpValue(from.y, to.y, t),
+    z: lerpValue(from.z, to.z, t)
+  };
+}
+
 function tickOrderButtons() {
   for (const [playerId, state] of activeArmies.entries()) {
     const player = deps.world.getEntity(playerId);
@@ -274,9 +296,15 @@ function tickOrderButtons() {
       const btn = state.orderBtnIds[i];
       const entity = deps.world.getEntity(btn.id);
       if (!entity?.isValid) continue;
-      const pos = getMenuPosition(player, i, state.menuRightVector);
+      const target = getMenuPosition(player, i, state.menuRightVector);
+      const current = entity.location;
+      const dx = target.x - current.x;
+      const dy = target.y - current.y;
+      const dz = target.z - current.z;
+      if ((dx * dx + dy * dy + dz * dz) < 0.0004) continue;
+      const next = lerpLocation(current, target, ORDER_MENU_LERP);
       try {
-        entity.teleport(pos, { dimension: player.dimension });
+        entity.teleport(next, { dimension: player.dimension });
       } catch (_error) {
         // Ignore teleport failures.
       }
@@ -579,6 +607,7 @@ function summonArmy(player, settlement, count) {
       knight.addTag(`kingdoms_settlement_${settlement.id}`);
       knight.addTag(`kingdoms_knight_type_${DEFAULT_KNIGHT_TYPE}`);
       tameKnight(knight, player);
+      equipKnightWeapon(knight);
       knightIds.push(knight.id);
     } catch (error) {
       player.sendMessage(`§cНе удалось призвать рыцаря: ${error}`);

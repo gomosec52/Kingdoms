@@ -58,6 +58,9 @@
       "minecraft:attack": {
         "damage": 7
       },
+      "minecraft:equipment": {
+        "table": "entities/knight_equipment.json"
+      },
       "minecraft:tameable": {
         "probability": 1,
         "tame_items": [],

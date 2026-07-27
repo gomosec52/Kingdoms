@@ -12,8 +12,32 @@
       "geometry": {
         "default": "geometry.humanoid.custom"
       },
+      "animations": {
+        "root": "animation.player.root",
+        "base": "animation.player.base",
+        "move": "animation.player.move",
+        "holding": "animation.player.holding",
+        "attack": "animation.player.attack",
+        "attack.positions": "animation.player.attack.positions",
+        "attack.rotations": "animation.player.attack.rotations",
+        "bob": "animation.player.bob",
+        "look_at_target": "animation.common.look_at_target"
+      },
+      "scripts": {
+        "animate": [
+          "controller.animation.player.root",
+          "controller.animation.player.base",
+          "controller.animation.player.holding",
+          "controller.animation.player.bob",
+          "controller.animation.player.move",
+          "controller.animation.player.attack"
+        ]
+      },
+      "enable_attachables": true,
+      "hide_armor": true,
       "render_controllers": [
-        "controller.render.knight"
+        "controller.render.knight",
+        "controller.render.item_default"
       ]
     }
   }
