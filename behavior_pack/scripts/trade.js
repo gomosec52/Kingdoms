@@ -1,6 +1,12 @@
 import { ItemStack } from "@minecraft/server";
 import { formatCopperValue, giveCopperValue, takeCopperValue, countCopperValue, COPPER_PER_SILVER, COPPER_PER_GOLD } from "./economy.js";
 import { canAccessTrade, canWithdrawTradeCoins } from "./permissions.js";
+import {
+  formatItemButtonLabel,
+  getItemDisplayNameRu,
+  isTradeBlockedItem
+} from "./item_names.js";
+import { getModalTextFieldValues } from "./ui.js";
 
 /** @type {object | undefined} */
 let deps;
@@ -78,7 +84,13 @@ function getInventoryItems(player) {
   for (let slot = 0; slot < inventory.size; slot += 1) {
     const item = inventory.getItem(slot);
     if (!item) continue;
-    items.push({ slot, typeId: item.typeId, amount: item.amount, name: item.typeId.replace("minecraft:", "") });
+    if (isTradeBlockedItem(item.typeId)) continue;
+    items.push({
+      slot,
+      typeId: item.typeId,
+      amount: item.amount,
+      name: getItemDisplayNameRu(item.typeId)
+    });
   }
   return items;
 }
@@ -185,9 +197,10 @@ function canFitCoins(player, copperAmount) {
 }
 
 function parseCoinPrice(formValues) {
-  const copper = Math.max(0, Math.floor(Number(formValues?.[0] ?? 0)));
-  const silver = Math.max(0, Math.floor(Number(formValues?.[1] ?? 0)));
-  const gold = Math.max(0, Math.floor(Number(formValues?.[2] ?? 0)));
+  const strings = getModalTextFieldValues(formValues);
+  const copper = Math.max(0, Math.floor(Number(strings[0] ?? 0)));
+  const silver = Math.max(0, Math.floor(Number(strings[1] ?? 0)));
+  const gold = Math.max(0, Math.floor(Number(strings[2] ?? 0)));
   return copper + silver * COPPER_PER_SILVER + gold * COPPER_PER_GOLD;
 }
 
@@ -223,7 +236,7 @@ async function openCreateTradeOffer(player, settlementId, sessionToken) {
   const settlement = deps.getSettlement(data, settlementId);
   const items = getInventoryItems(player).filter((entry) => entry.amount > 0);
   if (!items.length) {
-    player.sendMessage("§cВ инвентаре нет предметов для продажи.");
+    player.sendMessage("§cНет предметов для продажи. Монеты нельзя выставлять на торговлю.");
     return openTradeHub(player, settlementId, sessionToken);
   }
 
@@ -236,9 +249,9 @@ async function openCreateTradeOffer(player, settlementId, sessionToken) {
   }
 
   const itemPick = await deps.pickFromActionList(player, "Торговля", "Выберите предмет:", uniqueItems, {
-    getLabel: (entry) => `${entry.name} (${entry.amount})`,
-    icon: "textures/ui/icon_best3",
-    menuPage: deps.KINGDOMS_MENU_PAGE.TRADE_SELL
+    getLabel: (entry) => formatItemButtonLabel(entry.name),
+    menuPage: deps.KINGDOMS_MENU_PAGE.TRADE_SELL,
+    noIcon: true
   });
   if (itemPick.canceled) {
     if (itemPick.back) return openTradeHub(player, settlementId, sessionToken);
@@ -323,10 +336,12 @@ async function openTradeInbox(player, settlementId, sessionToken) {
   const pick = await deps.pickFromActionList(player, "Почта", "Выберите предложение:", settlement.trade.inbox, {
     getLabel: (offer) => {
       const from = deps.getSettlement(data, offer.fromSettlementId);
-      return `${from?.name ?? "?"}: ${offer.itemAmount} x ${offer.itemTypeId.replace("minecraft:", "")} за ${formatCopperValue(offer.totalCopper)}`;
+      const itemName = getItemDisplayNameRu(offer.itemTypeId);
+      const label = `${from?.name ?? "?"}: ${offer.itemAmount} × ${itemName} за ${formatCopperValue(offer.totalCopper)}`;
+      return formatItemButtonLabel(label, 24);
     },
-    icon: "textures/ui/icon_map",
-    menuPage: deps.KINGDOMS_MENU_PAGE.TRADE_MAIL
+    menuPage: deps.KINGDOMS_MENU_PAGE.TRADE_MAIL,
+    noIcon: true
   });
   if (pick.canceled) {
     if (pick.back) return openTradeHub(player, settlementId, sessionToken);
@@ -336,7 +351,7 @@ async function openTradeInbox(player, settlementId, sessionToken) {
   const offer = pick.item;
   const accept = await deps.showFormDeferred(player, new deps.ActionFormData()
     .title(deps.kingdomsMenuTitle(deps.KINGDOMS_MENU_PAGE.TRADE_MAIL))
-    .body(`Купить ${offer.itemAmount} x ${offer.itemTypeId.replace("minecraft:", "")} за ${formatCopperValue(offer.totalCopper)}?`)
+    .body(`Купить ${offer.itemAmount} × ${getItemDisplayNameRu(offer.itemTypeId)} за ${formatCopperValue(offer.totalCopper)}?`)
     .button("Да", "textures/ui/check")
     .button("Нет", "textures/ui/cancel"));
   if (accept.canceled || accept.selection !== 0) return openTradeInbox(player, settlementId, sessionToken);
@@ -368,7 +383,7 @@ async function openTradeInbox(player, settlementId, sessionToken) {
   }
 
   deps.saveData(data);
-  player.sendMessage(`§aСделка принята: ${offer.itemAmount} x ${offer.itemTypeId.replace("minecraft:", "")}.`);
+  player.sendMessage(`§aСделка принята: ${offer.itemAmount} × ${getItemDisplayNameRu(offer.itemTypeId)}.`);
   return openTradeInbox(player, settlementId, sessionToken);
 }
 

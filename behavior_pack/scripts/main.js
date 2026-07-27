@@ -67,6 +67,7 @@ import {
   KINGDOMS_MENU_PAGE,
   SETTLEMENT_MENU_PAGE,
   formatResidentsListTwoRows,
+  getModalTextFieldValue,
   kingdomsMenuTitle,
   settlementMenuTitle,
   stripColorCodes
@@ -547,22 +548,14 @@ async function runSettlementCreationFlow(player, context) {
   }
 
   const warning = getTerritoryPlacementWarning(loadData(), territoryCenter, dimensionId);
-  const form = new ModalFormData()
-    .title(kingdomsMenuTitle(KINGDOMS_MENU_PAGE.CREATE));
-  if (warning) form.label(stripColorCodes(warning));
-  form.textField(
-    `Название поселения (${formatCopperValue(CREATION_COST)})`,
-    "Например: Новгород",
-    { defaultValue: `Поселение ${playerName}` }
-  );
-  const response = await showForm(player, form);
+  const response = await showForm(player, buildSettlementCreationForm(playerName, warning));
   if (response.canceled) {
     player.sendMessage("§7Создание поселения отменено.");
     cleanupFailedPlacement(player, flagEntity, flagItemConsumed);
     return;
   }
 
-  const name = cleanName(response.formValues?.[0]);
+  const name = cleanName(getModalTextFieldValue(response.formValues, 0));
   if (!name) {
     player.sendMessage("§cНазвание не может быть пустым.");
     cleanupFailedPlacement(player, flagEntity, flagItemConsumed);
@@ -718,6 +711,18 @@ function getTerritoryPlacementWarning(data, center, dimensionId) {
   return `§eВ этом месте вы можете максимум улучшиться до ${maxType.name}. До ${absoluteMax.name} не получится, т.к. мешает чужая территория. Посмотрите на карту в приложении и выберите место подальше.`;
 }
 
+function buildSettlementCreationForm(playerName, warning) {
+  const form = new ModalFormData()
+    .title(kingdomsMenuTitle(KINGDOMS_MENU_PAGE.CREATE));
+  if (warning) form.label(stripColorCodes(warning));
+  form.textField(
+    `Название поселения (${formatCopperValue(CREATION_COST)})`,
+    "Например: Новгород",
+    { defaultValue: `Поселение ${playerName}` }
+  );
+  return form;
+}
+
 function validateNewSettlement(player, territoryCenter, dimensionId) {
   const data = loadData();
   const playerName = getPlayerName(player);
@@ -788,23 +793,15 @@ async function beginSettlementCreation(player, block) {
     return;
   }
 
-  const form = new ModalFormData()
-    .title("Создание поселения")
-    .textField(
-      `Название поселения (${formatCopperValue(CREATION_COST)})`,
-      "Например: Новгород",
-      { defaultValue: `Поселение ${playerName}` }
-    );
   const warning = getTerritoryPlacementWarning(data, block.location, dimensionId);
-  if (warning) player.sendMessage(warning);
-  const response = await showForm(player, form);
+  const response = await showForm(player, buildSettlementCreationForm(playerName, warning));
   if (response.canceled) {
     removePlacedFlag(block, player);
     player.sendMessage("§7Создание поселения отменено, флаг возвращён.");
     return;
   }
 
-  const name = cleanName(response.formValues?.[0]);
+  const name = cleanName(getModalTextFieldValue(response.formValues, 0));
   if (!name) {
     removePlacedFlag(block, player);
     player.sendMessage("§cНазвание не может быть пустым.");
@@ -869,8 +866,8 @@ async function openSettlementMenu(player, settlementId, page = SETTLEMENT_MENU_P
 
   const nextType = SETTLEMENT_TYPES[settlement.typeIndex + 1];
   const upgradeLabel = nextType
-    ? `Улучшить до: ${nextType.name} (${emeraldCostToLabel(nextType.upgradeCost)})`
-    : "Максимум развития";
+    ? `Улучшить до\n${nextType.name}\n(${formatCopperValue(buildingCostCopper(nextType.upgradeCost))})`
+    : "Максимум\nразвития";
   const form = new ActionFormData()
     .title(settlementMenuTitle(page, animate))
     .body(page === SETTLEMENT_MENU_PAGE.EXTRA ? formatExtraPageBody(settlement) : settlementInfo(data, settlement));
@@ -2446,14 +2443,15 @@ async function pickFromActionList(player, title, body, items, options = {}) {
     icon = "textures/ui/icon_multiplayer",
     backLabel = "Назад",
     showBack = true,
-    menuPage
+    menuPage,
+    noIcon = false
   } = options;
 
   if (!items.length) return { canceled: true, empty: true };
 
   const form = new ActionFormData().title(menuPage ? kingdomsMenuTitle(menuPage) : title);
   if (body) form.body(body);
-  for (const item of items) form.button(getLabel(item), icon);
+  for (const item of items) form.button(getLabel(item), noIcon ? "" : icon);
   if (showBack) form.button(backLabel, "textures/ui/kingdoms/icon_disband");
 
   const response = await showFormDeferred(player, form);

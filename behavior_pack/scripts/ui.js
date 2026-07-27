@@ -39,3 +39,13 @@ export function formatResidentsListTwoRows(creatorName, members = {}) {
   const row2 = names.slice(mid).join(", ");
   return row2 ? `${row1}\n${row2}` : row1;
 }
+
+export function getModalTextFieldValues(formValues) {
+  if (!Array.isArray(formValues)) return [];
+  return formValues.filter((value) => typeof value === "string");
+}
+
+export function getModalTextFieldValue(formValues, index = 0) {
+  const strings = getModalTextFieldValues(formValues);
+  return strings[index] ?? "";
+}

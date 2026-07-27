@@ -1161,10 +1161,10 @@
   "kingdoms_dynamic_button": {
     "type": "stack_panel",
     "orientation": "horizontal",
-    "size": [
-      "100%",
-      27
-    ],
+          "size": [
+            "100%",
+            38
+          ],
     "controls": [
       {
         "icon_panel": {
@@ -1255,14 +1255,14 @@
           "anchor_to": "top_left",
           "size": [
             "fill",
-            26
+            36
           ],
           "$button_text": "#form_button_text",
           "$button_text_binding_type": "collection",
           "$button_text_grid_collection_name": "form_buttons",
           "$button_text_max_size": [
             "100% - 6px",
-            16
+            34
           ],
           "layer": 4,
           "bindings": [
