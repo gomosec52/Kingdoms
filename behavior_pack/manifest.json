@@ -2,12 +2,12 @@
   "format_version": 2,
   "header": {
     "name": "KW Build",
-    "description": "v1.5.1 — exact glTF conversion with correct Bedrock scale",
-    "uuid": "e984dac2-be00-4356-85d1-fb3eb23766f3",
+    "description": "v1.5.2 — restore stable flag rendering (no mesh explosion)",
+    "uuid": "3f9ecf6e-364d-4c67-9a95-0a5181286ce4",
     "version": [
       1,
       5,
-      1
+      2
     ],
     "min_engine_version": [
       1,
@@ -18,32 +18,32 @@
   "modules": [
     {
       "type": "data",
-      "uuid": "9407841d-2b85-4ead-8ff3-52cc26d42d69",
+      "uuid": "ac5fd597-9493-4a76-9efb-ff996706c675",
       "version": [
         1,
         5,
-        1
+        2
       ]
     },
     {
       "type": "script",
       "language": "javascript",
-      "uuid": "6a2488ef-aaed-471c-83c5-7ca8b1e50549",
+      "uuid": "be5e26a1-d716-48bb-abcc-378dd0f29130",
       "entry": "scripts/main.js",
       "version": [
         1,
         5,
-        1
+        2
       ]
     }
   ],
   "dependencies": [
     {
-      "uuid": "c5e3928f-865b-465b-a5f0-24667ceefa01",
+      "uuid": "9a65a06a-f352-4392-a907-deb9c4c8b28b",
       "version": [
         1,
         5,
-        1
+        2
       ]
     },
     {
