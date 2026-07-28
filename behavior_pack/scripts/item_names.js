@@ -2,17 +2,13 @@ const KINGDOMS_ITEM_NAMES = {
   "kingdoms:coin_copper": "Медная монета",
   "kingdoms:coin_silver": "Серебряная монета",
   "kingdoms:coin_gold": "Золотая монета",
-  "kingdoms:coin_roll_copper": "Свёрток медных монет",
-  "kingdoms:coin_roll_silver": "Свёрток серебряных монет",
   "kingdoms:flag": "Флаг поселения"
 };
 
 export const TRADE_BLOCKED_TYPE_IDS = new Set([
   "kingdoms:coin_copper",
   "kingdoms:coin_silver",
-  "kingdoms:coin_gold",
-  "kingdoms:coin_roll_copper",
-  "kingdoms:coin_roll_silver"
+  "kingdoms:coin_gold"
 ]);
 
 const WORD_RU = {

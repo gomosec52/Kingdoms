@@ -6,13 +6,10 @@
     },
     "tags": ["crafting_table"],
     "unlock": [
-      { "item": "kingdoms:coin_roll_copper" }
+      { "item": "kingdoms:coin_copper" }
     ],
     "ingredients": [
-      { "item": "kingdoms:coin_roll_copper" },
-      { "item": "kingdoms:coin_roll_copper" },
-      { "item": "kingdoms:coin_roll_copper" },
-      { "item": "kingdoms:coin_roll_copper" }
+      { "item": "kingdoms:coin_copper", "count": 32 }
     ],
     "result": {
       "item": "kingdoms:coin_silver",

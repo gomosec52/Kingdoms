@@ -12,8 +12,8 @@
       { "item": "kingdoms:coin_silver" }
     ],
     "result": {
-      "item": "kingdoms:coin_roll_copper",
-      "count": 4
+      "item": "kingdoms:coin_copper",
+      "count": 32
     }
   }
 }

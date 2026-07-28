@@ -14,8 +14,6 @@
               "kingdoms:coin_copper",
               "kingdoms:coin_silver",
               "kingdoms:coin_gold",
-              "kingdoms:coin_roll_copper",
-              "kingdoms:coin_roll_silver",
               "kingdoms:flag"
             ]
           }

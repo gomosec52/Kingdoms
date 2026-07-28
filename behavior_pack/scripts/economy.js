@@ -3,10 +3,7 @@ import { ItemStack } from "@minecraft/server";
 export const COIN_COPPER = "kingdoms:coin_copper";
 export const COIN_SILVER = "kingdoms:coin_silver";
 export const COIN_GOLD = "kingdoms:coin_gold";
-export const COIN_ROLL_COPPER = "kingdoms:coin_roll_copper";
-export const COIN_ROLL_SILVER = "kingdoms:coin_roll_silver";
 export const COIN_EXCHANGE = 32;
-export const COIN_ROLL_SIZE = 8;
 
 /** 1 старый изумруд = 1 серебряная монета = 32 медных */
 export const COPPER_PER_SILVER = COIN_EXCHANGE;
@@ -40,9 +37,7 @@ export function countItem(player, typeId) {
 
 export function countCopperValue(player) {
   return countItem(player, COIN_COPPER)
-    + countItem(player, COIN_ROLL_COPPER) * COIN_ROLL_SIZE
     + countItem(player, COIN_SILVER) * COPPER_PER_SILVER
-    + countItem(player, COIN_ROLL_SILVER) * COIN_ROLL_SIZE * COPPER_PER_SILVER
     + countItem(player, COIN_GOLD) * COPPER_PER_GOLD;
 }
 
@@ -132,15 +127,11 @@ export function takeCopperValue(player, copperAmount) {
   if (total < copperAmount) return false;
 
   const copperHeld = countItem(player, COIN_COPPER);
-  const copperRollHeld = countItem(player, COIN_ROLL_COPPER);
   const silverHeld = countItem(player, COIN_SILVER);
-  const silverRollHeld = countItem(player, COIN_ROLL_SILVER);
   const goldHeld = countItem(player, COIN_GOLD);
 
   if (copperHeld > 0) takeItem(player, COIN_COPPER, copperHeld);
-  if (copperRollHeld > 0) takeItem(player, COIN_ROLL_COPPER, copperRollHeld);
   if (silverHeld > 0) takeItem(player, COIN_SILVER, silverHeld);
-  if (silverRollHeld > 0) takeItem(player, COIN_ROLL_SILVER, silverRollHeld);
   if (goldHeld > 0) takeItem(player, COIN_GOLD, goldHeld);
 
   giveCopperValue(player, total - copperAmount);
