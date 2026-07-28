@@ -75,6 +75,8 @@ import {
   canAssignPrefix,
   getAssignablePrefixes,
   canManageResidents,
+  canOpenMintWorkshop,
+  canBreakMintWorkshop,
   canManagePrefixes,
   canAccessConstruction,
   canAccessTrade,
@@ -1447,8 +1449,8 @@ async function openMintFurnaceMenu(player, block) {
   const def = MINT_SHOP_TIERS[record.tier];
   const settlement = getSettlement(data, record.settlementId);
   const playerName = getPlayerName(player);
-  if (!def || !settlement || !hasTerritoryAccess(data, settlement, playerName)) {
-    player.sendMessage("§cЭтим чеканным двором могут пользоваться жители поселения.");
+  if (!def || !settlement || !canOpenMintWorkshop(data, playerName, settlement)) {
+    player.sendMessage("§cЧеканный двор могут открывать только создатель и Советник поселения.");
     return;
   }
 
@@ -1550,6 +1552,17 @@ function collectMintSmeltOutput(player, block, record, def) {
 
 function handleMintBlockInteract(player, block) {
   if (!player?.isValid || !block) return;
+  const data = loadData();
+  const dimensionId = getDimensionId(block.dimension);
+  const record = findMintWorkshop(data, block.location, dimensionId);
+  const settlement = record
+    ? getSettlement(data, record.settlementId)
+    : findSettlementAt(data, block.location, dimensionId);
+  const playerName = getPlayerName(player);
+  if (settlement && !canOpenMintWorkshop(data, playerName, settlement)) {
+    player.sendMessage("§cЧеканный двор могут открывать только создатель и Советник поселения.");
+    return;
+  }
   openMintFurnaceMenu(player, block).catch((error) => {
     player.sendMessage(`§c[Королевства] Ошибка чеканного двора: ${error?.message ?? error}`);
   });
@@ -1557,16 +1570,20 @@ function handleMintBlockInteract(player, block) {
 
 function tryBreakMintWorkshop(player, block, event) {
   const data = loadData();
-  const record = findMintWorkshop(data, block.location, getDimensionId(block.dimension));
-  if (!record) return false;
-
-  const settlement = getSettlement(data, record.settlementId);
+  const dimensionId = getDimensionId(block.dimension);
+  const record = findMintWorkshop(data, block.location, dimensionId);
+  const settlement = record
+    ? getSettlement(data, record.settlementId)
+    : findSettlementAt(data, block.location, dimensionId);
   const playerName = getPlayerName(player);
-  if (!settlement || !hasTerritoryAccess(data, settlement, playerName)) {
+
+  if (settlement && !canBreakMintWorkshop(data, playerName, settlement)) {
     event.cancel = true;
-    player.sendMessage("§cСломать чеканный двор могут жители этого поселения.");
-    return true;
+    player.sendMessage("§cСломать чеканный двор могут только создатель, Советник и Дворянин этого поселения.");
+    return;
   }
+
+  if (!record) return;
 
   const def = MINT_SHOP_TIERS[record.tier];
   if (record.state === "processing" && def) {
@@ -1583,7 +1600,6 @@ function tryBreakMintWorkshop(player, block, event) {
   saveData(data);
   if (def) giveItemStack(player, new ItemStack(def.blockId, 1));
   player.sendMessage(`§e${def?.name ?? "Чеканный двор"} снят.`);
-  return false;
 }
 
 function tickMintWorkshops() {
@@ -3681,7 +3697,7 @@ function notifyPlayerAboutAddon(player) {
   if (loadedNoticeShown.has(playerName)) return;
   loadedNoticeShown.add(playerName);
 
-  player.sendMessage("§6[KW Build] §fv1.12.31 §7— глобальная война: 1v1, 60% чанков, 50 убийств");
+  player.sendMessage("§6[KW Build] §fv1.12.32 §7— защита чеканного двора по ролям");
   player.sendMessage(`§7Флаг — сущность. Кликните предметом по блоку. Нужно ${formatCopperValue(CREATION_COST)}.`);
 }
 

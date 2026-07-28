@@ -84,6 +84,16 @@ export function canManageResidents(data, playerName, settlement) {
   return isSettlementOwner(playerName, settlement) || getPlayerRole(data, playerName, settlement) === "Советник";
 }
 
+export function canOpenMintWorkshop(data, playerName, settlement) {
+  return canManageResidents(data, playerName, settlement);
+}
+
+export function canBreakMintWorkshop(data, playerName, settlement) {
+  if (isSettlementOwner(playerName, settlement)) return true;
+  const role = getPlayerRole(data, playerName, settlement);
+  return role === "Советник" || role === "Дворянин";
+}
+
 export function canManagePrefixes(data, playerName, settlement) {
   const role = getPlayerRole(data, playerName, settlement);
   return isSettlementOwner(playerName, settlement) || role === "Советник" || role === "Дворянин";
