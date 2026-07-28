@@ -1,20 +1,20 @@
 {
-  "format_version": "1.20.10",
-  "minecraft:recipe_shapeless": {
+  "format_version": "1.21.40",
+  "minecraft:recipe_shaped": {
     "description": {
       "identifier": "kingdoms:silver_roll_from_coins"
     },
     "tags": ["crafting_table"],
-    "ingredients": [
-      { "item": "kingdoms:coin_silver" },
-      { "item": "kingdoms:coin_silver" },
-      { "item": "kingdoms:coin_silver" },
-      { "item": "kingdoms:coin_silver" },
-      { "item": "kingdoms:coin_silver" },
-      { "item": "kingdoms:coin_silver" },
-      { "item": "kingdoms:coin_silver" },
+    "unlock": [
       { "item": "kingdoms:coin_silver" }
     ],
+    "pattern": [
+      "CCCC",
+      "CCCC"
+    ],
+    "key": {
+      "C": { "item": "kingdoms:coin_silver" }
+    },
     "result": {
       "item": "kingdoms:coin_roll_silver",
       "count": 1

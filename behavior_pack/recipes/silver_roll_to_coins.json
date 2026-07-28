@@ -1,10 +1,13 @@
 {
-  "format_version": "1.20.10",
+  "format_version": "1.21.40",
   "minecraft:recipe_shapeless": {
     "description": {
       "identifier": "kingdoms:silver_roll_to_coins"
     },
     "tags": ["crafting_table"],
+    "unlock": [
+      { "item": "kingdoms:coin_roll_silver" }
+    ],
     "ingredients": [
       { "item": "kingdoms:coin_roll_silver" }
     ],

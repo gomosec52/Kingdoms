@@ -2,18 +2,18 @@
   "format_version": "1.21.40",
   "minecraft:recipe_shapeless": {
     "description": {
-      "identifier": "kingdoms:copper_roll_to_coins"
+      "identifier": "kingdoms:copper_ingot_to_coins_stonecutter"
     },
-    "tags": ["crafting_table"],
+    "tags": ["stonecutter"],
     "unlock": [
-      { "item": "kingdoms:coin_roll_copper" }
+      { "item": "minecraft:copper_ingot" }
     ],
     "ingredients": [
-      { "item": "kingdoms:coin_roll_copper" }
+      { "item": "minecraft:copper_ingot" }
     ],
     "result": {
       "item": "kingdoms:coin_copper",
-      "count": 8
+      "count": 9
     }
   }
 }

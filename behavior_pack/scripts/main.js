@@ -8,6 +8,7 @@ import {
   PENDING_SETUP_TAG,
   SPAWN_GUARD_BLOCK
 } from "./constants.js";
+import { bindCraftingFallback } from "./crafting.js";
 import {
   bindSpawnGuardSystem,
   findSpawnProtectionAt,
@@ -309,6 +310,8 @@ bindTradeSystem({
   kingdomsMenuTitle,
   getCurrentDay
 });
+
+bindCraftingFallback(world);
 
 bindSpawnGuardSystem({
   world,

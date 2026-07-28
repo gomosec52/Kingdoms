@@ -1,5 +1,5 @@
 {
-  "format_version": "1.20.10",
+  "format_version": "1.21.40",
   "minecraft:recipe_shaped": {
     "description": {
       "identifier": "kingdoms:flag_recipe"
@@ -15,6 +15,10 @@
       "S": { "item": "minecraft:stick" },
       "C": { "item": "kingdoms:coin_copper" }
     },
+    "unlock": [
+      { "item": "minecraft:white_wool" },
+      { "item": "kingdoms:coin_copper" }
+    ],
     "result": {
       "item": "kingdoms:flag",
       "count": 1
