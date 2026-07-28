@@ -100,9 +100,14 @@ import {
   stripColorCodes
 } from "./ui.js";
 
+import {
+  loadWorldData,
+  saveWorldData,
+  registerStorageProperties,
+  LEGACY_STORE_KEY
+} from "./storage.js";
+
 const { BlockPermutation, EquipmentSlot, ItemStack, system, world } = server;
-const STORE_KEY = "kingdoms:data:v1";
-const STORE_LIMIT = 32767;
 const CREATION_COST = CREATION_COST_COPPER;
 const DAY_TICKS = 24000;
 const TAX_COOLDOWN_TICKS = 25 * 60 * 20;
@@ -397,13 +402,8 @@ function registerDynamicProperties(registry) {
   const DynamicPropertiesDefinition = server.DynamicPropertiesDefinition;
   if (dynamicPropertiesRegistered || !registry?.registerWorldDynamicProperties || typeof DynamicPropertiesDefinition !== "function") return;
 
-  try {
-    const definition = new DynamicPropertiesDefinition();
-    definition.defineString(STORE_KEY, STORE_LIMIT);
-    registry.registerWorldDynamicProperties(definition);
+  if (registerStorageProperties(registry, DynamicPropertiesDefinition)) {
     dynamicPropertiesRegistered = true;
-  } catch (error) {
-    console.warn(`[Kingdoms] Не удалось зарегистрировать хранилище поселений: ${error}`);
   }
 }
 
@@ -2969,47 +2969,63 @@ function settlementDisplayName(data, settlement) {
   return `${settlementType(settlement).name} "${name}"`;
 }
 
-function loadData() {
-  const raw = world.getDynamicProperty(STORE_KEY);
-  if (typeof raw !== "string" || !raw) return emptyData();
+function normalizeWorldData(data) {
+  if (!Array.isArray(data.settlements)) data.settlements = [];
+  if (!Array.isArray(data.alliances)) data.alliances = [];
+  if (!Array.isArray(data.lootZones)) data.lootZones = [];
+  if (!Array.isArray(data.spawnGuards)) data.spawnGuards = [];
+  if (typeof data.nextSpawnGuardIdValue !== "number") {
+    data.nextSpawnGuardIdValue = (data.spawnGuards || []).reduce((max, guard) => Math.max(max, guard.id || 0), 0) + 1;
+  }
+  if (typeof data.nextSettlementIdValue !== "number") data.nextSettlementIdValue = data.settlements.reduce((max, settlement) => Math.max(max, settlement.id || 0), 0) + 1;
+  if (typeof data.nextAllianceIdValue !== "number") data.nextAllianceIdValue = data.alliances.reduce((max, alliance) => Math.max(max, alliance.id || 0), 0) + 1;
+  for (const settlement of data.settlements) {
+    if (!settlement.members) settlement.members = {};
+    if (!Array.isArray(settlement.wars)) settlement.wars = [];
+    if (!Array.isArray(settlement.warInitiatedAgainst)) settlement.warInitiatedAgainst = [];
+    ensureWarCooldownData(settlement);
+    if (!Array.isArray(settlement.buildings)) settlement.buildings = [];
+    if (!Array.isArray(settlement.borderBlocks)) settlement.borderBlocks = [];
+    ensureSettlementArmyData(settlement);
+    ensureSettlementTradeData(settlement);
+    if (typeof settlement.morale !== "number") settlement.morale = 75;
+    if (typeof settlement.territoryBonus !== "number") settlement.territoryBonus = 0;
+    ensureSettlementChunks(settlement, settlementType(settlement).radius);
+    if (!Array.isArray(settlement.capturedChunks)) settlement.capturedChunks = [];
+    if (typeof settlement.condemnationDemotesApplied !== "number") settlement.condemnationDemotesApplied = 0;
+  }
+  if (!Array.isArray(data.pendingPlayerPayouts)) data.pendingPlayerPayouts = [];
+  if (typeof data.nextTradeOfferIdValue !== "number") data.nextTradeOfferIdValue = 1;
+  ensureWarCampaigns(data);
+  if (typeof data.nextWarCampaignIdValue !== "number") data.nextWarCampaignIdValue = 1;
+  if (!Array.isArray(data.condemnations)) data.condemnations = [];
+  migrateMintWorkshopRecords(data);
+  for (const zone of data.lootZones) {
+    if (!Array.isArray(zone.winnerSettlementIds) || !zone.winnerSettlementIds.length) {
+      zone.winnerSettlementIds = zone.winnerSettlementId ? [zone.winnerSettlementId] : [];
+    }
+  }
+  return data;
+}
 
+function loadData() {
   try {
-    const data = JSON.parse(raw);
-    if (!Array.isArray(data.settlements)) data.settlements = [];
-    if (!Array.isArray(data.alliances)) data.alliances = [];
-    if (!Array.isArray(data.lootZones)) data.lootZones = [];
-    if (!Array.isArray(data.spawnGuards)) data.spawnGuards = [];
-    if (typeof data.nextSpawnGuardIdValue !== "number") {
-      data.nextSpawnGuardIdValue = (data.spawnGuards || []).reduce((max, guard) => Math.max(max, guard.id || 0), 0) + 1;
+    const loaded = loadWorldData(world);
+    if (!loaded) return emptyData();
+
+    const migrateLegacy = loaded.__legacyMigrationPending === true;
+    if (migrateLegacy) delete loaded.__legacyMigrationPending;
+
+    const data = normalizeWorldData(loaded);
+
+    if (migrateLegacy) {
+      system.run(() => {
+        if (saveData(data)) {
+          world.sendMessage("§7[Королевства] Данные мира перенесены в шардированное хранилище.");
+        }
+      });
     }
-    if (typeof data.nextSettlementIdValue !== "number") data.nextSettlementIdValue = data.settlements.reduce((max, settlement) => Math.max(max, settlement.id || 0), 0) + 1;
-    if (typeof data.nextAllianceIdValue !== "number") data.nextAllianceIdValue = data.alliances.reduce((max, alliance) => Math.max(max, alliance.id || 0), 0) + 1;
-    for (const settlement of data.settlements) {
-      if (!settlement.members) settlement.members = {};
-      if (!Array.isArray(settlement.wars)) settlement.wars = [];
-      if (!Array.isArray(settlement.warInitiatedAgainst)) settlement.warInitiatedAgainst = [];
-      ensureWarCooldownData(settlement);
-      if (!Array.isArray(settlement.buildings)) settlement.buildings = [];
-      if (!Array.isArray(settlement.borderBlocks)) settlement.borderBlocks = [];
-      ensureSettlementArmyData(settlement);
-      ensureSettlementTradeData(settlement);
-      if (typeof settlement.morale !== "number") settlement.morale = 75;
-      if (typeof settlement.territoryBonus !== "number") settlement.territoryBonus = 0;
-      ensureSettlementChunks(settlement, settlementType(settlement).radius);
-      if (!Array.isArray(settlement.capturedChunks)) settlement.capturedChunks = [];
-      if (typeof settlement.condemnationDemotesApplied !== "number") settlement.condemnationDemotesApplied = 0;
-    }
-    if (!Array.isArray(data.pendingPlayerPayouts)) data.pendingPlayerPayouts = [];
-    if (typeof data.nextTradeOfferIdValue !== "number") data.nextTradeOfferIdValue = 1;
-    ensureWarCampaigns(data);
-    if (typeof data.nextWarCampaignIdValue !== "number") data.nextWarCampaignIdValue = 1;
-    if (!Array.isArray(data.condemnations)) data.condemnations = [];
-    migrateMintWorkshopRecords(data);
-    for (const zone of data.lootZones) {
-      if (!Array.isArray(zone.winnerSettlementIds) || !zone.winnerSettlementIds.length) {
-        zone.winnerSettlementIds = zone.winnerSettlementId ? [zone.winnerSettlementId] : [];
-      }
-    }
+
     return data;
   } catch (error) {
     world.sendMessage(`§c[Королевства] Ошибка чтения данных: ${error}`);
@@ -3018,14 +3034,13 @@ function loadData() {
 }
 
 function saveData(data) {
-  data.version = 1;
-  const serialized = JSON.stringify(data);
-  if (serialized.length > STORE_LIMIT) {
-    world.sendMessage("§c[Королевства] Слишком много данных для одного мира. Удалите часть старых поселений или перенесите хранилище в несколько ключей.");
+  try {
+    saveWorldData(world, data);
+    return true;
+  } catch (error) {
+    world.sendMessage(`§c[Королевства] Ошибка сохранения: ${error.message ?? error}`);
     return false;
   }
-  world.setDynamicProperty(STORE_KEY, serialized);
-  return true;
 }
 
 function emptyData() {
