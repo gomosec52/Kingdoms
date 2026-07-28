@@ -12,6 +12,7 @@ export const GLOBAL_MINTS_KEY = "kingdoms:data:global:mints:v1";
 export const GLOBAL_PAYOUTS_KEY = "kingdoms:data:global:payouts:v1";
 export const SETTLEMENTS_SHARD_PREFIX = "kingdoms:data:settlements:v1:";
 export const MAX_SETTLEMENT_SHARDS = 64;
+export const SHARD_REGISTER_BATCH = 16;
 
 const DATA_VERSION = 2;
 
@@ -22,28 +23,41 @@ const GLOBAL_KEYS = [
   GLOBAL_WARS_KEY,
   GLOBAL_DIPLOMACY_KEY,
   GLOBAL_MINTS_KEY,
-  GLOBAL_PAYOUTS_KEY
+  GLOBAL_PAYOUTS_KEY,
+  `${GLOBAL_PAYOUTS_KEY}:items`
 ];
+
+let shardedStorageActive = false;
 
 function settlementShardKey(index) {
   return `${SETTLEMENTS_SHARD_PREFIX}${index}`;
 }
 
 function readProperty(world, key) {
-  const raw = world.getDynamicProperty(key);
-  return typeof raw === "string" && raw.length ? raw : undefined;
+  try {
+    const raw = world.getDynamicProperty(key);
+    return typeof raw === "string" && raw.length ? raw : undefined;
+  } catch (_error) {
+    return undefined;
+  }
 }
 
 function writeProperty(world, key, value) {
-  if (value === undefined || value === null || value === "") {
-    try {
-      world.setDynamicProperty(key, undefined);
-    } catch (_error) {
-      world.setDynamicProperty(key, "");
+  try {
+    if (value === undefined || value === null || value === "") {
+      try {
+        world.setDynamicProperty(key, undefined);
+      } catch (_error) {
+        world.setDynamicProperty(key, "");
+      }
+      return true;
     }
-    return;
+    world.setDynamicProperty(key, value);
+    return true;
+  } catch (error) {
+    console.warn(`[Kingdoms] Failed to write property ${key}: ${error}`);
+    return false;
   }
-  world.setDynamicProperty(key, value);
 }
 
 function parseJson(raw, label) {
@@ -66,7 +80,9 @@ function writeJsonArray(world, key, label, value) {
   if (serialized.length > STORE_PROPERTY_LIMIT) {
     throw new Error(`${label} exceeds storage limit (${serialized.length}).`);
   }
-  writeProperty(world, key, serialized);
+  if (!writeProperty(world, key, serialized)) {
+    throw new Error(`${label} write failed.`);
+  }
 }
 
 function extractCounters(data) {
@@ -122,25 +138,47 @@ function validateShardSizes(label, parts) {
   }
 }
 
+function registerDefinition(registry, DynamicPropertiesDefinition, keys) {
+  const definition = new DynamicPropertiesDefinition();
+  for (const { key, maxLength } of keys) {
+    definition.defineString(key, maxLength);
+  }
+  registry.registerWorldDynamicProperties(definition);
+}
+
 export function registerStorageProperties(registry, DynamicPropertiesDefinition) {
   if (!registry?.registerWorldDynamicProperties || typeof DynamicPropertiesDefinition !== "function") return false;
 
+  shardedStorageActive = false;
+
   try {
-    const definition = new DynamicPropertiesDefinition();
-    definition.defineString(META_STORE_KEY, 2048);
-    definition.defineString(LEGACY_STORE_KEY, STORE_PROPERTY_LIMIT);
-    for (const key of GLOBAL_KEYS) {
-      definition.defineString(key, STORE_PROPERTY_LIMIT);
+    registerDefinition(registry, DynamicPropertiesDefinition, [
+      { key: LEGACY_STORE_KEY, maxLength: STORE_PROPERTY_LIMIT }
+    ]);
+  } catch (error) {
+    console.warn(`[Kingdoms] Legacy storage registration failed: ${error}`);
+    return false;
+  }
+
+  try {
+    registerDefinition(registry, DynamicPropertiesDefinition, [
+      { key: META_STORE_KEY, maxLength: 2048 },
+      ...GLOBAL_KEYS.map((key) => ({ key, maxLength: STORE_PROPERTY_LIMIT }))
+    ]);
+
+    for (let start = 0; start < MAX_SETTLEMENT_SHARDS; start += SHARD_REGISTER_BATCH) {
+      const batch = [];
+      for (let index = start; index < Math.min(start + SHARD_REGISTER_BATCH, MAX_SETTLEMENT_SHARDS); index += 1) {
+        batch.push({ key: settlementShardKey(index), maxLength: STORE_PROPERTY_LIMIT });
+      }
+      registerDefinition(registry, DynamicPropertiesDefinition, batch);
     }
-    definition.defineString(`${GLOBAL_PAYOUTS_KEY}:items`, STORE_PROPERTY_LIMIT);
-    for (let index = 0; index < MAX_SETTLEMENT_SHARDS; index += 1) {
-      definition.defineString(settlementShardKey(index), STORE_PROPERTY_LIMIT);
-    }
-    registry.registerWorldDynamicProperties(definition);
+
+    shardedStorageActive = true;
     return true;
   } catch (error) {
-    console.warn(`[Kingdoms] Storage property registration failed: ${error}`);
-    return false;
+    console.warn(`[Kingdoms] Sharded storage registration failed, using legacy fallback: ${error}`);
+    return true;
   }
 }
 
@@ -157,65 +195,86 @@ function loadGlobalWorldData(world) {
   };
 }
 
-function saveGlobalWorldData(world, globalPayload) {
-  writeJsonArray(world, GLOBAL_ALLIANCES_KEY, "alliances", globalPayload.alliances);
-  writeJsonArray(world, GLOBAL_LOOT_KEY, "lootZones", globalPayload.lootZones);
-  writeJsonArray(world, GLOBAL_GUARDS_KEY, "spawnGuards", globalPayload.spawnGuards);
-  writeJsonArray(world, GLOBAL_WARS_KEY, "warCampaigns", globalPayload.warCampaigns);
-  writeJsonArray(world, GLOBAL_DIPLOMACY_KEY, "condemnations", globalPayload.condemnations);
-  writeJsonArray(world, GLOBAL_MINTS_KEY, "mintWorkshops", globalPayload.mintWorkshops);
-  writeJsonArray(world, GLOBAL_PAYOUTS_KEY, "pendingPlayerPayouts", globalPayload.pendingPlayerPayouts);
-  writeJsonArray(world, `${GLOBAL_PAYOUTS_KEY}:items`, "pendingPlayerItemPayouts", globalPayload.pendingPlayerItemPayouts);
+function loadLegacyWorldData(world) {
+  const legacyRaw = readProperty(world, LEGACY_STORE_KEY);
+  if (!legacyRaw) return undefined;
+
+  try {
+    const legacy = parseJson(legacyRaw, "legacy");
+    legacy.__legacyMigrationPending = false;
+    return legacy;
+  } catch (error) {
+    console.warn(`[Kingdoms] Legacy load failed: ${error}`);
+    return undefined;
+  }
+}
+
+function loadShardedWorldData(world) {
+  const metaRaw = readProperty(world, META_STORE_KEY);
+  if (!metaRaw) return undefined;
+
+  try {
+    const meta = parseJson(metaRaw, "meta");
+    const shardCount = Math.max(0, Math.min(Number(meta.settlementShardCount) || 0, MAX_SETTLEMENT_SHARDS));
+    const settlements = [];
+
+    for (let index = 0; index < shardCount; index += 1) {
+      const shardRaw = readProperty(world, settlementShardKey(index));
+      if (!shardRaw) continue;
+      const shard = parseJson(shardRaw, `settlements:${index}`);
+      if (Array.isArray(shard)) settlements.push(...shard);
+    }
+
+    const expectedSettlements = shardCount > 0;
+    if (expectedSettlements && settlements.length === 0) {
+      console.warn("[Kingdoms] Sharded meta present but settlement shards are empty.");
+      return undefined;
+    }
+
+    const global = loadGlobalWorldData(world);
+    return {
+      version: DATA_VERSION,
+      ...extractCounters(meta),
+      settlements,
+      ...global
+    };
+  } catch (error) {
+    console.warn(`[Kingdoms] Sharded load failed: ${error}`);
+    return undefined;
+  }
 }
 
 export function loadWorldData(world) {
-  const legacyRaw = readProperty(world, LEGACY_STORE_KEY);
+  const sharded = shardedStorageActive ? loadShardedWorldData(world) : undefined;
+  if (sharded) return sharded;
 
-  const metaRaw = readProperty(world, META_STORE_KEY);
-  if (metaRaw) {
-    try {
-      const meta = parseJson(metaRaw, "meta");
-      const shardCount = Math.max(0, Math.min(Number(meta.settlementShardCount) || 0, MAX_SETTLEMENT_SHARDS));
-      const settlements = [];
-
-      for (let index = 0; index < shardCount; index += 1) {
-        const shardRaw = readProperty(world, settlementShardKey(index));
-        if (!shardRaw) continue;
-        const shard = parseJson(shardRaw, `settlements:${index}`);
-        if (Array.isArray(shard)) settlements.push(...shard);
-      }
-
-      if (settlements.length === 0 && legacyRaw) {
-        console.warn("[Kingdoms] Sharded settlements empty, recovering from legacy storage.");
-      } else {
-        const global = loadGlobalWorldData(world);
-        return {
-          version: DATA_VERSION,
-          ...extractCounters(meta),
-          settlements,
-          ...global
-        };
-      }
-    } catch (error) {
-      console.warn(`[Kingdoms] Sharded load failed: ${error}`);
-    }
-  }
-
-  if (legacyRaw) {
-    try {
-      const legacy = parseJson(legacyRaw, "legacy");
+  const legacy = loadLegacyWorldData(world);
+  if (legacy) {
+    if (shardedStorageActive && readProperty(world, META_STORE_KEY)) {
       legacy.__legacyMigrationPending = true;
-      return legacy;
-    } catch (error) {
-      console.warn(`[Kingdoms] Legacy load failed: ${error}`);
     }
+    return legacy;
   }
 
   return undefined;
 }
 
-export function saveWorldData(world, data) {
+function saveLegacyWorldData(world, data) {
   const payload = { ...data, version: DATA_VERSION };
+  delete payload.__legacyMigrationPending;
+  const serialized = JSON.stringify(payload);
+  if (serialized.length > STORE_PROPERTY_LIMIT) {
+    throw new Error(`Legacy storage overflow (${serialized.length}).`);
+  }
+  if (!writeProperty(world, LEGACY_STORE_KEY, serialized)) {
+    throw new Error("Legacy storage write failed.");
+  }
+  return { mode: "legacy", bytes: serialized.length };
+}
+
+function saveShardedWorldData(world, data) {
+  const payload = { ...data, version: DATA_VERSION };
+  delete payload.__legacyMigrationPending;
   const counters = extractCounters(payload);
   const globalPayload = extractGlobalPayload(payload);
   const settlementShards = packSettlementsIntoShards(payload.settlements ?? []);
@@ -250,7 +309,9 @@ export function saveWorldData(world, data) {
   saveGlobalWorldData(world, globalPayload);
 
   for (let index = 0; index < settlementShards.length; index += 1) {
-    writeProperty(world, settlementShardKey(index), shardSerialized[index]);
+    if (!writeProperty(world, settlementShardKey(index), shardSerialized[index])) {
+      throw new Error(`Failed to write settlement shard ${index}.`);
+    }
   }
 
   const oldShardCount = Math.max(previousShardCount, settlementShards.length);
@@ -258,22 +319,64 @@ export function saveWorldData(world, data) {
     writeProperty(world, settlementShardKey(index), undefined);
   }
 
-  // Meta and legacy cleanup happen last so a failed shard write cannot hide data behind an empty meta snapshot.
-  writeProperty(world, META_STORE_KEY, metaSerialized);
-  writeProperty(world, LEGACY_STORE_KEY, undefined);
+  if (!writeProperty(world, META_STORE_KEY, metaSerialized)) {
+    throw new Error("Failed to write storage meta.");
+  }
+
   return {
+    mode: "sharded",
     settlementShards: settlementShards.length,
     settlementCount: (payload.settlements ?? []).length
   };
 }
 
+function saveGlobalWorldData(world, globalPayload) {
+  writeJsonArray(world, GLOBAL_ALLIANCES_KEY, "alliances", globalPayload.alliances);
+  writeJsonArray(world, GLOBAL_LOOT_KEY, "lootZones", globalPayload.lootZones);
+  writeJsonArray(world, GLOBAL_GUARDS_KEY, "spawnGuards", globalPayload.spawnGuards);
+  writeJsonArray(world, GLOBAL_WARS_KEY, "warCampaigns", globalPayload.warCampaigns);
+  writeJsonArray(world, GLOBAL_DIPLOMACY_KEY, "condemnations", globalPayload.condemnations);
+  writeJsonArray(world, GLOBAL_MINTS_KEY, "mintWorkshops", globalPayload.mintWorkshops);
+  writeJsonArray(world, GLOBAL_PAYOUTS_KEY, "pendingPlayerPayouts", globalPayload.pendingPlayerPayouts);
+  writeJsonArray(world, `${GLOBAL_PAYOUTS_KEY}:items`, "pendingPlayerItemPayouts", globalPayload.pendingPlayerItemPayouts);
+}
+
+export function saveWorldData(world, data) {
+  const payload = { ...data, version: DATA_VERSION };
+  delete payload.__legacyMigrationPending;
+  const legacySerialized = JSON.stringify(payload);
+  const legacyFits = legacySerialized.length <= STORE_PROPERTY_LIMIT;
+
+  if (shardedStorageActive) {
+    try {
+      const result = saveShardedWorldData(world, data);
+      if (legacyFits) {
+        writeProperty(world, LEGACY_STORE_KEY, legacySerialized);
+      } else {
+        writeProperty(world, LEGACY_STORE_KEY, undefined);
+      }
+      return result;
+    } catch (error) {
+      console.warn(`[Kingdoms] Sharded save failed: ${error}`);
+      if (legacyFits) {
+        return saveLegacyWorldData(world, data);
+      }
+      throw error;
+    }
+  }
+
+  return saveLegacyWorldData(world, data);
+}
+
 export function getStorageStats(world) {
   const metaRaw = readProperty(world, META_STORE_KEY);
+  const legacyRaw = readProperty(world, LEGACY_STORE_KEY);
+
   if (!metaRaw) {
-    const legacyRaw = readProperty(world, LEGACY_STORE_KEY);
     return {
       mode: legacyRaw ? "legacy" : "empty",
-      legacyBytes: legacyRaw?.length ?? 0
+      legacyBytes: legacyRaw?.length ?? 0,
+      shardedActive: shardedStorageActive
     };
   }
 
@@ -284,7 +387,7 @@ export function getStorageStats(world) {
   }
 
   let globalBytes = 0;
-  for (const key of [...GLOBAL_KEYS, `${GLOBAL_PAYOUTS_KEY}:items`]) {
+  for (const key of GLOBAL_KEYS) {
     globalBytes += readProperty(world, key)?.length ?? 0;
   }
 
@@ -294,6 +397,12 @@ export function getStorageStats(world) {
     settlementBytes,
     globalBytes,
     metaBytes: metaRaw.length,
-    totalBytes: settlementBytes + globalBytes + metaRaw.length
+    legacyBytes: legacyRaw?.length ?? 0,
+    totalBytes: settlementBytes + globalBytes + metaRaw.length,
+    shardedActive: shardedStorageActive
   };
+}
+
+export function isShardedStorageActive() {
+  return shardedStorageActive;
 }

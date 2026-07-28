@@ -2951,7 +2951,7 @@ function notifyPlayerAboutAddon(player) {
   if (loadedNoticeShown.has(playerName)) return;
   loadedNoticeShown.add(playerName);
 
-  player.sendMessage("§6[KW Build] §fv1.13.3");
+  player.sendMessage("§6[KW Build] §fv1.13.4");
   player.sendMessage(`§7Флаг — сущность. Кликните предметом по блоку. Нужно ${formatCopperValue(CREATION_COST)}.`);
 }
 
@@ -3280,18 +3280,32 @@ function shortText(value, maxLength) {
   return `${text.slice(0, Math.max(0, maxLength - 3))}...`;
 }
 
-async function showForm(player, form) {
-  if (!player?.isValid) return { canceled: true };
-  if (formBusyPlayers.has(player.id)) return { canceled: true };
-  formBusyPlayers.add(player.id);
-  try {
-    return await form.show(player);
-  } catch (error) {
-    player.sendMessage(`§cНе удалось открыть меню: ${error}`);
-    return { canceled: true };
-  } finally {
-    formBusyPlayers.delete(player.id);
-  }
+function showForm(player, form) {
+  if (!player?.isValid) return Promise.resolve({ canceled: true });
+  if (formBusyPlayers.has(player.id)) return Promise.resolve({ canceled: true });
+
+  return new Promise((resolve) => {
+    system.run(async () => {
+      if (!player?.isValid) {
+        resolve({ canceled: true });
+        return;
+      }
+      if (formBusyPlayers.has(player.id)) {
+        resolve({ canceled: true });
+        return;
+      }
+
+      formBusyPlayers.add(player.id);
+      try {
+        resolve(await form.show(player));
+      } catch (error) {
+        player.sendMessage(`§cНе удалось открыть меню: ${error?.message ?? error}`);
+        resolve({ canceled: true });
+      } finally {
+        formBusyPlayers.delete(player.id);
+      }
+    });
+  });
 }
 
 const FORM_CHAIN_DELAY_TICKS = 3;
