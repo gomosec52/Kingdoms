@@ -15,21 +15,9 @@ const COMPACT_COPPER_INGOT = "5fs_br:compact_copper_ingot";
 const WHITE_WOOL = "minecraft:white_wool";
 const STICK = "minecraft:stick";
 const CRAFTING_TABLE = "minecraft:crafting_table";
+const COIN_TYPES = new Set([COIN_COPPER, COIN_SILVER, COIN_GOLD]);
 
 let coinExchangeRegistered = false;
-const inventorySnapshots = new Map();
-
-function snapshotCoins(player) {
-  return {
-    copper: countItem(player, COIN_COPPER),
-    silver: countItem(player, COIN_SILVER),
-    gold: countItem(player, COIN_GOLD)
-  };
-}
-
-function storeSnapshot(player) {
-  inventorySnapshots.set(player.id, snapshotCoins(player));
-}
 
 function tryCoinFromIngot(player, typeId, coinCount) {
   if (countItem(player, typeId) < 1) return false;
@@ -55,80 +43,68 @@ function tryCraftFlag(player) {
 
 function tryUpgradeCoins(player, fromTypeId, toTypeId) {
   if (countItem(player, fromTypeId) < COIN_EXCHANGE) {
-    player.sendMessage(`§e[Королевства] Нужно ${COIN_EXCHANGE} монет`);
+    player.sendMessage(`§e[Королевства] Нужен стак из ${COIN_EXCHANGE} монет в руке`);
     return false;
   }
-  storeSnapshot(player);
   if (!takeItem(player, fromTypeId, COIN_EXCHANGE)) return false;
   giveItems(player, toTypeId, 1);
-  storeSnapshot(player);
+  player.sendMessage(`§a[Королевства] ${COIN_EXCHANGE} → 1 монета выше`);
   return true;
 }
 
 function tryDowngradeCoins(player, fromTypeId, toTypeId) {
   if (countItem(player, fromTypeId) < 1) return false;
-  storeSnapshot(player);
   if (!takeItem(player, fromTypeId, 1)) return false;
   giveItems(player, toTypeId, COIN_EXCHANGE);
-  storeSnapshot(player);
+  player.sendMessage(`§a[Королевства] 1 → ${COIN_EXCHANGE} монет`);
   return true;
 }
 
-function revertInvalidCoinCraft(player, before, after) {
-  const dCopper = after.copper - before.copper;
-  const dSilver = after.silver - before.silver;
-  const dGold = after.gold - before.gold;
-
-  if (dSilver === 1 && dCopper < 0 && dCopper > -COIN_EXCHANGE) {
-    takeItem(player, COIN_SILVER, 1);
-    giveItems(player, COIN_COPPER, -dCopper);
-    player.sendMessage(`§c[Королевства] Положи ${COIN_EXCHANGE} медных монет в один слот (не раскладывай по сетке)`);
-    storeSnapshot(player);
-    return true;
-  }
-
-  if (dGold === 1 && dSilver < 0 && dSilver > -COIN_EXCHANGE) {
-    takeItem(player, COIN_GOLD, 1);
-    giveItems(player, COIN_SILVER, -dSilver);
-    player.sendMessage(`§c[Королевства] Положи ${COIN_EXCHANGE} серебряных монет в один слот (не раскладывай по сетке)`);
-    storeSnapshot(player);
-    return true;
-  }
-
-  return false;
-}
-
-function handleShiftCraft(player) {
-  if (tryCoinFromIngot(player, COPPER_INGOT, 9)) return true;
-  if (tryCoinFromIngot(player, COMPACT_COPPER_INGOT, 81)) return true;
-  if (tryUpgradeCoins(player, COIN_COPPER, COIN_SILVER)) return true;
-  if (tryUpgradeCoins(player, COIN_SILVER, COIN_GOLD)) return true;
-  if (tryDowngradeCoins(player, COIN_SILVER, COIN_COPPER)) return true;
-  if (tryDowngradeCoins(player, COIN_GOLD, COIN_SILVER)) return true;
-  if (tryCraftFlag(player)) return true;
-
-  player.sendMessage(`§e[Королевства] Shift+клик: обмен ${COIN_EXCHANGE}↔1, слиток→монеты, флаг`);
-  return false;
+function sendCoinExchangeHint(player) {
+  player.sendMessage(
+    `§e[Королевства] Обмен: ПКМ со стаком ${COIN_EXCHANGE} → выше | ПКМ с 1 монетой → ${COIN_EXCHANGE} ниже | Shift+ПКМ по верстаку — то же`
+  );
 }
 
 function handleCoinUse(player, itemTypeId, stackSize) {
   if (itemTypeId === COIN_COPPER && stackSize >= COIN_EXCHANGE) {
-    tryUpgradeCoins(player, COIN_COPPER, COIN_SILVER);
-    return true;
+    return tryUpgradeCoins(player, COIN_COPPER, COIN_SILVER);
   }
   if (itemTypeId === COIN_SILVER && stackSize >= COIN_EXCHANGE) {
-    tryUpgradeCoins(player, COIN_SILVER, COIN_GOLD);
-    return true;
+    return tryUpgradeCoins(player, COIN_SILVER, COIN_GOLD);
   }
-  if (itemTypeId === COIN_SILVER && stackSize >= 1) {
-    tryDowngradeCoins(player, COIN_SILVER, COIN_COPPER);
-    return true;
+  if (itemTypeId === COIN_SILVER && stackSize === 1) {
+    return tryDowngradeCoins(player, COIN_SILVER, COIN_COPPER);
   }
-  if (itemTypeId === COIN_GOLD && stackSize >= 1) {
-    tryDowngradeCoins(player, COIN_GOLD, COIN_SILVER);
-    return true;
+  if (itemTypeId === COIN_GOLD && stackSize === 1) {
+    return tryDowngradeCoins(player, COIN_GOLD, COIN_SILVER);
+  }
+
+  if (COIN_TYPES.has(itemTypeId)) {
+    sendCoinExchangeHint(player);
   }
   return false;
+}
+
+function getHeldCoinStack(player) {
+  const inventory = player.getComponent("minecraft:inventory")?.container;
+  const held = inventory?.getItem(player.selectedSlotIndex);
+  if (!held || !COIN_TYPES.has(held.typeId)) return null;
+  return held;
+}
+
+function bindCoinUseEvents(world) {
+  const runCoinUse = (player, itemStack) => {
+    if (!player || player.typeId !== "minecraft:player" || !itemStack) return;
+    system.run(() => handleCoinUse(player, itemStack.typeId, itemStack.amount ?? 0));
+  };
+
+  world.beforeEvents?.itemUse?.subscribe((event) => {
+    const itemTypeId = event.itemStack?.typeId;
+    if (!COIN_TYPES.has(itemTypeId)) return;
+    event.cancel = true;
+    runCoinUse(event.source, event.itemStack);
+  });
 }
 
 /** @type {import("@minecraft/server").ItemCustomComponent} */
@@ -136,17 +112,9 @@ const coinExchangeComponent = {
   onUse(event) {
     const player = event.source;
     if (!player || player.typeId !== "minecraft:player") return;
-
-    const itemTypeId = event.itemStack?.typeId;
-    const stackSize = event.itemStack?.amount ?? 0;
-    if (!itemTypeId) return;
-
-    system.run(() => {
-      if (handleCoinUse(player, itemTypeId, stackSize)) return;
-      if (itemTypeId === COIN_COPPER || itemTypeId === COIN_SILVER || itemTypeId === COIN_GOLD) {
-        player.sendMessage(`§e[Королевства] Обмен: ${COIN_EXCHANGE} в стаке → выше, 1 шт. → ${COIN_EXCHANGE} ниже`);
-      }
-    });
+    const itemStack = event.itemStack;
+    if (!itemStack) return;
+    system.run(() => handleCoinUse(player, itemStack.typeId, itemStack.amount ?? 0));
   }
 };
 
@@ -165,36 +133,22 @@ export function bindCraftingFallback(world) {
     registerCoinExchangeComponent(event.itemComponentRegistry);
   });
 
-  world.afterEvents?.playerSpawn?.subscribe((event) => {
-    if (event.player) storeSnapshot(event.player);
-  });
-
-  system.runInterval(() => {
-    for (const player of world.getPlayers()) {
-      if (!inventorySnapshots.has(player.id)) storeSnapshot(player);
-    }
-  }, 20);
-
-  world.afterEvents?.playerInventoryItemChange?.subscribe((event) => {
-    const player = event.player;
-    if (!player || player.typeId !== "minecraft:player") return;
-
-    system.run(() => {
-      const before = inventorySnapshots.get(player.id) ?? snapshotCoins(player);
-      const after = snapshotCoins(player);
-      if (revertInvalidCoinCraft(player, before, after)) return;
-      inventorySnapshots.set(player.id, after);
-    });
-  });
+  bindCoinUseEvents(world);
 
   world.beforeEvents?.playerInteractWithBlock?.subscribe((event) => {
     const player = event.player;
     const block = event.block;
-    if (!player || block?.typeId !== CRAFTING_TABLE) return;
-    if (!player.isSneaking) return;
+    if (!player || block?.typeId !== CRAFTING_TABLE || !player.isSneaking) return;
+
+    const held = getHeldCoinStack(player);
+    if (!held) return;
 
     event.cancel = true;
-    system.run(() => handleShiftCraft(player));
+    system.run(() => {
+      if (!handleCoinUse(player, held.typeId, held.amount ?? 0)) {
+        sendCoinExchangeHint(player);
+      }
+    });
   });
 
   system.afterEvents?.scriptEventReceive?.subscribe((event) => {
@@ -212,6 +166,16 @@ export function bindCraftingFallback(world) {
       if (!tryCraftFlag(player)) {
         player.sendMessage("§c[Королевства] Нужно: 3 белой шерсти, палка, 4 медные монеты");
       }
+      return;
+    }
+
+    if (event.id === "kingdoms:exchange_copper") {
+      tryUpgradeCoins(player, COIN_COPPER, COIN_SILVER);
+      return;
+    }
+
+    if (event.id === "kingdoms:exchange_silver") {
+      tryUpgradeCoins(player, COIN_SILVER, COIN_GOLD);
     }
   });
 }

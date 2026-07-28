@@ -5,6 +5,9 @@
       "identifier": "kingdoms:silver_to_copper"
     },
     "tags": ["crafting_table"],
+    "unlock": [
+      { "item": "kingdoms:coin_silver" }
+    ],
     "ingredients": [
       { "item": "kingdoms:coin_silver" }
     ],

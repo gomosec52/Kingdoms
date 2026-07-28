@@ -13,6 +13,15 @@
       },
       "minecraft:icon": "kingdoms_coin_copper",
       "minecraft:max_stack_size": 64,
+      "minecraft:lore": [
+        "§7ПКМ со стаком 32 → 1 серебряная",
+        "§7Shift+ПКМ по верстаку — то же",
+        "§7В сетку верстака 32 в 1 слот не ложатся"
+      ],
+      "minecraft:use_modifiers": {
+        "use_duration": 0.1,
+        "movement_modifier": 1.0
+      },
       "kingdoms:coin_exchange": {}
     }
   }
