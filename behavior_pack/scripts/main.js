@@ -406,13 +406,25 @@ world.afterEvents.playerLeave?.subscribe((event) => {
 });
 
 world.afterEvents.playerPlaceBlock?.subscribe((event) => {
-  if (event.block.typeId !== LEGACY_FLAG_BLOCK) return;
-  system.run(() => beginSettlementCreation(event.player, event.block));
+  const blockId = event.block.typeId;
+  if (blockId === LEGACY_FLAG_BLOCK) {
+    system.run(() => beginSettlementCreation(event.player, event.block));
+    return;
+  }
+  if (isMintBlockId(blockId)) {
+    system.run(() => registerPlacedMintWorkshop(event.player, event.block));
+  }
 });
 
 world.afterEvents.playerInteractWithBlock?.subscribe((event) => {
-  if (event.block.typeId !== LEGACY_FLAG_BLOCK) return;
-  handleFlagInteraction(event.player, event.block);
+  const blockId = event.block.typeId;
+  if (blockId === LEGACY_FLAG_BLOCK) {
+    handleFlagInteraction(event.player, event.block);
+    return;
+  }
+  if (isMintBlockId(blockId)) {
+    system.run(() => handleMintBlockInteract(event.player, event.block));
+  }
 });
 
 function getFlagDamageCooldownRemaining(settlementId) {
@@ -557,6 +569,11 @@ world.beforeEvents.playerBreakBlock?.subscribe((event) => {
     }
 
     tryApplyFlagDamage(data, settlement, attackerSettlement, event.player, undefined, undefined);
+    return;
+  }
+
+  if (isMintBlockId(block.typeId)) {
+    tryBreakMintWorkshop(event.player, block, event);
     return;
   }
 
@@ -706,6 +723,7 @@ system.runInterval(() => updatePlayerPrefixDisplays(), 40);
 system.runInterval(() => updatePlayerTerritoryMessages(), 20);
 system.runInterval(() => processPendingTradePayouts(), 40);
 system.runInterval(() => processPendingTradeItemReturns(), 40);
+system.runInterval(() => tickMintWorkshops(), 20);
 
 async function beginSettlementCreationFromItem(player, clickedBlock, blockFace, origin = "script") {
   if (!player || !clickedBlock) return;
@@ -974,12 +992,13 @@ function formatExtraPageBody(settlement) {
     "Дополнительные разделы:",
     "• Армия — рыцари и приказы",
     "• Торговля — сделки между поселениями",
-    "• Чеканный двор — покупка блока для поселения"
+    "• Чеканный двор — покупка блока, ПКМ — плавка слитков"
   ].join("\n");
 }
 
 const MINT_BLOCK_T1 = "kingdoms:mint_workshop_1";
 const MINT_BLOCK_T2 = "kingdoms:mint_workshop_2";
+const MINT_SMELT_TICKS = 10 * 60 * 20;
 
 const MINT_SHOP_TIERS = {
   1: {
@@ -991,7 +1010,12 @@ const MINT_SHOP_TIERS = {
       { itemId: "minecraft:iron_ingot", amount: 12, label: "железные слитки" },
       { itemId: "minecraft:stone", amount: 24, label: "камень" },
       { itemId: "minecraft:anvil", amount: 1, label: "наковальня" }
-    ]
+    ],
+    inputId: "minecraft:iron_ingot",
+    inputLabel: "железный слиток",
+    outputId: "kingdoms:coin_silver",
+    outputAmount: 3,
+    outputLabel: "серебряные монеты"
   },
   2: {
     name: "Чеканный двор II",
@@ -1003,7 +1027,12 @@ const MINT_SHOP_TIERS = {
       { itemId: "minecraft:gold_ingot", amount: 8, label: "золотые слитки" },
       { itemId: "minecraft:stone_bricks", amount: 32, label: "каменные кирпичи" },
       { itemId: "minecraft:anvil", amount: 1, label: "наковальня" }
-    ]
+    ],
+    inputId: "minecraft:gold_ingot",
+    inputLabel: "золотой слиток",
+    outputId: "kingdoms:coin_gold",
+    outputAmount: 3,
+    outputLabel: "золотые монеты"
   }
 };
 
@@ -1013,20 +1042,27 @@ function formatMintCost(def) {
     .join(", ");
 }
 
+function formatMintSmeltLine(def) {
+  return `Плавка: 1 ${def.inputLabel} → ${def.outputAmount} ${def.outputLabel} (10 мин., по одному)`;
+}
+
 function formatMintShopBody() {
   const tier1 = MINT_SHOP_TIERS[1];
   const tier2 = MINT_SHOP_TIERS[2];
   return [
     "§6Чеканный двор§r",
-    "Купите блок и поставьте на своей территории.",
+    "Купите блок, поставьте на своей территории.",
+    "ПКМ по блоку — меню плавки.",
     "",
     `§e${tier1.name}§r`,
-    `Нужен тип: ${SETTLEMENT_TYPE_NAMES[tier1.minTypeIndex]} или выше`,
-    `Стоимость: ${formatMintCost(tier1)}`,
+    `Тип поселения: ${SETTLEMENT_TYPE_NAMES[tier1.minTypeIndex]} или выше`,
+    `Покупка: ${formatMintCost(tier1)}`,
+    formatMintSmeltLine(tier1),
     "",
     `§e${tier2.name}§r`,
-    `Нужен тип: ${SETTLEMENT_TYPE_NAMES[tier2.minTypeIndex]} или выше`,
-    `Стоимость: ${formatMintCost(tier2)}`
+    `Тип поселения: ${SETTLEMENT_TYPE_NAMES[tier2.minTypeIndex]} или выше`,
+    `Покупка: ${formatMintCost(tier2)}`,
+    formatMintSmeltLine(tier2)
   ].join("\n");
 }
 
@@ -1080,8 +1116,295 @@ async function purchaseMintBlock(player, settlementId, sessionToken, tier) {
   }
 
   giveItemStack(player, new ItemStack(def.blockId, 1));
-  player.sendMessage(`§a${def.name} куплен. Поставьте блок на территории поселения.`);
+  player.sendMessage(`§a${def.name} куплен. Поставьте на территории. ПКМ — ${formatMintSmeltLine(def)}`);
   return openMintShopMenu(player, settlementId, sessionToken);
+}
+
+function isMintBlockId(blockId) {
+  return blockId === MINT_BLOCK_T1 || blockId === MINT_BLOCK_T2;
+}
+
+function getMintTierFromBlockId(blockId) {
+  if (blockId === MINT_BLOCK_T1) return 1;
+  if (blockId === MINT_BLOCK_T2) return 2;
+  return undefined;
+}
+
+function ensureMintWorkshops(data) {
+  if (!Array.isArray(data.mintWorkshops)) data.mintWorkshops = [];
+}
+
+function mintLocationKey(location, dimensionId) {
+  return `${dimensionId}:${Math.floor(location.x)},${Math.floor(location.y)},${Math.floor(location.z)}`;
+}
+
+function findMintWorkshop(data, location, dimensionId) {
+  ensureMintWorkshops(data);
+  const key = mintLocationKey(location, dimensionId);
+  return data.mintWorkshops.find((entry) => mintLocationKey(entry.location, entry.dimensionId) === key);
+}
+
+function nextMintWorkshopId(data) {
+  if (typeof data.nextMintWorkshopIdValue !== "number") data.nextMintWorkshopIdValue = 1;
+  const id = data.nextMintWorkshopIdValue;
+  data.nextMintWorkshopIdValue = id + 1;
+  return id;
+}
+
+function registerPlacedMintWorkshop(player, block) {
+  const tier = getMintTierFromBlockId(block.typeId);
+  const def = tier ? MINT_SHOP_TIERS[tier] : undefined;
+  if (!def || !player?.isValid) return;
+
+  const data = loadData();
+  ensureMintWorkshops(data);
+  const dimensionId = getDimensionId(block.dimension);
+  const location = blockPosition(block.location);
+  if (findMintWorkshop(data, location, dimensionId)) return;
+
+  const playerName = getPlayerName(player);
+  const settlement = getPlayerSettlement(data, playerName);
+  const territory = findSettlementAtLocation(data, block.location, dimensionId);
+
+  if (!settlement || !territory || territory.id !== settlement.id || !hasTerritoryAccess(data, territory, playerName)) {
+    setBlockToAir(block);
+    giveItemStack(player, new ItemStack(def.blockId, 1));
+    player.sendMessage("§cЧеканный двор можно ставить только на своей территории.");
+    saveData(data);
+    return;
+  }
+
+  const alreadyHas = data.mintWorkshops.some((entry) => entry.settlementId === settlement.id && entry.tier === tier);
+  if (alreadyHas) {
+    setBlockToAir(block);
+    giveItemStack(player, new ItemStack(def.blockId, 1));
+    player.sendMessage(`§cВ поселении уже есть ${def.name}.`);
+    saveData(data);
+    return;
+  }
+
+  data.mintWorkshops.push({
+    id: nextMintWorkshopId(data),
+    settlementId: settlement.id,
+    tier,
+    dimensionId,
+    location,
+    state: "idle",
+    finishTick: 0,
+    placedBy: playerName
+  });
+  saveData(data);
+  player.sendMessage(`§a${def.name} установлен. ПКМ — меню плавки.`);
+}
+
+function ensureMintWorkshopRecord(player, block) {
+  let data = loadData();
+  let record = findMintWorkshop(data, block.location, getDimensionId(block.dimension));
+  if (record) return record;
+
+  registerPlacedMintWorkshop(player, block);
+  data = loadData();
+  return findMintWorkshop(data, block.location, getDimensionId(block.dimension));
+}
+
+function formatMintFurnaceBody(def, record, player) {
+  const now = system.currentTick;
+  let inputLine = "§7[ пусто ]";
+  let outputLine = "§7[ пусто ]";
+  let statusLine = `§aОжидание: 1 ${def.inputLabel}`;
+
+  if (record.state === "processing") {
+    inputLine = `§f[ 1 ${def.inputLabel} ]`;
+    outputLine = `§e[ ${def.outputAmount} ${def.outputLabel} ]`;
+    statusLine = `§6Плавка: ${formatCooldownTicks(Math.max(0, record.finishTick - now))}`;
+  } else if (record.state === "ready") {
+    inputLine = "§7[ использовано ]";
+    outputLine = `§a[ ${def.outputAmount} ${def.outputLabel} ]`;
+    statusLine = "§aГотово — заберите монеты";
+  }
+
+  const haveInput = countItem(player, def.inputId);
+  return [
+    `§6${def.name}§r`,
+    "",
+    "       §8╔════════════╗",
+    `       §8║§r ${inputLine} §8║`,
+    "       §8║     ↓      ║",
+    `       §8║§r ${outputLine} §8║`,
+    "       §8╚════════════╝",
+    "",
+    `§7Статус:§r ${statusLine}`,
+    `§7Рецепт:§r 1 ${def.inputLabel} → ${def.outputAmount} ${def.outputLabel} (10 мин.)`,
+    "",
+    "§e─── Ваш инвентарь ───",
+    `§f${def.inputLabel}: §e${haveInput > 0 ? `${haveInput} шт.` : "нет"}`
+  ].join("\n");
+}
+
+function canFitItemAmount(player, typeId, amount) {
+  const inventory = getInventory(player);
+  if (!inventory) return false;
+  let free = 0;
+  let partial = 0;
+  for (let slot = 0; slot < inventory.size; slot += 1) {
+    const item = inventory.getItem(slot);
+    if (!item) free += 64;
+    else if (item.typeId === typeId) partial += Math.max(0, 64 - item.amount);
+  }
+  return free + partial >= amount;
+}
+
+async function openMintFurnaceMenu(player, block) {
+  if (!player?.isValid || !block) return;
+
+  tickMintWorkshops();
+  const data = loadData();
+  const record = ensureMintWorkshopRecord(player, block);
+  if (!record) {
+    player.sendMessage("§cНе удалось открыть чеканный двор.");
+    return;
+  }
+
+  const def = MINT_SHOP_TIERS[record.tier];
+  const settlement = getSettlement(data, record.settlementId);
+  const playerName = getPlayerName(player);
+  if (!def || !settlement || !hasTerritoryAccess(data, settlement, playerName)) {
+    player.sendMessage("§cЭтим чеканным двором могут пользоваться жители поселения.");
+    return;
+  }
+
+  const fresh = findMintWorkshop(loadData(), block.location, getDimensionId(block.dimension));
+  if (!fresh) return;
+
+  const form = new ActionFormData()
+    .title(kingdomsMenuTitle(KINGDOMS_MENU_PAGE.MINT))
+    .body(formatMintFurnaceBody(def, fresh, player));
+
+  if (fresh.state === "idle") {
+    form.button(`Положить 1 ${def.inputLabel}`, "textures/ui/kingdoms/icon_tax");
+  }
+  if (fresh.state === "ready") {
+    form.button(`Забрать ${def.outputAmount} ${def.outputLabel}`, "textures/ui/kingdoms/icon_tax");
+  }
+  form.button("Обновить", "textures/ui/kingdoms/icon_info");
+  form.button("Закрыть", "textures/ui/kingdoms/icon_disband");
+
+  const response = await showFormDeferred(player, form);
+  if (response.canceled) return;
+
+  let buttonIndex = 0;
+  if (fresh.state === "idle") {
+    if (response.selection === buttonIndex) {
+      return startMintSmelt(player, block, fresh, def);
+    }
+    buttonIndex += 1;
+  }
+  if (fresh.state === "ready") {
+    if (response.selection === buttonIndex) {
+      return collectMintSmeltOutput(player, block, fresh, def);
+    }
+    buttonIndex += 1;
+  }
+  if (response.selection === buttonIndex) {
+    return openMintFurnaceMenu(player, block);
+  }
+}
+
+function startMintSmelt(player, block, record, def) {
+  if (record.state !== "idle") {
+    player.sendMessage("§cСейчас уже идёт плавка или ждёт выдача.");
+    return openMintFurnaceMenu(player, block);
+  }
+  if (!takeItem(player, def.inputId, 1)) {
+    player.sendMessage(`§cНужен 1 ${def.inputLabel}.`);
+    return openMintFurnaceMenu(player, block);
+  }
+
+  const data = loadData();
+  const fresh = findMintWorkshop(data, block.location, getDimensionId(block.dimension));
+  if (!fresh || fresh.id !== record.id) {
+    giveItemStack(player, new ItemStack(def.inputId, 1));
+    return;
+  }
+
+  fresh.state = "processing";
+  fresh.finishTick = system.currentTick + MINT_SMELT_TICKS;
+  saveData(data);
+  player.sendMessage(`§aПлавка начата. Через 10 минут: ${def.outputAmount} ${def.outputLabel}.`);
+  return openMintFurnaceMenu(player, block);
+}
+
+function collectMintSmeltOutput(player, block, record, def) {
+  if (record.state !== "ready") {
+    player.sendMessage("§cВыход ещё не готов.");
+    return openMintFurnaceMenu(player, block);
+  }
+  if (!canFitItemAmount(player, def.outputId, def.outputAmount)) {
+    player.sendMessage("§cОсвободите место в инвентаре.");
+    return openMintFurnaceMenu(player, block);
+  }
+
+  giveItems(player, def.outputId, def.outputAmount);
+
+  const data = loadData();
+  const fresh = findMintWorkshop(data, block.location, getDimensionId(block.dimension));
+  if (!fresh || fresh.id !== record.id) return;
+
+  fresh.state = "idle";
+  fresh.finishTick = 0;
+  saveData(data);
+  player.sendMessage(`§aПолучено: ${def.outputAmount} ${def.outputLabel}.`);
+  return openMintFurnaceMenu(player, block);
+}
+
+function handleMintBlockInteract(player, block) {
+  if (!player?.isValid || !block) return;
+  openMintFurnaceMenu(player, block).catch((error) => {
+    player.sendMessage(`§c[Королевства] Ошибка чеканного двора: ${error?.message ?? error}`);
+  });
+}
+
+function tryBreakMintWorkshop(player, block, event) {
+  const data = loadData();
+  const record = findMintWorkshop(data, block.location, getDimensionId(block.dimension));
+  if (!record) return false;
+
+  const settlement = getSettlement(data, record.settlementId);
+  const playerName = getPlayerName(player);
+  if (!settlement || !hasTerritoryAccess(data, settlement, playerName)) {
+    event.cancel = true;
+    player.sendMessage("§cСломать чеканный двор могут жители этого поселения.");
+    return true;
+  }
+
+  if (record.state === "processing") {
+    event.cancel = true;
+    player.sendMessage("§cНельзя сломать во время плавки. Дождитесь окончания или заберите результат.");
+    return true;
+  }
+
+  const def = MINT_SHOP_TIERS[record.tier];
+  data.mintWorkshops = data.mintWorkshops.filter((entry) => entry.id !== record.id);
+  saveData(data);
+  if (def) giveItemStack(player, new ItemStack(def.blockId, 1));
+  player.sendMessage(`§e${def?.name ?? "Чеканный двор"} снят.`);
+  return false;
+}
+
+function tickMintWorkshops() {
+  const data = loadData();
+  ensureMintWorkshops(data);
+  const now = system.currentTick;
+  let changed = false;
+
+  for (const record of data.mintWorkshops) {
+    if (record.state !== "processing" || !record.finishTick) continue;
+    if (now < record.finishTick) continue;
+    record.state = "ready";
+    changed = true;
+  }
+
+  if (changed) saveData(data);
 }
 
 function getTerritoryPlacementWarning(data, center, dimensionId) {
@@ -3012,7 +3335,7 @@ function notifyPlayerAboutAddon(player) {
   if (loadedNoticeShown.has(playerName)) return;
   loadedNoticeShown.add(playerName);
 
-  player.sendMessage("§6[KW Build] §fv1.12.27 §7— флаг + покупка чеканного двора");
+  player.sendMessage("§6[KW Build] §fv1.12.28 §7— флаг + чеканный двор с плавкой");
   player.sendMessage(`§7Флаг — сущность. Кликните предметом по блоку. Нужно ${formatCopperValue(CREATION_COST)}.`);
 }
 
@@ -3070,6 +3393,10 @@ function loadData() {
     ensureWarCampaigns(data);
     if (typeof data.nextWarCampaignIdValue !== "number") data.nextWarCampaignIdValue = 1;
     if (!Array.isArray(data.condemnations)) data.condemnations = [];
+    ensureMintWorkshops(data);
+    if (typeof data.nextMintWorkshopIdValue !== "number") {
+      data.nextMintWorkshopIdValue = data.mintWorkshops.reduce((max, entry) => Math.max(max, entry.id || 0), 0) + 1;
+    }
     for (const zone of data.lootZones) {
       if (!Array.isArray(zone.winnerSettlementIds) || !zone.winnerSettlementIds.length) {
         zone.winnerSettlementIds = zone.winnerSettlementId ? [zone.winnerSettlementId] : [];
@@ -3102,10 +3429,12 @@ function emptyData() {
     spawnGuards: [],
     warCampaigns: [],
     condemnations: [],
+    mintWorkshops: [],
     nextSettlementIdValue: 1,
     nextAllianceIdValue: 1,
     nextSpawnGuardIdValue: 1,
-    nextWarCampaignIdValue: 1
+    nextWarCampaignIdValue: 1,
+    nextMintWorkshopIdValue: 1
   };
 }
 
