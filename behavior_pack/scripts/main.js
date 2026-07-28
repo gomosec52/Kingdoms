@@ -2023,6 +2023,8 @@ function finishSettlementUpgrade(player, data, settlement, upgradeCost, options 
     if (overlap && expansion.addedAdjacent > 0) {
       player.sendMessage(`§eТерритория пересекалась с ${settlementDisplayName(data, overlap)} — добавлено ${expansion.addedAdjacent} соседних свободных чанков.`);
     }
+    saveData(data);
+    refreshSettlementBorders(data, settlement);
     scheduleRefreshSettlementBorders(data, settlement);
     world.sendMessage(`§6[Королевства] §f${settlementDisplayName(data, settlement)} улучшено за ${formatCopperValue(upgradeCost)}. Мораль выросла.`);
   } else {

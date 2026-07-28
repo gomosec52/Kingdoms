@@ -18,24 +18,6 @@ export function bindTerritoryBorderSystem(world, dependencies) {
   });
 }
 
-export function clearSettlementBorders(settlement) {
-  const dimension = deps?.safeDimension?.(settlement?.dimensionId);
-  if (!dimension || !Array.isArray(settlement?.borderBlocks)) return;
-
-  for (const entry of settlement.borderBlocks) {
-    const [x, y, z] = entry.split(",").map(Number);
-    try {
-      const block = dimension.getBlock({ x, y, z });
-      if (block?.typeId === TERRITORY_BORDER_BLOCK) {
-        block.setPermutation(BlockPermutation.resolve("minecraft:air"));
-      }
-    } catch (_error) {
-      // Ignore stale border cleanup failures.
-    }
-  }
-  settlement.borderBlocks = [];
-}
-
 function findSurfaceY(dimension, x, z, hintY) {
   const start = Math.min(Math.floor(hintY) + 24, 320);
   const end = Math.max(Math.floor(hintY) - 24, -64);
@@ -53,6 +35,67 @@ function findSurfaceY(dimension, x, z, hintY) {
   }
 
   return Math.floor(hintY);
+}
+
+function removeBorderBlockAt(dimension, x, y, z) {
+  try {
+    const block = dimension.getBlock({ x, y, z });
+    if (block?.typeId === TERRITORY_BORDER_BLOCK) {
+      block.setPermutation(BlockPermutation.resolve("minecraft:air"));
+      return true;
+    }
+  } catch (_error) {
+    // Chunk may be unloaded.
+  }
+  return false;
+}
+
+export function clearSettlementBorders(settlement) {
+  const dimension = deps?.safeDimension?.(settlement?.dimensionId);
+  if (!dimension || !Array.isArray(settlement?.borderBlocks)) return;
+
+  for (const entry of settlement.borderBlocks) {
+    const [x, y, z] = entry.split(",").map(Number);
+    if (!Number.isFinite(x) || !Number.isFinite(y) || !Number.isFinite(z)) continue;
+    removeBorderBlockAt(dimension, x, y, z);
+  }
+  settlement.borderBlocks = [];
+}
+
+/** Removes border blocks on every chunk edge inside the settlement (including old interior rings after upgrade). */
+function clearStrayBorderBlocksOnChunkEdges(settlement) {
+  const dimension = deps?.safeDimension?.(settlement?.dimensionId);
+  if (!dimension) return;
+
+  const keys = getAllSettlementChunkKeys(settlement);
+  const hintY = settlement.flag?.y ?? 64;
+  const checked = new Set();
+
+  for (const key of keys) {
+    const { cx, cz } = parseChunkKey(key);
+    const edgePositions = [];
+    for (let i = 0; i < 16; i += 1) {
+      edgePositions.push(
+        { x: cx * 16 + i, z: cz * 16 },
+        { x: cx * 16 + i, z: cz * 16 + 15 },
+        { x: cx * 16, z: cz * 16 + i },
+        { x: cx * 16 + 15, z: cz * 16 + i }
+      );
+    }
+
+    for (const { x, z } of edgePositions) {
+      const columnKey = `${x},${z}`;
+      if (checked.has(columnKey)) continue;
+      checked.add(columnKey);
+
+      const y = findSurfaceY(dimension, x, z, hintY);
+      removeBorderBlockAt(dimension, x, y, z);
+
+      // Also clear one block above/below in case the surface shifted since the last refresh.
+      removeBorderBlockAt(dimension, x, y + 1, z);
+      removeBorderBlockAt(dimension, x, y - 1, z);
+    }
+  }
 }
 
 function computeBorderPositions(settlement) {
@@ -84,6 +127,11 @@ function computeBorderPositions(settlement) {
   return [...seen.values()];
 }
 
+function canPlaceBorderBlock(block) {
+  if (!block) return false;
+  return block.typeId === "minecraft:air" || block.typeId === TERRITORY_BORDER_BLOCK;
+}
+
 export function refreshSettlementBorders(data, settlement) {
   if (!settlement || !deps) return;
 
@@ -91,6 +139,7 @@ export function refreshSettlementBorders(data, settlement) {
   if (!dimension) return;
 
   clearSettlementBorders(settlement);
+  clearStrayBorderBlocksOnChunkEdges(settlement);
   if (!Array.isArray(settlement.borderBlocks)) settlement.borderBlocks = [];
 
   const hintY = settlement.flag?.y ?? 64;
@@ -100,13 +149,13 @@ export function refreshSettlementBorders(data, settlement) {
     const y = findSurfaceY(dimension, x, z, hintY);
     try {
       const block = dimension.getBlock({ x, y, z });
-      if (!block || block.typeId !== "minecraft:air") continue;
+      if (!canPlaceBorderBlock(block)) continue;
       block.setPermutation(BlockPermutation.resolve(TERRITORY_BORDER_BLOCK, {
         "kingdoms:stripe_axis": axis
       }));
       placed.push(`${x},${y},${z}`);
     } catch (_error) {
-      // Skip blocked positions.
+      // Skip blocked or unloaded positions.
     }
   }
 
@@ -116,11 +165,17 @@ export function refreshSettlementBorders(data, settlement) {
 
 export function scheduleRefreshSettlementBorders(data, settlement) {
   if (!settlement) return;
-  system.run(() => {
+  const settlementId = settlement.id;
+
+  const runRefresh = () => {
     const freshData = deps?.loadData?.() ?? data;
-    const freshSettlement = deps?.getSettlement?.(freshData, settlement.id) ?? settlement;
+    const freshSettlement = deps?.getSettlement?.(freshData, settlementId) ?? settlement;
     if (freshSettlement) refreshSettlementBorders(freshData, freshSettlement);
-  });
+  };
+
+  system.run(runRefresh);
+  system.runTimeout(runRefresh, 40);
+  system.runTimeout(runRefresh, 100);
 }
 
 export function scheduleRefreshAllSettlementBorders(data) {
