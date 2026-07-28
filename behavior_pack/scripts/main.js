@@ -192,6 +192,7 @@ const pendingAllianceOffers = new Map();
 const activeFlagPlacements = new Set();
 let directChatPrefixAvailable = false;
 let dynamicPropertiesRegistered = false;
+const recentGlobalWarKillKeys = new Map();
 
 import { bindFlagSystem, setFlagPlacementHandler, setWildFlagSpawnHandler } from "./flag.js";
 import { bindChunkCaptureSystem, cleanupChunkMarkersForSettlement } from "./chunk_flag.js";
@@ -248,6 +249,7 @@ import {
 } from "./war.js";
 import { bindDiplomacySystem, openCondemnationMenu } from "./diplomacy.js";
 import { processPendingTradePayouts, processPendingTradeItemReturns } from "./trade.js";
+import { bindBrProtectionSystem, isBrProtectedInteractBlock } from "./br_protection.js";
 
 bindArmySystem({
   world,
@@ -679,12 +681,12 @@ world.beforeEvents.playerInteractWithBlock?.subscribe((event) => {
   const blockId = event.block.typeId;
   const data = loadData();
   const dimensionId = getDimensionId(event.block.dimension);
-  if (PROTECTED_INTERACTIONS.includes(blockId) && shouldBlockSpawnInteract(data, event.player, event.block.location, dimensionId)) {
+  if (isBrProtectedInteractBlock(blockId, PROTECTED_INTERACTIONS) && shouldBlockSpawnInteract(data, event.player, event.block.location, dimensionId)) {
     event.cancel = true;
     event.player.sendMessage("§cЗона защиты спавна: взаимодействовать с этим нельзя.");
     return;
   }
-  if (!PROTECTED_INTERACTIONS.includes(blockId)) return;
+  if (!isBrProtectedInteractBlock(blockId, PROTECTED_INTERACTIONS)) return;
 
   const playerName = getPlayerName(event.player);
   const lootZone = findLootZoneAt(data, event.block.location, getDimensionId(event.block.dimension));
@@ -771,6 +773,25 @@ world.beforeEvents.entityHurt?.subscribe((event) => {
   }
 });
 
+function processGlobalWarPlayerKill(data, killer, victim, killerSettlement, victimSettlement, campaign) {
+  if (!campaign || campaign.ended) return;
+
+  const dedupeKey = `${campaign.id ?? campaign.initiatorSettlementId}:${victim.id}`;
+  const now = system.currentTick;
+  const lastTick = recentGlobalWarKillKeys.get(dedupeKey);
+  if (lastTick !== undefined && now - lastTick < 60) return;
+  recentGlobalWarKillKeys.set(dedupeKey, now);
+
+  const points = addGlobalWarKillPoint(campaign, killerSettlement.id);
+  const scoreLine = formatGlobalWarKillScore(data, campaign);
+  world.sendMessage(`§4[Глобальная война] §f${getPlayerName(killer)} убил ${getPlayerName(victim)}. Счёт: ${scoreLine}.`);
+
+  if (points >= GLOBAL_WAR_KILL_POINTS_TO_WIN) {
+    handleGlobalWarVictory(data, killerSettlement, victimSettlement, killer, campaign);
+  }
+  saveData(data);
+}
+
 world.afterEvents.entityDie?.subscribe((event) => {
   const victim = event.deadEntity;
   if (!victim || victim.typeId !== "minecraft:player") return;
@@ -787,14 +808,7 @@ world.afterEvents.entityDie?.subscribe((event) => {
   if (!campaign || !isGlobalWarCampaign(campaign) || campaign.ended) return;
   if (!isWarCombatActive(campaign, system.currentTick)) return;
 
-  const points = addGlobalWarKillPoint(campaign, killerSettlement.id);
-  const scoreLine = formatGlobalWarKillScore(data, campaign);
-  world.sendMessage(`§4[Глобальная война] §f${getPlayerName(killer)} убил ${getPlayerName(victim)}. Счёт: ${scoreLine}.`);
-
-  if (points >= GLOBAL_WAR_KILL_POINTS_TO_WIN) {
-    handleGlobalWarVictory(data, killerSettlement, victimSettlement, killer, campaign);
-  }
-  saveData(data);
+  processGlobalWarPlayerKill(data, killer, victim, killerSettlement, victimSettlement, campaign);
 });
 
 system.run(() => updatePlayerPrefixDisplays());
@@ -810,6 +824,24 @@ system.runInterval(() => processPendingTradePayouts(), 40);
 system.runInterval(() => processPendingTradeItemReturns(), 40);
 system.runInterval(() => tickMintWorkshops(), 20);
 system.runInterval(() => refreshAllMintLabels(), 60);
+
+bindBrProtectionSystem({
+  world,
+  system,
+  loadData,
+  saveData,
+  getPlayerName,
+  getDimensionId,
+  findSettlementAt,
+  hasTerritoryAccess,
+  settlementDisplayName,
+  getPlayerSettlement,
+  findWarCampaignBetween,
+  isGlobalWarCampaign,
+  isWarCombatActive,
+  findOnlinePlayerByName,
+  handleGlobalWarKillFromProtection: processGlobalWarPlayerKill
+});
 
 async function beginSettlementCreationFromItem(player, clickedBlock, blockFace, origin = "script") {
   if (!player || !clickedBlock) return;
@@ -4029,6 +4061,13 @@ function hasLootAccess(data, zone, playerName) {
 function getPlayerSettlement(data, playerName) {
   return data.settlements.find((settlement) => samePlayerName(settlement.creatorName, playerName))
     ?? data.settlements.find((settlement) => Object.keys(settlement.members || {}).some((memberName) => samePlayerName(memberName, playerName)));
+}
+
+function findOnlinePlayerByName(playerName) {
+  for (const player of world.getPlayers()) {
+    if (samePlayerName(getPlayerName(player), playerName)) return player;
+  }
+  return undefined;
 }
 
 function isMember(settlement, playerName) {
