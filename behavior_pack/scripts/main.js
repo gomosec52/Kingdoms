@@ -230,14 +230,6 @@ import {
   computeFlagRepairAmount
 } from "./war.js";
 import { bindDiplomacySystem, openCondemnationMenu } from "./diplomacy.js";
-import {
-  bindMintSystem,
-  openMintShopMenu,
-  getMintTaxBonus,
-  formatMintIncomeLine,
-  migrateMintWorkshopRecords,
-  processPendingMintItemPayouts
-} from "./mint.js";
 import { processPendingTradePayouts, processPendingTradeItemReturns } from "./trade.js";
 
 bindArmySystem({
@@ -316,7 +308,6 @@ bindSpawnGuardSystem({
 bindFlagSystem(world);
 setFlagPlacementHandler(beginSettlementCreationFromItem);
 setWildFlagSpawnHandler(handleWildFlagEntitySpawn);
-
 bindChunkCaptureSystem(world, {
   loadData,
   saveData,
@@ -365,31 +356,6 @@ bindDiplomacySystem({
   scheduleRefreshSettlementBorders
 });
 
-bindMintSystem({
-  world,
-  system,
-  ActionFormData,
-  loadData,
-  saveData,
-  getSettlement,
-  getPlayerSettlement,
-  getPlayerName,
-  samePlayerName,
-  showFormDeferred,
-  assertSettlementMenuSession,
-  openSettlementMenu,
-  SETTLEMENT_MENU_PAGE,
-  KINGDOMS_MENU_PAGE,
-  kingdomsMenuTitle,
-  canAccessConstruction,
-  hasTerritoryAccess,
-  findSettlementAtLocation,
-  getDimensionId,
-  blockPosition,
-  setBlockToAir,
-  giveItemStack
-});
-
 world.beforeEvents?.worldInitialize?.subscribe((event) => {
   registerDynamicProperties(event.propertyRegistry);
 });
@@ -420,22 +386,9 @@ world.afterEvents.playerSpawn?.subscribe((event) => {
 
   playerIdByName.set(getPlayerName(player), player.id);
   system.run(() => {
-    try {
-      updatePlayerPrefixDisplays();
-    } catch (error) {
-      console.warn(`[Kingdoms] Префиксы: ${error?.message ?? error}`);
-    }
-    try {
-      notifyPlayerAboutPrefixes(player);
-    } catch (error) {
-      console.warn(`[Kingdoms] Уведомление о префиксе: ${error?.message ?? error}`);
-    }
+    updatePlayerPrefixDisplays();
+    notifyPlayerAboutPrefixes(player);
     notifyPlayerAboutAddon(player);
-    try {
-      processPendingMintItemPayouts();
-    } catch (error) {
-      console.warn(`[Kingdoms] Выплаты монетного двора: ${error?.message ?? error}`);
-    }
   });
 });
 
@@ -569,11 +522,7 @@ function handleFlagInteraction(player, flagSource) {
   }
   const sessionToken = `${player.id}:${settlement.id}:${system.currentTick}`;
   settlementMenuSessions.set(player.id, { settlementId: settlement.id, token: sessionToken, openedAt: system.currentTick });
-  system.run(() => {
-    openSettlementMenu(player, settlement.id, SETTLEMENT_MENU_PAGE.MAIN, false, sessionToken).catch((error) => {
-      player.sendMessage(`§cНе удалось открыть меню флага: ${error?.message ?? error}`);
-    });
-  });
+  system.run(() => openSettlementMenu(player, settlement.id, SETTLEMENT_MENU_PAGE.MAIN, false, sessionToken));
 }
 
 world.beforeEvents.playerBreakBlock?.subscribe((event) => {
@@ -837,7 +786,7 @@ async function handleWildFlagEntitySpawn(entity, knownPlayer) {
   system.runTimeout(() => activeFlagPlacements.delete(placementKey), 40);
 
   if (!entity.hasTag(PENDING_SETUP_TAG)) entity.addTag(PENDING_SETUP_TAG);
-  player.sendMessage("§a[Королевства] Открываю меню создания поселения...");
+  player.sendMessage("§aФлаг-сущность появилась. Открываю меню создания поселения...");
 
   await runSettlementCreationFlow(player, {
     territoryCenter,
@@ -1019,17 +968,13 @@ function removeOrphanFlagsAt(territoryCenter, dimensionId) {
 }
 
 function formatExtraPageBody(settlement) {
-  const data = loadData();
-  const mintLine = formatMintIncomeLine(data, settlement);
   return [
     formatArmyPowerLine(settlement),
     "",
     "Дополнительные разделы:",
     "• Армия — рыцари и приказы",
-    "• Торговля — сделки между поселениями",
-    "• Чеканный двор — переплавка слитков в монеты",
-    mintLine ? `• Установлено: ${mintLine}` : ""
-  ].filter(Boolean).join("\n");
+    "• Торговля — сделки между поселениями"
+  ].join("\n");
 }
 
 function getTerritoryPlacementWarning(data, center, dimensionId) {
@@ -1215,7 +1160,6 @@ async function openSettlementMenu(player, settlementId, page = SETTLEMENT_MENU_P
     form
       .button("Армия", "textures/ui/kingdoms/icon_war")
       .button("Торговля", "textures/ui/kingdoms/icon_tax")
-      .button("Чеканный двор", "textures/ui/kingdoms/icon_build")
       .button("Назад", "textures/ui/kingdoms/icon_disband");
   } else {
     form
@@ -1242,8 +1186,7 @@ async function openSettlementMenu(player, settlementId, page = SETTLEMENT_MENU_P
   if (page === SETTLEMENT_MENU_PAGE.EXTRA) {
     if (selection === 0) return deferMenu(player, () => openArmyMenu(player, settlementId, sessionToken));
     if (selection === 1) return deferMenu(player, () => openTradeHub(player, settlementId, sessionToken));
-    if (selection === 2) return deferMenu(player, () => openMintShopMenu(player, settlementId, sessionToken));
-    if (selection === 3) {
+    if (selection === 2) {
       return openSettlementMenu(player, settlementId, SETTLEMENT_MENU_PAGE.MAIN, false, sessionToken);
     }
     return undefined;
@@ -1306,10 +1249,10 @@ function finishSettlementUpgrade(player, data, settlement, upgradeCost, options 
       player.sendMessage(`§eТерритория пересекалась с ${settlementDisplayName(data, overlap)} — добавлено ${expansion.addedAdjacent} соседних свободных чанков.`);
     }
     scheduleRefreshSettlementBorders(data, settlement);
-    world.sendMessage(`§6[Королевства] §fУлучшение: ${settlementDisplayName(data, settlement)} за ${formatCopperValue(upgradeCost)}. Мораль выросла.`);
+    world.sendMessage(`§6[Королевства] §f${settlementDisplayName(data, settlement)} улучшено за ${formatCopperValue(upgradeCost)}. Мораль выросла.`);
   } else {
-    player.sendMessage("§eТерритория не изменилась — изменён только тип поселения.");
-    world.sendMessage(`§6[Королевства] §fУлучшение без расширения: ${settlementDisplayName(data, settlement)} за ${formatCopperValue(upgradeCost)}. Мораль выросла.`);
+    player.sendMessage("§eТерритория не изменилась — улучшен только тип поселения.");
+    world.sendMessage(`§6[Королевства] §f${settlementDisplayName(data, settlement)} улучшено за ${formatCopperValue(upgradeCost)} без расширения территории. Мораль выросла.`);
   }
 
   grantChunkCaptureFlagOnUpgrade(player, settlement);
@@ -1906,7 +1849,7 @@ async function declareWarMenu(player, settlementId, sessionToken) {
   settlement.morale = Math.max(0, settlement.morale - 6);
   target.morale = Math.max(0, target.morale - 6);
   saveData(data);
-  world.sendMessage(`§4[Война] §fОбъявлена война: ${settlementDisplayName(data, settlement)} против ${settlementDisplayName(data, target)}. Причина: "${reason}". Бой начнётся через ${formatCooldownTicks(WAR_PREPARATION_TICKS)}.`);
+  world.sendMessage(`§4[Война] §f${settlementDisplayName(data, settlement)} объявило войну ${settlementDisplayName(data, target)}. Причина: "${reason}". Бой начнётся через ${formatCooldownTicks(WAR_PREPARATION_TICKS)}.`);
   return openWarMenu(player, settlementId, sessionToken);
 }
 
@@ -1948,7 +1891,7 @@ async function endWarMenu(player, settlementId, sessionToken) {
   }
 
   saveData(data);
-  world.sendMessage(`§e[Война] §fВойна прекращена: ${settlementDisplayName(data, settlement)} и ${settlementDisplayName(data, target)}.`);
+  world.sendMessage(`§e[Война] §f${settlementDisplayName(data, settlement)} прекратило войну с ${settlementDisplayName(data, target)}.`);
   return openWarMenu(player, settlementId, sessionToken);
 }
 
@@ -2265,27 +2208,24 @@ function countBuildingsOfType(settlement, buildingId) {
 }
 
 function getExtraIncomeBonus(settlement) {
-  const data = loadData();
   let total = 0;
   for (const placed of settlement.buildings || []) {
     const def = BUILDINGS[placed.type];
     if (def) total += Number(def.taxBonus || 0);
   }
-  total += getMintTaxBonus(data, settlement);
   return total;
 }
 
 function formatExtraIncomeLine(settlement) {
-  const data = loadData();
   const buildings = settlement.buildings || [];
+  if (!buildings.length) return "Доп заработок: нет";
+
   const parts = [];
   for (const placed of buildings) {
     const def = BUILDINGS[placed.type];
     if (!def) continue;
     parts.push(`${def.name} (+${def.taxBonus})`);
   }
-  const mintLine = formatMintIncomeLine(data, settlement);
-  if (mintLine) parts.push(mintLine);
   if (!parts.length) return "Доп заработок: нет";
   return `Доп заработок: ${parts.join(", ")}`;
 }
@@ -2559,14 +2499,14 @@ function handleWarVictory(data, winner, loser, attackerPlayer, campaign) {
   });
 
   const reasonSuffix = campaign?.reason ? ` Причина войны: "${campaign.reason}".` : "";
-  world.sendMessage(`§4[Война] §fПобеда — ${winnerLabel}. ${loserLabel}: тип понижен (${defeat.beforeType} → ${settlementType(loser).name}), потеряно ${defeat.lostChunks} чанк(ов). Мародёрство 5 минут.${reasonSuffix}`);
+  world.sendMessage(`§4[Война] §f${winnerLabel} победило. ${loserLabel} понижено (${defeat.beforeType} → ${settlementType(loser).name}), потеряно ${defeat.lostChunks} чанк(ов). Мародёрство 5 минут.${reasonSuffix}`);
 
   updateFlagLabelFor(loser, data);
   updateFlagLabelFor(winner, data);
   scheduleRefreshSettlementBorders(data, winner);
 
   if (attackerPlayer?.isValid) {
-    attackerPlayer.sendMessage(`§aПобеда — ${winnerLabel}. ${loserLabel}: откат на тип ниже.`);
+    attackerPlayer.sendMessage(`§a${winnerLabel} победило. ${loserLabel} откатилось на тип ниже.`);
   }
 }
 
@@ -2963,7 +2903,7 @@ function notifyPlayerAboutAddon(player) {
   if (loadedNoticeShown.has(playerName)) return;
   loadedNoticeShown.add(playerName);
 
-  player.sendMessage("§6[KW Build] §fv1.13.6 §7— скрипт активен");
+  player.sendMessage("§6[KW Build] §fv1.12.19 §7— восстановлено ядро v1.12.17");
   player.sendMessage(`§7Флаг — сущность. Кликните предметом по блоку. Нужно ${formatCopperValue(CREATION_COST)}.`);
 }
 
@@ -2986,51 +2926,47 @@ function settlementDisplayName(data, settlement) {
   return `${settlementType(settlement).name} "${name}"`;
 }
 
-function normalizeWorldData(data) {
-  if (!Array.isArray(data.settlements)) data.settlements = [];
-  if (!Array.isArray(data.alliances)) data.alliances = [];
-  if (!Array.isArray(data.lootZones)) data.lootZones = [];
-  if (!Array.isArray(data.spawnGuards)) data.spawnGuards = [];
-  if (typeof data.nextSpawnGuardIdValue !== "number") {
-    data.nextSpawnGuardIdValue = (data.spawnGuards || []).reduce((max, guard) => Math.max(max, guard.id || 0), 0) + 1;
-  }
-  if (typeof data.nextSettlementIdValue !== "number") data.nextSettlementIdValue = data.settlements.reduce((max, settlement) => Math.max(max, settlement.id || 0), 0) + 1;
-  if (typeof data.nextAllianceIdValue !== "number") data.nextAllianceIdValue = data.alliances.reduce((max, alliance) => Math.max(max, alliance.id || 0), 0) + 1;
-  for (const settlement of data.settlements) {
-    if (!settlement.members) settlement.members = {};
-    if (!Array.isArray(settlement.wars)) settlement.wars = [];
-    if (!Array.isArray(settlement.warInitiatedAgainst)) settlement.warInitiatedAgainst = [];
-    ensureWarCooldownData(settlement);
-    if (!Array.isArray(settlement.buildings)) settlement.buildings = [];
-    if (!Array.isArray(settlement.borderBlocks)) settlement.borderBlocks = [];
-    ensureSettlementArmyData(settlement);
-    ensureSettlementTradeData(settlement);
-    if (typeof settlement.morale !== "number") settlement.morale = 75;
-    if (typeof settlement.territoryBonus !== "number") settlement.territoryBonus = 0;
-    ensureSettlementChunks(settlement, settlementType(settlement).radius);
-    if (!Array.isArray(settlement.capturedChunks)) settlement.capturedChunks = [];
-    if (typeof settlement.condemnationDemotesApplied !== "number") settlement.condemnationDemotesApplied = 0;
-  }
-  if (!Array.isArray(data.pendingPlayerPayouts)) data.pendingPlayerPayouts = [];
-  if (typeof data.nextTradeOfferIdValue !== "number") data.nextTradeOfferIdValue = 1;
-  ensureWarCampaigns(data);
-  if (typeof data.nextWarCampaignIdValue !== "number") data.nextWarCampaignIdValue = 1;
-  if (!Array.isArray(data.condemnations)) data.condemnations = [];
-  migrateMintWorkshopRecords(data);
-  for (const zone of data.lootZones) {
-    if (!Array.isArray(zone.winnerSettlementIds) || !zone.winnerSettlementIds.length) {
-      zone.winnerSettlementIds = zone.winnerSettlementId ? [zone.winnerSettlementId] : [];
-    }
-  }
-  return data;
-}
-
 function loadData() {
   const raw = world.getDynamicProperty(STORE_KEY);
   if (typeof raw !== "string" || !raw) return emptyData();
 
   try {
-    return normalizeWorldData(JSON.parse(raw));
+    const data = JSON.parse(raw);
+    if (!Array.isArray(data.settlements)) data.settlements = [];
+    if (!Array.isArray(data.alliances)) data.alliances = [];
+    if (!Array.isArray(data.lootZones)) data.lootZones = [];
+    if (!Array.isArray(data.spawnGuards)) data.spawnGuards = [];
+    if (typeof data.nextSpawnGuardIdValue !== "number") {
+      data.nextSpawnGuardIdValue = (data.spawnGuards || []).reduce((max, guard) => Math.max(max, guard.id || 0), 0) + 1;
+    }
+    if (typeof data.nextSettlementIdValue !== "number") data.nextSettlementIdValue = data.settlements.reduce((max, settlement) => Math.max(max, settlement.id || 0), 0) + 1;
+    if (typeof data.nextAllianceIdValue !== "number") data.nextAllianceIdValue = data.alliances.reduce((max, alliance) => Math.max(max, alliance.id || 0), 0) + 1;
+    for (const settlement of data.settlements) {
+      if (!settlement.members) settlement.members = {};
+      if (!Array.isArray(settlement.wars)) settlement.wars = [];
+      if (!Array.isArray(settlement.warInitiatedAgainst)) settlement.warInitiatedAgainst = [];
+      ensureWarCooldownData(settlement);
+      if (!Array.isArray(settlement.buildings)) settlement.buildings = [];
+      if (!Array.isArray(settlement.borderBlocks)) settlement.borderBlocks = [];
+      ensureSettlementArmyData(settlement);
+      ensureSettlementTradeData(settlement);
+      if (typeof settlement.morale !== "number") settlement.morale = 75;
+      if (typeof settlement.territoryBonus !== "number") settlement.territoryBonus = 0;
+      ensureSettlementChunks(settlement, settlementType(settlement).radius);
+      if (!Array.isArray(settlement.capturedChunks)) settlement.capturedChunks = [];
+      if (typeof settlement.condemnationDemotesApplied !== "number") settlement.condemnationDemotesApplied = 0;
+    }
+    if (!Array.isArray(data.pendingPlayerPayouts)) data.pendingPlayerPayouts = [];
+    if (typeof data.nextTradeOfferIdValue !== "number") data.nextTradeOfferIdValue = 1;
+    ensureWarCampaigns(data);
+    if (typeof data.nextWarCampaignIdValue !== "number") data.nextWarCampaignIdValue = 1;
+    if (!Array.isArray(data.condemnations)) data.condemnations = [];
+    for (const zone of data.lootZones) {
+      if (!Array.isArray(zone.winnerSettlementIds) || !zone.winnerSettlementIds.length) {
+        zone.winnerSettlementIds = zone.winnerSettlementId ? [zone.winnerSettlementId] : [];
+      }
+    }
+    return data;
   } catch (error) {
     world.sendMessage(`§c[Королевства] Ошибка чтения данных: ${error}`);
     return emptyData();
@@ -3038,19 +2974,14 @@ function loadData() {
 }
 
 function saveData(data) {
-  try {
-    data.version = 1;
-    const serialized = JSON.stringify(data);
-    if (serialized.length > STORE_LIMIT) {
-      world.sendMessage("§c[Королевства] Слишком много данных для одного мира. Удалите часть старых поселений или перенесите хранилище в несколько ключей.");
-      return false;
-    }
-    world.setDynamicProperty(STORE_KEY, serialized);
-    return true;
-  } catch (error) {
-    world.sendMessage(`§c[Королевства] Ошибка сохранения: ${error.message ?? error}`);
+  data.version = 1;
+  const serialized = JSON.stringify(data);
+  if (serialized.length > STORE_LIMIT) {
+    world.sendMessage("§c[Королевства] Слишком много данных для одного мира. Удалите часть старых поселений или перенесите хранилище в несколько ключей.");
     return false;
   }
+  world.setDynamicProperty(STORE_KEY, serialized);
+  return true;
 }
 
 function emptyData() {
@@ -3062,13 +2993,10 @@ function emptyData() {
     spawnGuards: [],
     warCampaigns: [],
     condemnations: [],
-    mintWorkshops: [],
-    pendingPlayerItemPayouts: [],
     nextSettlementIdValue: 1,
     nextAllianceIdValue: 1,
     nextSpawnGuardIdValue: 1,
-    nextWarCampaignIdValue: 1,
-    nextMintWorkshopIdValue: 1
+    nextWarCampaignIdValue: 1
   };
 }
 
@@ -3289,32 +3217,18 @@ function shortText(value, maxLength) {
   return `${text.slice(0, Math.max(0, maxLength - 3))}...`;
 }
 
-function showForm(player, form) {
-  if (!player?.isValid) return Promise.resolve({ canceled: true });
-  if (formBusyPlayers.has(player.id)) return Promise.resolve({ canceled: true });
-
-  return new Promise((resolve) => {
-    system.run(async () => {
-      if (!player?.isValid) {
-        resolve({ canceled: true });
-        return;
-      }
-      if (formBusyPlayers.has(player.id)) {
-        resolve({ canceled: true });
-        return;
-      }
-
-      formBusyPlayers.add(player.id);
-      try {
-        resolve(await form.show(player));
-      } catch (error) {
-        player.sendMessage(`§cНе удалось открыть меню: ${error?.message ?? error}`);
-        resolve({ canceled: true });
-      } finally {
-        formBusyPlayers.delete(player.id);
-      }
-    });
-  });
+async function showForm(player, form) {
+  if (!player?.isValid) return { canceled: true };
+  if (formBusyPlayers.has(player.id)) return { canceled: true };
+  formBusyPlayers.add(player.id);
+  try {
+    return await form.show(player);
+  } catch (error) {
+    player.sendMessage(`§cНе удалось открыть меню: ${error}`);
+    return { canceled: true };
+  } finally {
+    formBusyPlayers.delete(player.id);
+  }
 }
 
 const FORM_CHAIN_DELAY_TICKS = 3;

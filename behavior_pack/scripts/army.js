@@ -47,7 +47,7 @@ let deps;
 export function bindArmySystem(dependencies) {
   deps = dependencies;
 
-  deps.world.afterEvents.entityHurt.subscribe((event) => {
+  deps.world.afterEvents?.entityHurt?.subscribe((event) => {
     const hurt = event.hurtEntity;
     if (!hurt || hurt.typeId !== "minecraft:player") return;
     handleOwnerHurt(/** @type {import("@minecraft/server").Player} */ (hurt), event.damageSource?.damagingEntity);
@@ -61,7 +61,7 @@ export function bindArmySystem(dependencies) {
     handleOrderButtonTouch(event.player, event.target);
   });
 
-  deps.world.afterEvents.playerLeave.subscribe((event) => {
+  deps.world.afterEvents?.playerLeave?.subscribe((event) => {
     dismissArmyForPlayerId(event.playerId, false);
   });
 

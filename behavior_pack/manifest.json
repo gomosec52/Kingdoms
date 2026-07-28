@@ -2,12 +2,12 @@
   "format_version": 2,
   "header": {
     "name": "KW Build",
-    "description": "v1.13.6 — revert broken storage and flag item",
+    "description": "v1.12.19 — restore working v1.12.17 core",
     "uuid": "35da6754-77fe-403f-98e0-6e6702d1c764",
     "version": [
       1,
-      13,
-      6
+      12,
+      19
     ],
     "min_engine_version": [
       1,
@@ -21,8 +21,8 @@
       "uuid": "85aa1b50-3187-42b5-81e7-a79d75242d9b",
       "version": [
       1,
-      13,
-      6
+      12,
+      19
       ]
     },
     {
@@ -32,8 +32,8 @@
       "entry": "scripts/main.js",
       "version": [
       1,
-      13,
-      6
+      12,
+      19
       ]
     }
   ],
@@ -42,8 +42,8 @@
       "uuid": "0319ea31-7410-4887-be2d-2d52676a4a6d",
       "version": [
       1,
-      13,
-      6
+      12,
+      19
       ]
     },
     {

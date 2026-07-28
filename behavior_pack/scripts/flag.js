@@ -6,7 +6,7 @@ const recentPlacementKeys = new Set();
 /** @type {((player: import("@minecraft/server").Player, block: import("@minecraft/server").Block, blockFace: import("@minecraft/server").Direction, origin: string) => void) | null} */
 let onFlagUseOn = null;
 
-/** @type {((entity: import("@minecraft/server").Entity, player?: import("@minecraft/server").Player) => void | Promise<void>) | null} */
+/** @type {((entity: import("@minecraft/server").Entity, player?: import("@minecraft/server").Player) => void) | null} */
 let onWildFlagSpawn = null;
 
 function placementKey(player, block) {
@@ -26,7 +26,7 @@ export function queueFlagPlacement(player, block, blockFace, origin = "script") 
     try {
       onFlagUseOn(player, block, blockFace, origin);
     } catch (error) {
-      player.sendMessage(`§c[Королевства] Ошибка установки флага: ${error?.message ?? error}`);
+      player.sendMessage(`§c[Королевства] Ошибка установки флага: ${error}`);
     }
   });
 }
@@ -92,14 +92,8 @@ function bindUseOnHandler(event, origin) {
   queueFlagPlacement(player, block, event.blockFace ?? event.face, origin);
 }
 
-function invokeWildFlagSpawn(entity, player) {
-  if (typeof onWildFlagSpawn !== "function") return;
-  Promise.resolve(onWildFlagSpawn(entity, player)).catch((error) => {
-    console.warn(`[Kingdoms] Ошибка обработки флага-сущности: ${error?.message ?? error}`);
-  });
-}
-
 export function bindFlagPlacementEvents(world) {
+  // itemUseOn is unavailable on Script API 2.0/beta; entity_placer + entitySpawn is the primary path.
   world.afterEvents?.itemUseOn?.subscribe((event) => bindUseOnHandler(event, "afterUseOn"));
   world.beforeEvents?.itemUseOn?.subscribe((event) => bindUseOnHandler(event, "beforeUseOn"));
 }
@@ -107,7 +101,14 @@ export function bindFlagPlacementEvents(world) {
 export function bindFlagEntitySpawn(world) {
   world.afterEvents?.entitySpawn?.subscribe((event) => {
     if (event.entity?.typeId !== FLAG_ENTITY) return;
-    system.run(() => invokeWildFlagSpawn(event.entity));
+
+    system.run(() => {
+      try {
+        if (typeof onWildFlagSpawn === "function") onWildFlagSpawn(event.entity);
+      } catch (error) {
+        console.warn(`[Kingdoms] Ошибка обработки флага-сущности: ${error}`);
+      }
+    });
   });
 }
 
