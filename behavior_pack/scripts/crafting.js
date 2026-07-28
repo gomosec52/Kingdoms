@@ -9,6 +9,7 @@ import {
   giveItems,
   takeItem
 } from "./economy.js";
+import { tryUpgradeCoins, tryDowngradeCoins } from "./coin_exchange.js";
 
 const COPPER_INGOT = "minecraft:copper_ingot";
 const COMPACT_COPPER_INGOT = "5fs_br:compact_copper_ingot";
@@ -41,28 +42,9 @@ function tryCraftFlag(player) {
   return true;
 }
 
-function tryUpgradeCoins(player, fromTypeId, toTypeId) {
-  if (countItem(player, fromTypeId) < COIN_EXCHANGE) {
-    player.sendMessage(`§e[Королевства] Нужен стак из ${COIN_EXCHANGE} монет в руке`);
-    return false;
-  }
-  if (!takeItem(player, fromTypeId, COIN_EXCHANGE)) return false;
-  giveItems(player, toTypeId, 1);
-  player.sendMessage(`§a[Королевства] ${COIN_EXCHANGE} → 1 монета выше`);
-  return true;
-}
-
-function tryDowngradeCoins(player, fromTypeId, toTypeId) {
-  if (countItem(player, fromTypeId) < 1) return false;
-  if (!takeItem(player, fromTypeId, 1)) return false;
-  giveItems(player, toTypeId, COIN_EXCHANGE);
-  player.sendMessage(`§a[Королевства] 1 → ${COIN_EXCHANGE} монет`);
-  return true;
-}
-
 function sendCoinExchangeHint(player) {
   player.sendMessage(
-    `§e[Королевства] Обмен: ПКМ со стаком ${COIN_EXCHANGE} → выше | ПКМ с 1 монетой → ${COIN_EXCHANGE} ниже | Shift+ПКМ по верстаку — то же`
+    `§e[Королевства] Обмен: /kingdoms:con | ПКМ: стак ${COIN_EXCHANGE} → выше | 1 шт. → ${COIN_EXCHANGE} ниже`
   );
 }
 

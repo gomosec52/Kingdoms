@@ -1107,6 +1107,46 @@
           "size": [
             "100%",
             "default"
+          ],
+          "bindings": [
+            {
+              "binding_name": "#title_text",
+              "binding_type": "global"
+            },
+            {
+              "binding_type": "view",
+              "source_property_name": "((#title_text - 'coin_exchange') = #title_text)",
+              "target_property_name": "#visible"
+            }
+          ]
+        }
+      },
+      {
+        "coin_heading": {
+          "type": "label",
+          "text": "Обмен монет",
+          "font_size": "normal",
+          "font_scale_factor": 1.18,
+          "shadow": true,
+          "color": [
+            0.29,
+            0.13,
+            0.03
+          ],
+          "size": [
+            "100%",
+            "default"
+          ],
+          "bindings": [
+            {
+              "binding_name": "#title_text",
+              "binding_type": "global"
+            },
+            {
+              "binding_type": "view",
+              "source_property_name": "(not ((#title_text - 'coin_exchange') = #title_text))",
+              "target_property_name": "#visible"
+            }
           ]
         }
       },

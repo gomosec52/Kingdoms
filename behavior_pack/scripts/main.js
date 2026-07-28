@@ -9,6 +9,7 @@ import {
   SPAWN_GUARD_BLOCK
 } from "./constants.js";
 import { bindCraftingFallback } from "./crafting.js";
+import { bindCoinExchangeSystem } from "./coin_exchange.js";
 import {
   bindSpawnGuardSystem,
   findSpawnProtectionAt,
@@ -312,6 +313,12 @@ bindTradeSystem({
 });
 
 bindCraftingFallback(world);
+
+bindCoinExchangeSystem({
+  system,
+  showFormDeferred,
+  KINGDOMS_MENU_PAGE
+});
 
 bindSpawnGuardSystem({
   world,
