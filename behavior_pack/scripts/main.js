@@ -1289,10 +1289,10 @@ function finishSettlementUpgrade(player, data, settlement, upgradeCost, options 
       player.sendMessage(`§eТерритория пересекалась с ${settlementDisplayName(data, overlap)} — добавлено ${expansion.addedAdjacent} соседних свободных чанков.`);
     }
     scheduleRefreshSettlementBorders(data, settlement);
-    world.sendMessage(`§6[Королевства] §f${settlementDisplayName(data, settlement)} улучшено за ${formatCopperValue(upgradeCost)}. Мораль выросла.`);
+    world.sendMessage(`§6[Королевства] §fУлучшение: ${settlementDisplayName(data, settlement)} за ${formatCopperValue(upgradeCost)}. Мораль выросла.`);
   } else {
-    player.sendMessage("§eТерритория не изменилась — улучшен только тип поселения.");
-    world.sendMessage(`§6[Королевства] §f${settlementDisplayName(data, settlement)} улучшено за ${formatCopperValue(upgradeCost)} без расширения территории. Мораль выросла.`);
+    player.sendMessage("§eТерритория не изменилась — изменён только тип поселения.");
+    world.sendMessage(`§6[Королевства] §fУлучшение без расширения: ${settlementDisplayName(data, settlement)} за ${formatCopperValue(upgradeCost)}. Мораль выросла.`);
   }
 
   grantChunkCaptureFlagOnUpgrade(player, settlement);
@@ -1889,7 +1889,7 @@ async function declareWarMenu(player, settlementId, sessionToken) {
   settlement.morale = Math.max(0, settlement.morale - 6);
   target.morale = Math.max(0, target.morale - 6);
   saveData(data);
-  world.sendMessage(`§4[Война] §f${settlementDisplayName(data, settlement)} объявило войну ${settlementDisplayName(data, target)}. Причина: "${reason}". Бой начнётся через ${formatCooldownTicks(WAR_PREPARATION_TICKS)}.`);
+  world.sendMessage(`§4[Война] §fОбъявлена война: ${settlementDisplayName(data, settlement)} против ${settlementDisplayName(data, target)}. Причина: "${reason}". Бой начнётся через ${formatCooldownTicks(WAR_PREPARATION_TICKS)}.`);
   return openWarMenu(player, settlementId, sessionToken);
 }
 
@@ -1931,7 +1931,7 @@ async function endWarMenu(player, settlementId, sessionToken) {
   }
 
   saveData(data);
-  world.sendMessage(`§e[Война] §f${settlementDisplayName(data, settlement)} прекратило войну с ${settlementDisplayName(data, target)}.`);
+  world.sendMessage(`§e[Война] §fВойна прекращена: ${settlementDisplayName(data, settlement)} и ${settlementDisplayName(data, target)}.`);
   return openWarMenu(player, settlementId, sessionToken);
 }
 
@@ -2542,14 +2542,14 @@ function handleWarVictory(data, winner, loser, attackerPlayer, campaign) {
   });
 
   const reasonSuffix = campaign?.reason ? ` Причина войны: "${campaign.reason}".` : "";
-  world.sendMessage(`§4[Война] §f${winnerLabel} победило. ${loserLabel} понижено (${defeat.beforeType} → ${settlementType(loser).name}), потеряно ${defeat.lostChunks} чанк(ов). Мародёрство 5 минут.${reasonSuffix}`);
+  world.sendMessage(`§4[Война] §fПобеда — ${winnerLabel}. ${loserLabel}: тип понижен (${defeat.beforeType} → ${settlementType(loser).name}), потеряно ${defeat.lostChunks} чанк(ов). Мародёрство 5 минут.${reasonSuffix}`);
 
   updateFlagLabelFor(loser, data);
   updateFlagLabelFor(winner, data);
   scheduleRefreshSettlementBorders(data, winner);
 
   if (attackerPlayer?.isValid) {
-    attackerPlayer.sendMessage(`§a${winnerLabel} победило. ${loserLabel} откатилось на тип ниже.`);
+    attackerPlayer.sendMessage(`§aПобеда — ${winnerLabel}. ${loserLabel}: откат на тип ниже.`);
   }
 }
 
@@ -2946,7 +2946,7 @@ function notifyPlayerAboutAddon(player) {
   if (loadedNoticeShown.has(playerName)) return;
   loadedNoticeShown.add(playerName);
 
-  player.sendMessage("§6[KW Build] §fv1.11.1 — монеты, дипломатия, торговля");
+  player.sendMessage("§6[KW Build] §fv1.13.2");
   player.sendMessage(`§7Флаг — сущность. Кликните предметом по блоку. Нужно ${formatCopperValue(CREATION_COST)}.`);
 }
 
@@ -3019,11 +3019,7 @@ function loadData() {
     const data = normalizeWorldData(loaded);
 
     if (migrateLegacy) {
-      system.run(() => {
-        if (saveData(data)) {
-          world.sendMessage("§7[Королевства] Данные мира перенесены в шардированное хранилище.");
-        }
-      });
+      system.run(() => saveData(data));
     }
 
     return data;
