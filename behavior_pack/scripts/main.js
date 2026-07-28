@@ -305,6 +305,30 @@ bindSpawnGuardSystem({
   nextSpawnGuardId
 });
 
+let mintInteractComponentRegistered = false;
+
+function registerMintBlockInteractComponent() {
+  if (mintInteractComponentRegistered) return;
+
+  const attach = (registry) => {
+    if (!registry?.registerCustomComponent || mintInteractComponentRegistered) return;
+    registry.registerCustomComponent("kingdoms:mint_interact", {
+      onPlayerInteract(event) {
+        const block = event.block;
+        const player = event.player;
+        if (!player || !block || !isMintBlockId(block.typeId)) return;
+        system.run(() => handleMintBlockInteract(player, block));
+      }
+    });
+    mintInteractComponentRegistered = true;
+  };
+
+  system.beforeEvents?.startup?.subscribe(({ blockComponentRegistry }) => attach(blockComponentRegistry));
+  world.beforeEvents?.worldInitialize?.subscribe(({ blockComponentRegistry }) => attach(blockComponentRegistry));
+}
+
+registerMintBlockInteractComponent();
+
 bindFlagSystem(world);
 setFlagPlacementHandler(beginSettlementCreationFromItem);
 setWildFlagSpawnHandler(handleWildFlagEntitySpawn);
@@ -417,14 +441,8 @@ world.afterEvents.playerPlaceBlock?.subscribe((event) => {
 });
 
 world.afterEvents.playerInteractWithBlock?.subscribe((event) => {
-  const blockId = event.block.typeId;
-  if (blockId === LEGACY_FLAG_BLOCK) {
-    handleFlagInteraction(event.player, event.block);
-    return;
-  }
-  if (isMintBlockId(blockId)) {
-    system.run(() => handleMintBlockInteract(event.player, event.block));
-  }
+  if (event.block.typeId !== LEGACY_FLAG_BLOCK) return;
+  handleFlagInteraction(event.player, event.block);
 });
 
 function getFlagDamageCooldownRemaining(settlementId) {
@@ -3335,7 +3353,7 @@ function notifyPlayerAboutAddon(player) {
   if (loadedNoticeShown.has(playerName)) return;
   loadedNoticeShown.add(playerName);
 
-  player.sendMessage("§6[KW Build] §fv1.12.28 §7— флаг + чеканный двор с плавкой");
+  player.sendMessage("§6[KW Build] §fv1.12.29 §7— флаг + чеканный двор (ПКМ)");
   player.sendMessage(`§7Флаг — сущность. Кликните предметом по блоку. Нужно ${formatCopperValue(CREATION_COST)}.`);
 }
 

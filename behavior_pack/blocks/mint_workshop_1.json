@@ -22,7 +22,8 @@
           "render_method": "opaque"
         }
       },
-      "minecraft:map_color": "#484848"
+      "minecraft:map_color": "#484848",
+      "kingdoms:mint_interact": {}
     }
   }
 }
