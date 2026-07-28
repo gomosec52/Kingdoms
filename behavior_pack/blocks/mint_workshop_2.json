@@ -15,12 +15,20 @@
       "minecraft:destructible_by_explosion": {
         "explosion_resistance": 6
       },
-      "minecraft:geometry": "minecraft:geometry.full_block",
+      "minecraft:geometry": "geometry.kingdoms_mint_anvil",
       "minecraft:material_instances": {
         "*": {
-          "texture": "kingdoms_mint_workshop_gold",
+          "texture": "kingdoms_mint_anvil_gold",
           "render_method": "opaque"
         }
+      },
+      "minecraft:collision_box": {
+        "origin": [-8, 0, -8],
+        "size": [16, 9, 16]
+      },
+      "minecraft:selection_box": {
+        "origin": [-8, 0, -8],
+        "size": [16, 9, 16]
       },
       "minecraft:map_color": "#B8860B",
       "kingdoms:mint_interact": {}

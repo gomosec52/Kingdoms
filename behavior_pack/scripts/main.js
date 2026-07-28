@@ -108,6 +108,8 @@ const DAY_TICKS = 24000;
 const TAX_COOLDOWN_TICKS = 25 * 60 * 20;
 const LOOT_WINDOW_TICKS = 5 * 60 * 20;
 const LABEL_TAG = "kingdoms_flag_label";
+const MINT_LABEL_TAG = "kingdoms_mint_label";
+const MINT_QUEUE_LIMIT = 64;
 const PROTECTED_INTERACTIONS = [
   "minecraft:chest",
   "minecraft:trapped_chest",
@@ -1064,20 +1066,22 @@ function formatMintSmeltLine(def) {
   return `Плавка: 1 ${def.inputLabel} → ${def.outputAmount} ${def.outputLabel} (10 мин., по одному)`;
 }
 
-function formatMintShopBody() {
+function formatMintShopBody(data, settlementId) {
   const tier1 = MINT_SHOP_TIERS[1];
   const tier2 = MINT_SHOP_TIERS[2];
+  const owned1 = settlementHasMintTier(data, settlementId, 1);
+  const owned2 = settlementHasMintTier(data, settlementId, 2);
   return [
     "§6Чеканный двор§r",
-    "Купите блок, поставьте на своей территории.",
-    "ПКМ по блоку — меню плавки.",
+    "Купите блок один раз, поставьте на своей территории.",
+    "ПКМ — загрузить до 64 слитков, плавка по 1 (10 мин).",
     "",
-    `§e${tier1.name}§r`,
+    `§e${tier1.name}§r ${owned1 ? "§c[уже куплен]§r" : ""}`,
     `Тип поселения: ${SETTLEMENT_TYPE_NAMES[tier1.minTypeIndex]} или выше`,
     `Покупка: ${formatMintCost(tier1)}`,
     formatMintSmeltLine(tier1),
     "",
-    `§e${tier2.name}§r`,
+    `§e${tier2.name}§r ${owned2 ? "§c[уже куплен]§r" : ""}`,
     `Тип поселения: ${SETTLEMENT_TYPE_NAMES[tier2.minTypeIndex]} или выше`,
     `Покупка: ${formatMintCost(tier2)}`,
     formatMintSmeltLine(tier2)
@@ -1096,17 +1100,26 @@ async function openMintShopMenu(player, settlementId, sessionToken) {
 
   const form = new ActionFormData()
     .title(kingdomsMenuTitle(KINGDOMS_MENU_PAGE.MINT))
-    .body(formatMintShopBody())
-    .button("Купить двор I", "textures/ui/kingdoms/icon_tax")
-    .button("Купить двор II", "textures/ui/kingdoms/icon_tax")
-    .button("Назад", "textures/ui/kingdoms/icon_disband");
+    .body(formatMintShopBody(data, settlementId));
+
+  const buyOptions = [];
+  if (!settlementHasMintTier(data, settlementId, 1)) {
+    form.button("Купить двор I", "textures/ui/kingdoms/icon_tax");
+    buyOptions.push(1);
+  }
+  if (!settlementHasMintTier(data, settlementId, 2)) {
+    form.button("Купить двор II", "textures/ui/kingdoms/icon_tax");
+    buyOptions.push(2);
+  }
+  form.button("Назад", "textures/ui/kingdoms/icon_disband");
 
   const response = await showFormDeferred(player, form);
-  if (response.canceled || response.selection === 2) {
+  if (response.canceled || response.selection === buyOptions.length) {
     return openSettlementMenu(player, settlementId, SETTLEMENT_MENU_PAGE.EXTRA, false, sessionToken);
   }
 
-  const tier = response.selection === 0 ? 1 : 2;
+  const tier = buyOptions[response.selection];
+  if (!tier) return openMintShopMenu(player, settlementId, sessionToken);
   return purchaseMintBlock(player, settlementId, sessionToken, tier);
 }
 
@@ -1123,6 +1136,11 @@ async function purchaseMintBlock(player, settlementId, sessionToken, tier) {
     return openMintShopMenu(player, settlementId, sessionToken);
   }
 
+  if (settlementHasMintTier(data, settlement.id, tier)) {
+    player.sendMessage(`§c${def.name} для этого поселения уже куплен.`);
+    return openMintShopMenu(player, settlementId, sessionToken);
+  }
+
   if (countInventoryItem(player, def.blockId) > 0) {
     player.sendMessage(`§cУ вас уже есть ${def.name} в инвентаре.`);
     return openMintShopMenu(player, settlementId, sessionToken);
@@ -1133,6 +1151,9 @@ async function purchaseMintBlock(player, settlementId, sessionToken, tier) {
     return openMintShopMenu(player, settlementId, sessionToken);
   }
 
+  ensureSettlementMintOwned(settlement);
+  settlement.mintOwned[tier] = true;
+  saveData(data);
   giveItemStack(player, new ItemStack(def.blockId, 1));
   player.sendMessage(`§a${def.name} куплен. Поставьте на территории. ПКМ — ${formatMintSmeltLine(def)}`);
   return openMintShopMenu(player, settlementId, sessionToken);
@@ -1150,6 +1171,101 @@ function getMintTierFromBlockId(blockId) {
 
 function ensureMintWorkshops(data) {
   if (!Array.isArray(data.mintWorkshops)) data.mintWorkshops = [];
+}
+
+function ensureSettlementMintOwned(settlement) {
+  if (!settlement.mintOwned || typeof settlement.mintOwned !== "object") settlement.mintOwned = {};
+}
+
+function settlementHasMintTier(data, settlementId, tier) {
+  const settlement = getSettlement(data, settlementId);
+  if (!settlement) return false;
+  ensureSettlementMintOwned(settlement);
+  if (settlement.mintOwned[tier]) return true;
+  return data.mintWorkshops.some((entry) => entry.settlementId === settlementId && entry.tier === tier);
+}
+
+function migrateMintWorkshopRecord(record) {
+  if (typeof record.queuedIngots !== "number") {
+    record.queuedIngots = record.state === "idle" ? 0 : 0;
+  }
+  if (record.state === "processing" && !record.finishTick) record.finishTick = 0;
+}
+
+function mintWorkshopLabelTag(recordId) {
+  return `mint_ws_${recordId}`;
+}
+
+function getMintLabelLocation(record) {
+  return {
+    x: record.location.x + 0.5,
+    y: record.location.y + 1.35,
+    z: record.location.z + 0.5
+  };
+}
+
+function updateMintWorkshopLabel(record) {
+  const def = MINT_SHOP_TIERS[record.tier];
+  if (!def) return;
+  const dimension = safeDimension(record.dimensionId);
+  if (!dimension) return;
+
+  const tag = mintWorkshopLabelTag(record.id);
+  const location = getMintLabelLocation(record);
+  let labels = [];
+  try {
+    labels = dimension.getEntities({ type: FLAG_LABEL_ENTITY, tags: [MINT_LABEL_TAG, tag] });
+  } catch (_error) {
+    labels = [];
+  }
+
+  const label = labels[0] ?? dimension.spawnEntity(FLAG_LABEL_ENTITY, location);
+  if (!label.hasTag(MINT_LABEL_TAG)) label.addTag(MINT_LABEL_TAG);
+  if (!label.hasTag(tag)) label.addTag(tag);
+  label.nameTag = def.name;
+  try {
+    label.teleport(location, { dimension });
+  } catch (_error) {
+    // Keep the label at its last known position if teleport fails.
+  }
+  for (const duplicate of labels.slice(1)) duplicate.remove();
+}
+
+function removeMintWorkshopLabel(record) {
+  const dimension = safeDimension(record.dimensionId);
+  if (!dimension) return;
+  try {
+    for (const entity of dimension.getEntities({ type: FLAG_LABEL_ENTITY, tags: [MINT_LABEL_TAG, mintWorkshopLabelTag(record.id)] })) {
+      entity.remove();
+    }
+  } catch (_error) {
+    // Best-effort cleanup.
+  }
+}
+
+function refreshAllMintLabels() {
+  const data = loadData();
+  ensureMintWorkshops(data);
+  for (const record of data.mintWorkshops) {
+    migrateMintWorkshopRecord(record);
+    updateMintWorkshopLabel(record);
+  }
+}
+
+function getMintDepositCapacity(record) {
+  migrateMintWorkshopRecord(record);
+  let used = record.queuedIngots;
+  if (record.state === "processing") used += 1;
+  return Math.max(0, MINT_QUEUE_LIMIT - used);
+}
+
+function tryStartMintProcessing(record) {
+  migrateMintWorkshopRecord(record);
+  if (record.state !== "idle" || record.queuedIngots <= 0) return false;
+  record.queuedIngots -= 1;
+  record.state = "processing";
+  record.finishTick = system.currentTick + MINT_SMELT_TICKS;
+  return true;
 }
 
 function mintLocationKey(location, dimensionId) {
@@ -1208,10 +1324,14 @@ function registerPlacedMintWorkshop(player, block) {
     dimensionId,
     location,
     state: "idle",
+    queuedIngots: 0,
     finishTick: 0,
     placedBy: playerName
   });
+  ensureSettlementMintOwned(settlement);
+  settlement.mintOwned[tier] = true;
   saveData(data);
+  updateMintWorkshopLabel(data.mintWorkshops[data.mintWorkshops.length - 1]);
   player.sendMessage(`§a${def.name} установлен. ПКМ — меню плавки.`);
 }
 
@@ -1226,17 +1346,18 @@ function ensureMintWorkshopRecord(player, block) {
 }
 
 function formatMintFurnaceBody(def, record, player) {
+  migrateMintWorkshopRecord(record);
   const now = system.currentTick;
-  let inputLine = "§7[ пусто ]";
+  let inputLine = `§f[ ${record.queuedIngots} в очереди ]`;
   let outputLine = "§7[ пусто ]";
-  let statusLine = `§aОжидание: 1 ${def.inputLabel}`;
+  let statusLine = `§aМожно загрузить до ${getMintDepositCapacity(record)} ${def.inputLabel}`;
 
   if (record.state === "processing") {
-    inputLine = `§f[ 1 ${def.inputLabel} ]`;
+    inputLine = `§f[ ${record.queuedIngots} + 1 плавится ]`;
     outputLine = `§e[ ${def.outputAmount} ${def.outputLabel} ]`;
     statusLine = `§6Плавка: ${formatCooldownTicks(Math.max(0, record.finishTick - now))}`;
   } else if (record.state === "ready") {
-    inputLine = "§7[ использовано ]";
+    inputLine = `§f[ ${record.queuedIngots} в очереди ]`;
     outputLine = `§a[ ${def.outputAmount} ${def.outputLabel} ]`;
     statusLine = "§aГотово — заберите монеты";
   }
@@ -1252,7 +1373,8 @@ function formatMintFurnaceBody(def, record, player) {
     "       §8╚════════════╝",
     "",
     `§7Статус:§r ${statusLine}`,
-    `§7Рецепт:§r 1 ${def.inputLabel} → ${def.outputAmount} ${def.outputLabel} (10 мин.)`,
+    `§7Рецепт:§r 1 ${def.inputLabel} → ${def.outputAmount} ${def.outputLabel} (10 мин., по одному)`,
+    `§7Лимит загрузки:§r ${MINT_QUEUE_LIMIT} слитков`,
     "",
     "§e─── Ваш инвентарь ───",
     `§f${def.inputLabel}: §e${haveInput > 0 ? `${haveInput} шт.` : "нет"}`
@@ -1298,8 +1420,9 @@ async function openMintFurnaceMenu(player, block) {
     .title(kingdomsMenuTitle(KINGDOMS_MENU_PAGE.MINT))
     .body(formatMintFurnaceBody(def, fresh, player));
 
-  if (fresh.state === "idle") {
-    form.button(`Положить 1 ${def.inputLabel}`, "textures/ui/kingdoms/icon_tax");
+  const depositCapacity = getMintDepositCapacity(fresh);
+  if (depositCapacity > 0) {
+    form.button(`Положить слитки (до ${depositCapacity})`, "textures/ui/kingdoms/icon_tax");
   }
   if (fresh.state === "ready") {
     form.button(`Забрать ${def.outputAmount} ${def.outputLabel}`, "textures/ui/kingdoms/icon_tax");
@@ -1311,9 +1434,9 @@ async function openMintFurnaceMenu(player, block) {
   if (response.canceled) return;
 
   let buttonIndex = 0;
-  if (fresh.state === "idle") {
+  if (depositCapacity > 0) {
     if (response.selection === buttonIndex) {
-      return startMintSmelt(player, block, fresh, def);
+      return depositMintIngots(player, block, fresh, def);
     }
     buttonIndex += 1;
   }
@@ -1328,27 +1451,37 @@ async function openMintFurnaceMenu(player, block) {
   }
 }
 
-function startMintSmelt(player, block, record, def) {
-  if (record.state !== "idle") {
-    player.sendMessage("§cСейчас уже идёт плавка или ждёт выдача.");
+function depositMintIngots(player, block, record, def) {
+  migrateMintWorkshopRecord(record);
+  const capacity = getMintDepositCapacity(record);
+  if (capacity <= 0) {
+    player.sendMessage(`§cМожно хранить не больше ${MINT_QUEUE_LIMIT} слитков.`);
     return openMintFurnaceMenu(player, block);
   }
-  if (!takeItem(player, def.inputId, 1)) {
-    player.sendMessage(`§cНужен 1 ${def.inputLabel}.`);
+
+  const available = countItem(player, def.inputId);
+  if (available <= 0) {
+    player.sendMessage(`§cНужен ${def.inputLabel}.`);
+    return openMintFurnaceMenu(player, block);
+  }
+
+  const amount = Math.min(available, capacity);
+  if (!takeItem(player, def.inputId, amount)) {
+    player.sendMessage(`§cНе удалось загрузить ${def.inputLabel}.`);
     return openMintFurnaceMenu(player, block);
   }
 
   const data = loadData();
   const fresh = findMintWorkshop(data, block.location, getDimensionId(block.dimension));
   if (!fresh || fresh.id !== record.id) {
-    giveItemStack(player, new ItemStack(def.inputId, 1));
+    giveItems(player, def.inputId, amount);
     return;
   }
 
-  fresh.state = "processing";
-  fresh.finishTick = system.currentTick + MINT_SMELT_TICKS;
+  fresh.queuedIngots += amount;
+  tryStartMintProcessing(fresh);
   saveData(data);
-  player.sendMessage(`§aПлавка начата. Через 10 минут: ${def.outputAmount} ${def.outputLabel}.`);
+  player.sendMessage(`§aЗагружено: ${amount} ${def.inputLabel}. Плавка идёт по одному.`);
   return openMintFurnaceMenu(player, block);
 }
 
@@ -1370,6 +1503,7 @@ function collectMintSmeltOutput(player, block, record, def) {
 
   fresh.state = "idle";
   fresh.finishTick = 0;
+  tryStartMintProcessing(fresh);
   saveData(data);
   player.sendMessage(`§aПолучено: ${def.outputAmount} ${def.outputLabel}.`);
   return openMintFurnaceMenu(player, block);
@@ -1395,13 +1529,16 @@ function tryBreakMintWorkshop(player, block, event) {
     return true;
   }
 
-  if (record.state === "processing") {
-    event.cancel = true;
-    player.sendMessage("§cНельзя сломать во время плавки. Дождитесь окончания или заберите результат.");
-    return true;
+  if (record.state === "processing" && def) {
+    giveItemStack(player, new ItemStack(def.inputId, 1));
   }
-
-  const def = MINT_SHOP_TIERS[record.tier];
+  if (record.state === "ready" && def) {
+    giveItems(player, def.outputId, def.outputAmount);
+  }
+  if (record.queuedIngots > 0 && def) {
+    giveItems(player, def.inputId, record.queuedIngots);
+  }
+  removeMintWorkshopLabel(record);
   data.mintWorkshops = data.mintWorkshops.filter((entry) => entry.id !== record.id);
   saveData(data);
   if (def) giveItemStack(player, new ItemStack(def.blockId, 1));
@@ -1416,10 +1553,15 @@ function tickMintWorkshops() {
   let changed = false;
 
   for (const record of data.mintWorkshops) {
-    if (record.state !== "processing" || !record.finishTick) continue;
-    if (now < record.finishTick) continue;
-    record.state = "ready";
-    changed = true;
+    migrateMintWorkshopRecord(record);
+    if (record.state === "processing" && record.finishTick && now >= record.finishTick) {
+      record.state = "ready";
+      changed = true;
+    }
+  }
+
+  for (const record of data.mintWorkshops) {
+    if (tryStartMintProcessing(record)) changed = true;
   }
 
   if (changed) saveData(data);
@@ -3405,16 +3547,25 @@ function loadData() {
       ensureSettlementChunks(settlement, settlementType(settlement).radius);
       if (!Array.isArray(settlement.capturedChunks)) settlement.capturedChunks = [];
       if (typeof settlement.condemnationDemotesApplied !== "number") settlement.condemnationDemotesApplied = 0;
+      ensureSettlementMintOwned(settlement);
+    }
+    ensureMintWorkshops(data);
+    for (const record of data.mintWorkshops) {
+      migrateMintWorkshopRecord(record);
+      const ownerSettlement = getSettlement(data, record.settlementId);
+      if (ownerSettlement) {
+        ensureSettlementMintOwned(ownerSettlement);
+        ownerSettlement.mintOwned[record.tier] = true;
+      }
+    }
+    if (typeof data.nextMintWorkshopIdValue !== "number") {
+      data.nextMintWorkshopIdValue = data.mintWorkshops.reduce((max, entry) => Math.max(max, entry.id || 0), 0) + 1;
     }
     if (!Array.isArray(data.pendingPlayerPayouts)) data.pendingPlayerPayouts = [];
     if (typeof data.nextTradeOfferIdValue !== "number") data.nextTradeOfferIdValue = 1;
     ensureWarCampaigns(data);
     if (typeof data.nextWarCampaignIdValue !== "number") data.nextWarCampaignIdValue = 1;
     if (!Array.isArray(data.condemnations)) data.condemnations = [];
-    ensureMintWorkshops(data);
-    if (typeof data.nextMintWorkshopIdValue !== "number") {
-      data.nextMintWorkshopIdValue = data.mintWorkshops.reduce((max, entry) => Math.max(max, entry.id || 0), 0) + 1;
-    }
     for (const zone of data.lootZones) {
       if (!Array.isArray(zone.winnerSettlementIds) || !zone.winnerSettlementIds.length) {
         zone.winnerSettlementIds = zone.winnerSettlementId ? [zone.winnerSettlementId] : [];
