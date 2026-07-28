@@ -15,6 +15,7 @@
       "S": { "item": "minecraft:stick" },
       "C": { "item": "kingdoms:coin_copper" }
     },
+    "priority": 0,
     "unlock": [
       { "item": "minecraft:white_wool" },
       { "item": "kingdoms:coin_copper" }
