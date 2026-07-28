@@ -184,7 +184,6 @@ const pendingPlacementLocks = new Set();
 const playerPrefixCache = new Map();
 const playerIdentityCache = new Map();
 const playerIdByName = new Map();
-const chatPrefixNoticeShown = new Set();
 const loadedNoticeShown = new Set();
 const formBusyPlayers = new Set();
 const settlementMenuSessions = new Map();
@@ -428,8 +427,7 @@ world.afterEvents.playerSpawn?.subscribe((event) => {
   playerIdByName.set(getPlayerName(player), player.id);
   system.run(() => {
     updatePlayerPrefixDisplays();
-    notifyPlayerAboutPrefixes(player);
-    notifyPlayerAboutAddon(player);
+    notifyModActive(player);
   });
 });
 
@@ -438,7 +436,6 @@ world.afterEvents.playerLeave?.subscribe((event) => {
     playerPrefixCache.delete(event.playerName);
     playerIdentityCache.delete(event.playerName);
     playerIdByName.delete(event.playerName);
-    chatPrefixNoticeShown.delete(event.playerName);
   }
   if (event.playerId) {
     removePlayerPrefixLabelById(event.playerId);
@@ -2402,7 +2399,7 @@ async function openWarMenu(player, settlementId, sessionToken) {
         : "Выберите действие.",
       `Доступные цели: ${allowedTypes}.`,
       `Подготовка к бою: ${formatCooldownTicks(WAR_PREPARATION_TICKS)} после объявления.`,
-      `Глобальная война (кнопка ниже): только создатель, 1 на 1, минимум ${GLOBAL_WAR_MIN_ONLINE} жителей в сети с каждой стороны, победа — флаг или ${GLOBAL_WAR_KILL_POINTS_TO_WIN} убийств, 60% чанков проигравшего.`,
+      `Глобальная война — отдельная кнопка ниже.`,
       `Атакующих в сети: минимум ${MIN_ATTACKER_ONLINE_FOR_WAR}. Цель: минимум ${MIN_TARGET_ONLINE_FOR_WAR} в сети.`,
       `Урон по флагу: минимум ${MIN_ATTACKERS_ON_TERRITORY_FOR_FLAG_DAMAGE} атакующих на территории, кулдаун на флаг ${formatCooldownTicks(FLAG_DAMAGE_COOLDOWN_TICKS)}.`,
       "Прекратить войну досрочно без боя — штраф морали.",
@@ -2589,7 +2586,7 @@ async function declareGlobalWarMenu(player, settlementId, sessionToken) {
   target.morale = Math.max(0, target.morale - 8);
   saveData(data);
   world.sendMessage(
-    `§4[Глобальная война] §f${settlementDisplayName(data, settlement)} объявило глобальную войну ${settlementDisplayName(data, target)}. Причина: "${reason}". Бой через ${formatCooldownTicks(WAR_PREPARATION_TICKS)}. Победа: флаг или ${GLOBAL_WAR_KILL_POINTS_TO_WIN} убийств. На время боя — мародёрство на территории противника.`
+    `§4[Глобальная война] §f${settlementDisplayName(data, settlement)} объявило войну ${settlementDisplayName(data, target)}. "${reason}". Бой через ${formatCooldownTicks(WAR_PREPARATION_TICKS)}.`
   );
   return openWarMenu(player, settlementId, sessionToken);
 }
@@ -2693,7 +2690,7 @@ function checkWarActivations() {
     if (!initiator || !target) continue;
     if (isGlobalWarCampaign(campaign)) {
       world.sendMessage(
-        `§4[Глобальная война] §fБой начался: ${settlementDisplayName(data, initiator)} против ${settlementDisplayName(data, target)}. Причина: "${campaign.reason}". Мародёрство на территории противника разрешено. Победа: флаг или ${GLOBAL_WAR_KILL_POINTS_TO_WIN} убийств.`
+        `§4[Глобальная война] §fБой: ${settlementDisplayName(data, initiator)} — ${settlementDisplayName(data, target)}.`
       );
     } else {
       world.sendMessage(`§4[Война] §fБой начался: ${settlementDisplayName(data, initiator)} против ${settlementDisplayName(data, target)}. Причина: "${campaign.reason}".`);
@@ -3250,7 +3247,7 @@ function handleGlobalWarVictory(data, winner, loser, attackerPlayer, campaign) {
   const reasonSuffix = campaign?.reason ? ` Причина: "${campaign.reason}".` : "";
   const scoreSuffix = campaign ? ` Счёт: ${formatGlobalWarKillScore(data, campaign)}.` : "";
   world.sendMessage(
-    `§4[Глобальная война] §f${winnerLabel} победило. ${loserLabel} понижено (${defeat.beforeType} → ${settlementType(loser).name}), передано ${transferredChunks} чанк(ов) победителю.${reasonSuffix}${scoreSuffix}`
+    `§4[Глобальная война] §f${winnerLabel} победило. ${loserLabel}: ${defeat.beforeType} → ${settlementType(loser).name}.${reasonSuffix}`
   );
 
   updateFlagLabelFor(loser, data);
@@ -3258,7 +3255,7 @@ function handleGlobalWarVictory(data, winner, loser, attackerPlayer, campaign) {
   scheduleRefreshSettlementBorders(data, winner);
 
   if (attackerPlayer?.isValid) {
-    attackerPlayer.sendMessage(`§a${winnerLabel} победило в глобальной войне. ${loserLabel} потеряло ${transferredChunks} чанк(ов) и −2 типа.`);
+    attackerPlayer.sendMessage(`§a${winnerLabel} победило. ${loserLabel} откатилось на 2 типа.`);
   }
 }
 
@@ -3700,28 +3697,14 @@ function creatorPrefixFor(typeIndex) {
   return CREATOR_PREFIXES[typeIndex] ?? CREATOR_PREFIXES[0];
 }
 
-function notifyPlayerAboutAddon(player) {
+function notifyModActive(player) {
   if (!player) return;
 
   const playerName = getPlayerName(player);
   if (loadedNoticeShown.has(playerName)) return;
   loadedNoticeShown.add(playerName);
 
-  player.sendMessage("§6[KW Build] §fv1.12.33 §7— чеканный двор: чужаки заблокированы");
-  player.sendMessage(`§7Флаг — сущность. Кликните предметом по блоку. Нужно ${formatCopperValue(CREATION_COST)}.`);
-}
-
-function notifyPlayerAboutPrefixes(player) {
-  if (!player) return;
-
-  const playerName = getPlayerName(player);
-  if (chatPrefixNoticeShown.has(playerName)) return;
-
-  const prefix = playerDisplayPrefix(loadData(), playerName);
-  if (!prefix) return;
-
-  chatPrefixNoticeShown.add(playerName);
-  player.sendMessage(`§7[Королевства] Ваш префикс: §6${prefix}§7. Отображение через Prefix Reloaded.`);
+  player.sendMessage("§7KW — активно, префиксы — активны.");
 }
 
 function settlementDisplayName(data, settlement) {
