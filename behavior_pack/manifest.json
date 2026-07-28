@@ -2,12 +2,12 @@
   "format_version": 2,
   "header": {
     "name": "KW Build",
-    "description": "v1.12.21 — mint via script events, no block component",
+    "description": "v1.12.22 — stable, no mint (same as working v1.12.19)",
     "uuid": "35da6754-77fe-403f-98e0-6e6702d1c764",
     "version": [
       1,
       12,
-      21
+      22
     ],
     "min_engine_version": [
       1,
@@ -22,7 +22,7 @@
       "version": [
       1,
       12,
-      21
+      22
       ]
     },
     {
@@ -33,7 +33,7 @@
       "version": [
       1,
       12,
-      21
+      22
       ]
     }
   ],
@@ -43,7 +43,7 @@
       "version": [
       1,
       12,
-      21
+      22
       ]
     },
     {

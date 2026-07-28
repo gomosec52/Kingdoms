@@ -5,11 +5,5 @@
   },
   "kingdoms:territory_border": {
     "sound": "stone"
-  },
-  "kingdoms:mint_workshop_1": {
-    "sound": "stone"
-  },
-  "kingdoms:mint_workshop_2": {
-    "sound": "stone"
   }
 }
