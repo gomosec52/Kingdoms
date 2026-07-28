@@ -2,18 +2,18 @@
   "format_version": "1.21.0",
   "minecraft:recipe_shapeless": {
     "description": {
-      "identifier": "kingdoms:copper_ingot_to_coins"
+      "identifier": "kingdoms:compact_copper_ingot_to_coins"
     },
     "tags": ["crafting_table"],
     "unlock": [
-      { "item": "minecraft:copper_ingot" }
+      { "item": "5fs_br:compact_copper_ingot" }
     ],
     "ingredients": [
-      { "item": "minecraft:copper_ingot" }
+      { "item": "5fs_br:compact_copper_ingot" }
     ],
     "result": {
       "item": "kingdoms:coin_copper",
-      "count": 9
+      "count": 81
     }
   }
 }
