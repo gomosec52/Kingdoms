@@ -81,8 +81,12 @@ export function bindMintSystem(dependencies) {
     handleMintBreak(event.player, event.block, event);
   });
 
-  deps.system.runInterval(() => tickMintWorkshops(), 20);
-  deps.system.runInterval(() => processPendingMintItemPayouts(), 40);
+  try {
+    deps.system.runInterval(() => tickMintWorkshops(), 20);
+    deps.system.runInterval(() => processPendingMintItemPayouts(), 40);
+  } catch (error) {
+    console.warn(`[Kingdoms] Таймеры чеканного двора: ${error?.message ?? error}`);
+  }
 }
 
 export function ensureMintWorkshops(data) {

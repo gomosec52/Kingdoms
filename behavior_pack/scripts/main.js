@@ -230,74 +230,15 @@ import {
   computeFlagRepairAmount
 } from "./war.js";
 import { bindDiplomacySystem, openCondemnationMenu } from "./diplomacy.js";
+import {
+  bindMintSystem,
+  openMintShopMenu,
+  getMintTaxBonus,
+  formatMintIncomeLine,
+  migrateMintWorkshopRecords,
+  processPendingMintItemPayouts
+} from "./mint.js";
 import { processPendingTradePayouts, processPendingTradeItemReturns } from "./trade.js";
-
-/** @type {import("./mint.js") | null} */
-let mintModule = null;
-/** @type {Promise<import("./mint.js") | null> | null} */
-let mintBindPromise = null;
-
-function migrateMintWorkshopRecords(data) {
-  if (!Array.isArray(data.mintWorkshops)) data.mintWorkshops = [];
-  if (!Array.isArray(data.pendingPlayerItemPayouts)) data.pendingPlayerItemPayouts = [];
-  if (typeof data.nextMintWorkshopIdValue !== "number") {
-    data.nextMintWorkshopIdValue = data.mintWorkshops.reduce((max, entry) => Math.max(max, entry.id || 0), 0) + 1;
-  }
-}
-
-function getMintTaxBonusSafe(data, settlement) {
-  return mintModule?.getMintTaxBonus(data, settlement) ?? 0;
-}
-
-function formatMintIncomeLineSafe(data, settlement) {
-  return mintModule?.formatMintIncomeLine(data, settlement) ?? "";
-}
-
-function getMintDependencies() {
-  return {
-    world,
-    system,
-    ActionFormData,
-    loadData,
-    saveData,
-    getSettlement,
-    getPlayerSettlement,
-    getPlayerName,
-    samePlayerName,
-    showFormDeferred,
-    assertSettlementMenuSession,
-    openSettlementMenu,
-    SETTLEMENT_MENU_PAGE,
-    KINGDOMS_MENU_PAGE,
-    kingdomsMenuTitle,
-    canAccessConstruction,
-    hasTerritoryAccess,
-    findSettlementAtLocation,
-    getDimensionId,
-    blockPosition,
-    setBlockToAir,
-    giveItemStack
-  };
-}
-
-function ensureMintSystem() {
-  if (mintModule) return Promise.resolve(mintModule);
-  if (mintBindPromise) return mintBindPromise;
-
-  mintBindPromise = import("./mint.js")
-    .then((mod) => {
-      mod.bindMintSystem(getMintDependencies());
-      mintModule = mod;
-      return mod;
-    })
-    .catch((error) => {
-      console.warn(`[Kingdoms] Чеканный двор не загрузился: ${error?.message ?? error}`);
-      mintBindPromise = null;
-      return null;
-    });
-
-  return mintBindPromise;
-}
 
 bindArmySystem({
   world,
@@ -423,11 +364,34 @@ bindDiplomacySystem({
   scheduleRefreshSettlementBorders
 });
 
-system.runTimeout(() => {
-  ensureMintSystem().catch((error) => {
-    console.warn(`[Kingdoms] Чеканный двор: ${error?.message ?? error}`);
+try {
+  bindMintSystem({
+    world,
+    system,
+    ActionFormData,
+    loadData,
+    saveData,
+    getSettlement,
+    getPlayerSettlement,
+    getPlayerName,
+    samePlayerName,
+    showFormDeferred,
+    assertSettlementMenuSession,
+    openSettlementMenu,
+    SETTLEMENT_MENU_PAGE,
+    KINGDOMS_MENU_PAGE,
+    kingdomsMenuTitle,
+    canAccessConstruction,
+    hasTerritoryAccess,
+    findSettlementAtLocation,
+    getDimensionId,
+    blockPosition,
+    setBlockToAir,
+    giveItemStack
   });
-}, 1);
+} catch (error) {
+  console.warn(`[Kingdoms] Чеканный двор не привязан: ${error?.message ?? error}`);
+}
 
 world.beforeEvents?.worldInitialize?.subscribe((event) => {
   registerDynamicProperties(event.propertyRegistry);
@@ -462,11 +426,11 @@ world.afterEvents.playerSpawn?.subscribe((event) => {
     updatePlayerPrefixDisplays();
     notifyPlayerAboutPrefixes(player);
     notifyPlayerAboutAddon(player);
-    ensureMintSystem()
-      .then((mod) => mod?.processPendingMintItemPayouts())
-      .catch((error) => {
-        console.warn(`[Kingdoms] Выплаты чеканного двора: ${error?.message ?? error}`);
-      });
+    try {
+      processPendingMintItemPayouts();
+    } catch (error) {
+      console.warn(`[Kingdoms] Выплаты чеканного двора: ${error?.message ?? error}`);
+    }
   });
 });
 
@@ -1047,7 +1011,7 @@ function removeOrphanFlagsAt(territoryCenter, dimensionId) {
 
 function formatExtraPageBody(settlement) {
   const data = loadData();
-  const mintLine = formatMintIncomeLineSafe(data, settlement);
+  const mintLine = formatMintIncomeLine(data, settlement);
   return [
     formatArmyPowerLine(settlement),
     "",
@@ -1269,16 +1233,7 @@ async function openSettlementMenu(player, settlementId, page = SETTLEMENT_MENU_P
   if (page === SETTLEMENT_MENU_PAGE.EXTRA) {
     if (selection === 0) return deferMenu(player, () => openArmyMenu(player, settlementId, sessionToken));
     if (selection === 1) return deferMenu(player, () => openTradeHub(player, settlementId, sessionToken));
-    if (selection === 2) {
-      return deferMenu(player, async () => {
-        const mod = await ensureMintSystem();
-        if (!mod) {
-          player.sendMessage("§cЧеканный двор временно недоступен.");
-          return openSettlementMenu(player, settlementId, SETTLEMENT_MENU_PAGE.EXTRA, false, sessionToken);
-        }
-        return mod.openMintShopMenu(player, settlementId, sessionToken);
-      });
-    }
+    if (selection === 2) return deferMenu(player, () => openMintShopMenu(player, settlementId, sessionToken));
     if (selection === 3) {
       return openSettlementMenu(player, settlementId, SETTLEMENT_MENU_PAGE.MAIN, false, sessionToken);
     }
@@ -2307,7 +2262,7 @@ function getExtraIncomeBonus(settlement) {
     const def = BUILDINGS[placed.type];
     if (def) total += Number(def.taxBonus || 0);
   }
-  total += getMintTaxBonusSafe(data, settlement);
+  total += getMintTaxBonus(data, settlement);
   return total;
 }
 
@@ -2320,7 +2275,7 @@ function formatExtraIncomeLine(settlement) {
     if (!def) continue;
     parts.push(`${def.name} (+${def.taxBonus})`);
   }
-  const mintLine = formatMintIncomeLineSafe(data, settlement);
+  const mintLine = formatMintIncomeLine(data, settlement);
   if (mintLine) parts.push(mintLine);
   if (!parts.length) return "Доп заработок: нет";
   return `Доп заработок: ${parts.join(", ")}`;
@@ -2999,7 +2954,7 @@ function notifyPlayerAboutAddon(player) {
   if (loadedNoticeShown.has(playerName)) return;
   loadedNoticeShown.add(playerName);
 
-  player.sendMessage("§6[KW Build] §fv1.12.24 §7— флаг + чеканный двор (изолированная загрузка)");
+  player.sendMessage("§6[KW Build] §fv1.12.25 §7— флаг + чеканный двор");
   player.sendMessage(`§7Флаг — сущность. Кликните предметом по блоку. Нужно ${formatCopperValue(CREATION_COST)}.`);
 }
 
