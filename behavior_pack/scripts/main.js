@@ -230,6 +230,14 @@ import {
   computeFlagRepairAmount
 } from "./war.js";
 import { bindDiplomacySystem, openCondemnationMenu } from "./diplomacy.js";
+import {
+  bindMintSystem,
+  openMintShopMenu,
+  getMintTaxBonus,
+  formatMintIncomeLine,
+  migrateMintWorkshopRecords,
+  processPendingMintItemPayouts
+} from "./mint.js";
 import { processPendingTradePayouts, processPendingTradeItemReturns } from "./trade.js";
 
 bindArmySystem({
@@ -356,6 +364,31 @@ bindDiplomacySystem({
   scheduleRefreshSettlementBorders
 });
 
+bindMintSystem({
+  world,
+  system,
+  ActionFormData,
+  loadData,
+  saveData,
+  getSettlement,
+  getPlayerSettlement,
+  getPlayerName,
+  samePlayerName,
+  showFormDeferred,
+  assertSettlementMenuSession,
+  openSettlementMenu,
+  SETTLEMENT_MENU_PAGE,
+  KINGDOMS_MENU_PAGE,
+  kingdomsMenuTitle,
+  canAccessConstruction,
+  hasTerritoryAccess,
+  findSettlementAtLocation,
+  getDimensionId,
+  blockPosition,
+  setBlockToAir,
+  giveItemStack
+});
+
 world.beforeEvents?.worldInitialize?.subscribe((event) => {
   registerDynamicProperties(event.propertyRegistry);
 });
@@ -389,6 +422,7 @@ world.afterEvents.playerSpawn?.subscribe((event) => {
     updatePlayerPrefixDisplays();
     notifyPlayerAboutPrefixes(player);
     notifyPlayerAboutAddon(player);
+    processPendingMintItemPayouts();
   });
 });
 
@@ -968,13 +1002,17 @@ function removeOrphanFlagsAt(territoryCenter, dimensionId) {
 }
 
 function formatExtraPageBody(settlement) {
+  const data = loadData();
+  const mintLine = formatMintIncomeLine(data, settlement);
   return [
     formatArmyPowerLine(settlement),
     "",
     "Дополнительные разделы:",
     "• Армия — рыцари и приказы",
-    "• Торговля — сделки между поселениями"
-  ].join("\n");
+    "• Торговля — сделки между поселениями",
+    "• Чеканный двор — переплавка слитков в монеты",
+    mintLine ? `• Установлено: ${mintLine}` : ""
+  ].filter(Boolean).join("\n");
 }
 
 function getTerritoryPlacementWarning(data, center, dimensionId) {
@@ -1160,6 +1198,7 @@ async function openSettlementMenu(player, settlementId, page = SETTLEMENT_MENU_P
     form
       .button("Армия", "textures/ui/kingdoms/icon_war")
       .button("Торговля", "textures/ui/kingdoms/icon_tax")
+      .button("Чеканный двор", "textures/ui/kingdoms/icon_build")
       .button("Назад", "textures/ui/kingdoms/icon_disband");
   } else {
     form
@@ -1186,7 +1225,8 @@ async function openSettlementMenu(player, settlementId, page = SETTLEMENT_MENU_P
   if (page === SETTLEMENT_MENU_PAGE.EXTRA) {
     if (selection === 0) return deferMenu(player, () => openArmyMenu(player, settlementId, sessionToken));
     if (selection === 1) return deferMenu(player, () => openTradeHub(player, settlementId, sessionToken));
-    if (selection === 2) {
+    if (selection === 2) return deferMenu(player, () => openMintShopMenu(player, settlementId, sessionToken));
+    if (selection === 3) {
       return openSettlementMenu(player, settlementId, SETTLEMENT_MENU_PAGE.MAIN, false, sessionToken);
     }
     return undefined;
@@ -2208,24 +2248,27 @@ function countBuildingsOfType(settlement, buildingId) {
 }
 
 function getExtraIncomeBonus(settlement) {
+  const data = loadData();
   let total = 0;
   for (const placed of settlement.buildings || []) {
     const def = BUILDINGS[placed.type];
     if (def) total += Number(def.taxBonus || 0);
   }
+  total += getMintTaxBonus(data, settlement);
   return total;
 }
 
 function formatExtraIncomeLine(settlement) {
+  const data = loadData();
   const buildings = settlement.buildings || [];
-  if (!buildings.length) return "Доп заработок: нет";
-
   const parts = [];
   for (const placed of buildings) {
     const def = BUILDINGS[placed.type];
     if (!def) continue;
     parts.push(`${def.name} (+${def.taxBonus})`);
   }
+  const mintLine = formatMintIncomeLine(data, settlement);
+  if (mintLine) parts.push(mintLine);
   if (!parts.length) return "Доп заработок: нет";
   return `Доп заработок: ${parts.join(", ")}`;
 }
@@ -2903,7 +2946,7 @@ function notifyPlayerAboutAddon(player) {
   if (loadedNoticeShown.has(playerName)) return;
   loadedNoticeShown.add(playerName);
 
-  player.sendMessage("§6[KW Build] §fv1.12.19 §7— восстановлено ядро v1.12.17");
+  player.sendMessage("§6[KW Build] §fv1.12.20 §7— ядро v1.12.17 + чеканный двор");
   player.sendMessage(`§7Флаг — сущность. Кликните предметом по блоку. Нужно ${formatCopperValue(CREATION_COST)}.`);
 }
 
@@ -2961,6 +3004,7 @@ function loadData() {
     ensureWarCampaigns(data);
     if (typeof data.nextWarCampaignIdValue !== "number") data.nextWarCampaignIdValue = 1;
     if (!Array.isArray(data.condemnations)) data.condemnations = [];
+    migrateMintWorkshopRecords(data);
     for (const zone of data.lootZones) {
       if (!Array.isArray(zone.winnerSettlementIds) || !zone.winnerSettlementIds.length) {
         zone.winnerSettlementIds = zone.winnerSettlementId ? [zone.winnerSettlementId] : [];
@@ -2993,10 +3037,13 @@ function emptyData() {
     spawnGuards: [],
     warCampaigns: [],
     condemnations: [],
+    mintWorkshops: [],
+    pendingPlayerItemPayouts: [],
     nextSettlementIdValue: 1,
     nextAllianceIdValue: 1,
     nextSpawnGuardIdValue: 1,
-    nextWarCampaignIdValue: 1
+    nextWarCampaignIdValue: 1,
+    nextMintWorkshopIdValue: 1
   };
 }
 
