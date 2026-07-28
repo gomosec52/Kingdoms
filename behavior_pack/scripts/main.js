@@ -193,7 +193,7 @@ const activeFlagPlacements = new Set();
 let directChatPrefixAvailable = false;
 let dynamicPropertiesRegistered = false;
 
-import { bindFlagSystem, setFlagPlacementHandler, setWildFlagSpawnHandler } from "./flag.js";
+import { bindFlagSystem, setFlagPlacementHandler, setWildFlagSpawnHandler, findRecentFlagPlacer } from "./flag.js";
 import { bindChunkCaptureSystem, cleanupChunkMarkersForSettlement } from "./chunk_flag.js";
 import { bindTerritoryBorderSystem, clearSettlementBorders, refreshSettlementBorders, scheduleRefreshAllSettlementBorders, scheduleRefreshSettlementBorders } from "./territory_border.js";
 import {
@@ -321,6 +321,12 @@ bindSpawnGuardSystem({
 bindFlagSystem(world);
 setFlagPlacementHandler(beginSettlementCreationFromItem);
 setWildFlagSpawnHandler(handleWildFlagEntitySpawn);
+
+world.afterEvents?.worldLoad?.subscribe(() => {
+  system.run(() => {
+    world.sendMessage("§6[KW Build] §fv1.13.5 §7— аддон загружен");
+  });
+});
 bindChunkCaptureSystem(world, {
   loadData,
   saveData,
@@ -551,7 +557,9 @@ function handleFlagInteraction(player, flagSource) {
       : findSettlementByFlag(data, flagSource);
     if (!settlement) {
       if (flagSource.typeId === FLAG_ENTITY && flagSource.isValid && !isRegisteredFlagEntity(flagSource)) {
-        handleWildFlagEntitySpawn(flagSource, player);
+        handleWildFlagEntitySpawn(flagSource, player).catch((error) => {
+          player.sendMessage(`§c[Королевства] Ошибка меню флага: ${error?.message ?? error}`);
+        });
         return;
       }
       player.sendMessage("§cЭтот флаг не привязан к поселению. Уберите его и поставьте заново.");
@@ -801,14 +809,22 @@ async function handleWildFlagEntitySpawn(entity, knownPlayer) {
   const territoryCenter = blockPosition(entity.location);
   const dimensionId = getDimensionId(entity.dimension);
   const placementKey = placementLockKey(dimensionId, territoryCenter);
-  if (activeFlagPlacements.has(placementKey)) {
-    removeDuplicateFlagEntity(entity, territoryCenter, dimensionId);
+
+  const player = knownPlayer ?? findRecentFlagPlacer() ?? findNearestPlayer(entity, 24);
+  if (!player) {
+    entity.addTag(PENDING_SETUP_TAG);
     return;
   }
 
-  const player = knownPlayer ?? findNearestPlayer(entity, 12);
-  if (!player) {
-    entity.addTag(PENDING_SETUP_TAG);
+  if (activeFlagPlacements.has(placementKey)) {
+    if (knownPlayer) {
+      await runSettlementCreationFlow(player, {
+        territoryCenter,
+        dimensionId,
+        flagEntity: entity,
+        flagItemConsumed: true
+      });
+    }
     return;
   }
 
@@ -820,7 +836,7 @@ async function handleWildFlagEntitySpawn(entity, knownPlayer) {
   }
 
   if (!lockPlacement(placementKey)) {
-    removeDuplicateFlagEntity(entity, territoryCenter, dimensionId);
+    system.runTimeout(() => handleWildFlagEntitySpawn(entity, player), 5);
     return;
   }
 
@@ -828,14 +844,21 @@ async function handleWildFlagEntitySpawn(entity, knownPlayer) {
   system.runTimeout(() => activeFlagPlacements.delete(placementKey), 40);
 
   if (!entity.hasTag(PENDING_SETUP_TAG)) entity.addTag(PENDING_SETUP_TAG);
-  player.sendMessage("§aФлаг-сущность появилась. Открываю меню создания поселения...");
+  player.sendMessage("§a[Королевства] Открываю меню создания поселения...");
 
-  await runSettlementCreationFlow(player, {
-    territoryCenter,
-    dimensionId,
-    flagEntity: entity,
-    flagItemConsumed: true
-  });
+  try {
+    await runSettlementCreationFlow(player, {
+      territoryCenter,
+      dimensionId,
+      flagEntity: entity,
+      flagItemConsumed: true
+    });
+  } catch (error) {
+    player.sendMessage(`§c[Королевства] Ошибка создания поселения: ${error?.message ?? error}`);
+    cleanupFailedPlacement(player, entity, true);
+  } finally {
+    activeFlagPlacements.delete(placementKey);
+  }
 }
 
 async function runSettlementCreationFlow(player, context) {
@@ -2951,7 +2974,7 @@ function notifyPlayerAboutAddon(player) {
   if (loadedNoticeShown.has(playerName)) return;
   loadedNoticeShown.add(playerName);
 
-  player.sendMessage("§6[KW Build] §fv1.13.4");
+  player.sendMessage("§6[KW Build] §fv1.13.5 §7— скрипт активен");
   player.sendMessage(`§7Флаг — сущность. Кликните предметом по блоку. Нужно ${formatCopperValue(CREATION_COST)}.`);
 }
 
