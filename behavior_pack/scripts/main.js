@@ -1007,6 +1007,29 @@ const MINT_SHOP_TIERS = {
   }
 };
 
+function formatMintCost(def) {
+  return (def.cost || [])
+    .map((entry) => `${entry.amount} ${entry.label}`)
+    .join(", ");
+}
+
+function formatMintShopBody() {
+  const tier1 = MINT_SHOP_TIERS[1];
+  const tier2 = MINT_SHOP_TIERS[2];
+  return [
+    "§6Чеканный двор§r",
+    "Купите блок и поставьте на своей территории.",
+    "",
+    `§e${tier1.name}§r`,
+    `Нужен тип: ${SETTLEMENT_TYPE_NAMES[tier1.minTypeIndex]} или выше`,
+    `Стоимость: ${formatMintCost(tier1)}`,
+    "",
+    `§e${tier2.name}§r`,
+    `Нужен тип: ${SETTLEMENT_TYPE_NAMES[tier2.minTypeIndex]} или выше`,
+    `Стоимость: ${formatMintCost(tier2)}`
+  ].join("\n");
+}
+
 async function openMintShopMenu(player, settlementId, sessionToken) {
   if (!assertSettlementMenuSession(player, settlementId, sessionToken)) return;
   const data = loadData();
@@ -1019,13 +1042,7 @@ async function openMintShopMenu(player, settlementId, sessionToken) {
 
   const form = new ActionFormData()
     .title(kingdomsMenuTitle(KINGDOMS_MENU_PAGE.MINT))
-    .body([
-      "§6Чеканный двор§r",
-      "Купите блок и поставьте на своей территории.",
-      "",
-      "§eДвор I§r — деревня+, 28 серебра + материалы",
-      "§eДвор II§r — городок+, 55 серебра + материалы"
-    ].join("\n"))
+    .body(formatMintShopBody())
     .button("Купить двор I", "textures/ui/kingdoms/icon_tax")
     .button("Купить двор II", "textures/ui/kingdoms/icon_tax")
     .button("Назад", "textures/ui/kingdoms/icon_disband");
@@ -2995,7 +3012,7 @@ function notifyPlayerAboutAddon(player) {
   if (loadedNoticeShown.has(playerName)) return;
   loadedNoticeShown.add(playerName);
 
-  player.sendMessage("§6[KW Build] §fv1.12.26 §7— флаг + покупка чеканного двора");
+  player.sendMessage("§6[KW Build] §fv1.12.27 §7— флаг + покупка чеканного двора");
   player.sendMessage(`§7Флаг — сущность. Кликните предметом по блоку. Нужно ${formatCopperValue(CREATION_COST)}.`);
 }
 
