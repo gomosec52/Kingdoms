@@ -230,14 +230,6 @@ import {
   computeFlagRepairAmount
 } from "./war.js";
 import { bindDiplomacySystem, openCondemnationMenu } from "./diplomacy.js";
-import {
-  bindMintSystem,
-  openMintShopMenu,
-  getMintTaxBonus,
-  formatMintIncomeLine,
-  migrateMintWorkshopRecords,
-  processPendingMintItemPayouts
-} from "./mint.js";
 import { processPendingTradePayouts, processPendingTradeItemReturns } from "./trade.js";
 
 bindArmySystem({
@@ -364,35 +356,6 @@ bindDiplomacySystem({
   scheduleRefreshSettlementBorders
 });
 
-try {
-  bindMintSystem({
-    world,
-    system,
-    ActionFormData,
-    loadData,
-    saveData,
-    getSettlement,
-    getPlayerSettlement,
-    getPlayerName,
-    samePlayerName,
-    showFormDeferred,
-    assertSettlementMenuSession,
-    openSettlementMenu,
-    SETTLEMENT_MENU_PAGE,
-    KINGDOMS_MENU_PAGE,
-    kingdomsMenuTitle,
-    canAccessConstruction,
-    hasTerritoryAccess,
-    findSettlementAtLocation,
-    getDimensionId,
-    blockPosition,
-    setBlockToAir,
-    giveItemStack
-  });
-} catch (error) {
-  console.warn(`[Kingdoms] Чеканный двор не привязан: ${error?.message ?? error}`);
-}
-
 world.beforeEvents?.worldInitialize?.subscribe((event) => {
   registerDynamicProperties(event.propertyRegistry);
 });
@@ -426,11 +389,6 @@ world.afterEvents.playerSpawn?.subscribe((event) => {
     updatePlayerPrefixDisplays();
     notifyPlayerAboutPrefixes(player);
     notifyPlayerAboutAddon(player);
-    try {
-      processPendingMintItemPayouts();
-    } catch (error) {
-      console.warn(`[Kingdoms] Выплаты чеканного двора: ${error?.message ?? error}`);
-    }
   });
 });
 
@@ -1010,17 +968,103 @@ function removeOrphanFlagsAt(territoryCenter, dimensionId) {
 }
 
 function formatExtraPageBody(settlement) {
-  const data = loadData();
-  const mintLine = formatMintIncomeLine(data, settlement);
   return [
     formatArmyPowerLine(settlement),
     "",
     "Дополнительные разделы:",
     "• Армия — рыцари и приказы",
     "• Торговля — сделки между поселениями",
-    "• Чеканный двор — переплавка слитков в монеты",
-    mintLine ? `• Установлено: ${mintLine}` : ""
-  ].filter(Boolean).join("\n");
+    "• Чеканный двор — покупка блока для поселения"
+  ].join("\n");
+}
+
+const MINT_BLOCK_T1 = "kingdoms:mint_workshop_1";
+const MINT_BLOCK_T2 = "kingdoms:mint_workshop_2";
+
+const MINT_SHOP_TIERS = {
+  1: {
+    name: "Чеканный двор I",
+    blockId: MINT_BLOCK_T1,
+    minTypeIndex: 1,
+    cost: [
+      { itemId: "kingdoms:coin_silver", amount: 28, label: "серебряные монеты" },
+      { itemId: "minecraft:iron_ingot", amount: 12, label: "железные слитки" },
+      { itemId: "minecraft:stone", amount: 24, label: "камень" },
+      { itemId: "minecraft:anvil", amount: 1, label: "наковальня" }
+    ]
+  },
+  2: {
+    name: "Чеканный двор II",
+    blockId: MINT_BLOCK_T2,
+    minTypeIndex: 3,
+    cost: [
+      { itemId: "kingdoms:coin_silver", amount: 55, label: "серебряные монеты" },
+      { itemId: "kingdoms:coin_gold", amount: 2, label: "золотые монеты" },
+      { itemId: "minecraft:gold_ingot", amount: 8, label: "золотые слитки" },
+      { itemId: "minecraft:stone_bricks", amount: 32, label: "каменные кирпичи" },
+      { itemId: "minecraft:anvil", amount: 1, label: "наковальня" }
+    ]
+  }
+};
+
+async function openMintShopMenu(player, settlementId, sessionToken) {
+  if (!assertSettlementMenuSession(player, settlementId, sessionToken)) return;
+  const data = loadData();
+  const settlement = getSettlement(data, settlementId);
+  const playerName = getPlayerName(player);
+  if (!settlement || !canAccessConstruction(data, playerName, settlement)) {
+    player.sendMessage("§cЧеканный двор покупают создатель, Ремесленник, Рыцарь, Дворянин и Советник.");
+    return openSettlementMenu(player, settlementId, SETTLEMENT_MENU_PAGE.EXTRA, false, sessionToken);
+  }
+
+  const form = new ActionFormData()
+    .title(kingdomsMenuTitle(KINGDOMS_MENU_PAGE.MINT))
+    .body([
+      "§6Чеканный двор§r",
+      "Купите блок и поставьте на своей территории.",
+      "",
+      "§eДвор I§r — деревня+, 28 серебра + материалы",
+      "§eДвор II§r — городок+, 55 серебра + материалы"
+    ].join("\n"))
+    .button("Купить двор I", "textures/ui/kingdoms/icon_tax")
+    .button("Купить двор II", "textures/ui/kingdoms/icon_tax")
+    .button("Назад", "textures/ui/kingdoms/icon_disband");
+
+  const response = await showFormDeferred(player, form);
+  if (response.canceled || response.selection === 2) {
+    return openSettlementMenu(player, settlementId, SETTLEMENT_MENU_PAGE.EXTRA, false, sessionToken);
+  }
+
+  const tier = response.selection === 0 ? 1 : 2;
+  return purchaseMintBlock(player, settlementId, sessionToken, tier);
+}
+
+async function purchaseMintBlock(player, settlementId, sessionToken, tier) {
+  const def = MINT_SHOP_TIERS[tier];
+  if (!def) return openMintShopMenu(player, settlementId, sessionToken);
+
+  const data = loadData();
+  const settlement = getSettlement(data, settlementId);
+  if (!settlement) return;
+
+  if (settlement.typeIndex < def.minTypeIndex) {
+    player.sendMessage(`§c${def.name} доступен с типа «${SETTLEMENT_TYPE_NAMES[def.minTypeIndex]}».`);
+    return openMintShopMenu(player, settlementId, sessionToken);
+  }
+
+  if (countInventoryItem(player, def.blockId) > 0) {
+    player.sendMessage(`§cУ вас уже есть ${def.name} в инвентаре.`);
+    return openMintShopMenu(player, settlementId, sessionToken);
+  }
+
+  if (reportCostShortage(player, def.cost) || !takeMixedCost(player, def.cost)) {
+    player.sendMessage("§cНе хватает ресурсов для покупки.");
+    return openMintShopMenu(player, settlementId, sessionToken);
+  }
+
+  giveItemStack(player, new ItemStack(def.blockId, 1));
+  player.sendMessage(`§a${def.name} куплен. Поставьте блок на территории поселения.`);
+  return openMintShopMenu(player, settlementId, sessionToken);
 }
 
 function getTerritoryPlacementWarning(data, center, dimensionId) {
@@ -2256,27 +2300,24 @@ function countBuildingsOfType(settlement, buildingId) {
 }
 
 function getExtraIncomeBonus(settlement) {
-  const data = loadData();
   let total = 0;
   for (const placed of settlement.buildings || []) {
     const def = BUILDINGS[placed.type];
     if (def) total += Number(def.taxBonus || 0);
   }
-  total += getMintTaxBonus(data, settlement);
   return total;
 }
 
 function formatExtraIncomeLine(settlement) {
-  const data = loadData();
   const buildings = settlement.buildings || [];
+  if (!buildings.length) return "Доп заработок: нет";
+
   const parts = [];
   for (const placed of buildings) {
     const def = BUILDINGS[placed.type];
     if (!def) continue;
     parts.push(`${def.name} (+${def.taxBonus})`);
   }
-  const mintLine = formatMintIncomeLine(data, settlement);
-  if (mintLine) parts.push(mintLine);
   if (!parts.length) return "Доп заработок: нет";
   return `Доп заработок: ${parts.join(", ")}`;
 }
@@ -2954,7 +2995,7 @@ function notifyPlayerAboutAddon(player) {
   if (loadedNoticeShown.has(playerName)) return;
   loadedNoticeShown.add(playerName);
 
-  player.sendMessage("§6[KW Build] §fv1.12.25 §7— флаг + чеканный двор");
+  player.sendMessage("§6[KW Build] §fv1.12.26 §7— флаг + покупка чеканного двора");
   player.sendMessage(`§7Флаг — сущность. Кликните предметом по блоку. Нужно ${formatCopperValue(CREATION_COST)}.`);
 }
 
@@ -3012,7 +3053,6 @@ function loadData() {
     ensureWarCampaigns(data);
     if (typeof data.nextWarCampaignIdValue !== "number") data.nextWarCampaignIdValue = 1;
     if (!Array.isArray(data.condemnations)) data.condemnations = [];
-    migrateMintWorkshopRecords(data);
     for (const zone of data.lootZones) {
       if (!Array.isArray(zone.winnerSettlementIds) || !zone.winnerSettlementIds.length) {
         zone.winnerSettlementIds = zone.winnerSettlementId ? [zone.winnerSettlementId] : [];
@@ -3045,13 +3085,10 @@ function emptyData() {
     spawnGuards: [],
     warCampaigns: [],
     condemnations: [],
-    mintWorkshops: [],
-    pendingPlayerItemPayouts: [],
     nextSettlementIdValue: 1,
     nextAllianceIdValue: 1,
     nextSpawnGuardIdValue: 1,
-    nextWarCampaignIdValue: 1,
-    nextMintWorkshopIdValue: 1
+    nextWarCampaignIdValue: 1
   };
 }
 
