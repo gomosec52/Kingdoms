@@ -19,11 +19,9 @@ const CREATOR_PREFIXES = [
   "Посадник",
   "Бургомистр",
   "Кастелян",
-  "Королевство",
+  "Король",
   "Император"
 ];
-
-let chatHookInstalled = false;
 
 installChatHook();
 
@@ -57,9 +55,8 @@ function installChatHook() {
         }
       });
     });
-    chatHookInstalled = true;
   } catch (_error) {
-    chatHookInstalled = false;
+    // Silent — KW Build shows startup status.
   }
 }
 
