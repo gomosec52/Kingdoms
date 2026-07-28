@@ -2,12 +2,12 @@
   "format_version": 2,
   "header": {
     "name": "KW Build Resources",
-    "description": "v1.12.23 — stable core + mint (no JSON components)",
+    "description": "v1.12.24 — stable flag core + lazy-loaded mint",
     "uuid": "0319ea31-7410-4887-be2d-2d52676a4a6d",
     "version": [
       1,
       12,
-      23
+      24
     ],
     "min_engine_version": [
       1,
@@ -21,8 +21,8 @@
       "uuid": "c0ec327f-dd03-4e53-8b0f-7a0008b0946a",
       "version": [
         1,
-        13,
-        0
+        12,
+        24
       ]
     }
   ]

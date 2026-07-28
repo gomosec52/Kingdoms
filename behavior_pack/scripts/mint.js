@@ -71,12 +71,12 @@ export function bindMintSystem(dependencies) {
     });
   });
 
-  deps.world.afterEvents.playerPlaceBlock?.subscribe((event) => {
+  deps.world.afterEvents?.playerPlaceBlock?.subscribe((event) => {
     if (event.block.typeId !== MINT_BLOCK_T1 && event.block.typeId !== MINT_BLOCK_T2) return;
     registerMintWorkshop(event.player, event.block);
   });
 
-  deps.world.beforeEvents.playerBreakBlock?.subscribe((event) => {
+  deps.world.beforeEvents?.playerBreakBlock?.subscribe((event) => {
     if (event.block.typeId !== MINT_BLOCK_T1 && event.block.typeId !== MINT_BLOCK_T2) return;
     handleMintBreak(event.player, event.block, event);
   });
