@@ -1,5 +1,5 @@
 import {
-  CustomCommandPermissionLevel,
+  CommandPermissionLevel,
   CustomCommandStatus,
   system
 } from "@minecraft/server";
@@ -110,7 +110,7 @@ function formatExchangeBody(player) {
     "",
     `§7Итого: §f${formatCopperValue(copper + silver * COIN_EXCHANGE + gold * COIN_EXCHANGE * COIN_EXCHANGE)}`,
     "",
-    "§8Команда: /kingdoms:con"
+    "§8Команда: /con или /kingdoms:con"
   ].join("\n");
 }
 
@@ -164,32 +164,52 @@ export async function openCoinExchangeMenu(player) {
 
 function registerConCommand(initEvent) {
   const registry = initEvent.customCommandRegistry;
-  if (!registry?.registerCommand) return;
+  if (!registry?.registerCommand) return false;
 
-  registry.registerCommand(
-    {
-      name: "kingdoms:con",
-      description: "Меню обмена монет",
-      permissionLevel: CustomCommandPermissionLevel.Any,
-      cheatsRequired: false
-    },
-    (origin) => {
-      const player = origin.sourceEntity;
-      if (!player?.isValid || player.typeId !== "minecraft:player") {
-        return {
-          status: CustomCommandStatus.Failure,
-          message: "Команда только для игроков"
-        };
+  try {
+    registry.registerCommand(
+      {
+        name: "kingdoms:con",
+        description: "Меню обмена монет",
+        permissionLevel: CommandPermissionLevel.Any,
+        cheatsRequired: false
+      },
+      (origin) => {
+        const player = origin.initiator ?? origin.sourceEntity;
+        if (!player?.isValid || player.typeId !== "minecraft:player") {
+          return {
+            status: CustomCommandStatus.Failure,
+            message: "Команда только для игроков"
+          };
+        }
+        system.run(() => openCoinExchangeMenu(player));
+        return { status: CustomCommandStatus.Success };
       }
-      system.run(() => openCoinExchangeMenu(player));
-      return { status: CustomCommandStatus.Success };
+    );
+    return true;
+  } catch (_error) {
+    return false;
+  }
+}
+
+function bindChatFallback(world) {
+  world.beforeEvents?.chatSend?.subscribe((event) => {
+    const text = event.message.trim().toLowerCase();
+    if (text === "/con" || text === ".con" || text === "con") {
+      event.cancel = true;
+      system.run(() => openCoinExchangeMenu(event.sender));
     }
-  );
+  });
 }
 
 export function bindCoinExchangeSystem(bindDeps) {
   deps = bindDeps;
-  bindDeps.system.beforeEvents.startup.subscribe(registerConCommand);
+
+  bindDeps.system.beforeEvents.startup.subscribe((initEvent) => {
+    registerConCommand(initEvent);
+  });
+
+  bindChatFallback(bindDeps.world);
 
   bindDeps.system.afterEvents.scriptEventReceive.subscribe((event) => {
     if (event.id !== "kingdoms:open_con") return;

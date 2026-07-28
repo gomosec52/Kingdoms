@@ -316,6 +316,7 @@ bindCraftingFallback(world);
 
 bindCoinExchangeSystem({
   system,
+  world,
   showFormDeferred,
   KINGDOMS_MENU_PAGE
 });

@@ -44,7 +44,7 @@ function tryCraftFlag(player) {
 
 function sendCoinExchangeHint(player) {
   player.sendMessage(
-    `§e[Королевства] Обмен: /kingdoms:con | ПКМ: стак ${COIN_EXCHANGE} → выше | 1 шт. → ${COIN_EXCHANGE} ниже`
+    `§e[Королевства] Обмен: /con | ПКМ: стак ${COIN_EXCHANGE} → выше | 1 шт. → ${COIN_EXCHANGE} ниже`
   );
 }
 
