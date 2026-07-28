@@ -231,7 +231,6 @@ import {
   unlinkDirectWarPair,
   addGlobalWarKillPoint,
   formatGlobalWarKillScore,
-  getGlobalWarKillPoints,
   findWarCampaign,
   findWarCampaignBetween,
   isWarCombatActive,
