@@ -17,8 +17,7 @@
       "minecraft:max_stack_size": 16,
       "minecraft:entity_placer": {
         "entity": "kingdoms:flag"
-      },
-      "kingdoms:flag_placer": {}
+      }
     }
   }
 }

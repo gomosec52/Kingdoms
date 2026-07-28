@@ -9,7 +9,7 @@ let deps;
 export function bindSpawnGuardSystem(dependencies) {
   deps = dependencies;
 
-  deps.system.beforeEvents.startup.subscribe(({ blockComponentRegistry }) => {
+  deps.system.beforeEvents?.startup?.subscribe(({ blockComponentRegistry }) => {
     blockComponentRegistry.registerCustomComponent("kingdoms:spawn_guard_interact", {
       onPlayerInteract(event) {
         if (!event.player) return;

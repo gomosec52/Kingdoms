@@ -100,14 +100,9 @@ import {
   stripColorCodes
 } from "./ui.js";
 
-import {
-  loadWorldData,
-  saveWorldData,
-  registerStorageProperties,
-  LEGACY_STORE_KEY
-} from "./storage.js";
-
 const { BlockPermutation, EquipmentSlot, ItemStack, system, world } = server;
+const STORE_KEY = "kingdoms:data:v1";
+const STORE_LIMIT = 32767;
 const CREATION_COST = CREATION_COST_COPPER;
 const DAY_TICKS = 24000;
 const TAX_COOLDOWN_TICKS = 25 * 60 * 20;
@@ -193,7 +188,7 @@ const activeFlagPlacements = new Set();
 let directChatPrefixAvailable = false;
 let dynamicPropertiesRegistered = false;
 
-import { bindFlagSystem, setFlagPlacementHandler, setWildFlagSpawnHandler, findRecentFlagPlacer } from "./flag.js";
+import { bindFlagSystem, setFlagPlacementHandler, setWildFlagSpawnHandler } from "./flag.js";
 import { bindChunkCaptureSystem, cleanupChunkMarkersForSettlement } from "./chunk_flag.js";
 import { bindTerritoryBorderSystem, clearSettlementBorders, refreshSettlementBorders, scheduleRefreshAllSettlementBorders, scheduleRefreshSettlementBorders } from "./territory_border.js";
 import {
@@ -322,11 +317,6 @@ bindFlagSystem(world);
 setFlagPlacementHandler(beginSettlementCreationFromItem);
 setWildFlagSpawnHandler(handleWildFlagEntitySpawn);
 
-world.afterEvents?.worldLoad?.subscribe(() => {
-  system.run(() => {
-    world.sendMessage("§6[KW Build] §fv1.13.5 §7— аддон загружен");
-  });
-});
 bindChunkCaptureSystem(world, {
   loadData,
   saveData,
@@ -408,8 +398,13 @@ function registerDynamicProperties(registry) {
   const DynamicPropertiesDefinition = server.DynamicPropertiesDefinition;
   if (dynamicPropertiesRegistered || !registry?.registerWorldDynamicProperties || typeof DynamicPropertiesDefinition !== "function") return;
 
-  if (registerStorageProperties(registry, DynamicPropertiesDefinition)) {
+  try {
+    const definition = new DynamicPropertiesDefinition();
+    definition.defineString(STORE_KEY, STORE_LIMIT);
+    registry.registerWorldDynamicProperties(definition);
     dynamicPropertiesRegistered = true;
+  } catch (error) {
+    console.warn(`[Kingdoms] Не удалось зарегистрировать хранилище поселений: ${error}`);
   }
 }
 
@@ -425,10 +420,22 @@ world.afterEvents.playerSpawn?.subscribe((event) => {
 
   playerIdByName.set(getPlayerName(player), player.id);
   system.run(() => {
-    updatePlayerPrefixDisplays();
-    notifyPlayerAboutPrefixes(player);
+    try {
+      updatePlayerPrefixDisplays();
+    } catch (error) {
+      console.warn(`[Kingdoms] Префиксы: ${error?.message ?? error}`);
+    }
+    try {
+      notifyPlayerAboutPrefixes(player);
+    } catch (error) {
+      console.warn(`[Kingdoms] Уведомление о префиксе: ${error?.message ?? error}`);
+    }
     notifyPlayerAboutAddon(player);
-    processPendingMintItemPayouts();
+    try {
+      processPendingMintItemPayouts();
+    } catch (error) {
+      console.warn(`[Kingdoms] Выплаты монетного двора: ${error?.message ?? error}`);
+    }
   });
 });
 
@@ -548,27 +555,21 @@ function handleFlagInteraction(player, flagSource) {
   if (system.currentTick - lastInteractionTick < 10) return;
   flagInteractionCooldown.set(cooldownKey, system.currentTick);
 
-  system.run(() => {
-    if (!player?.isValid) return;
-
-    const data = loadData();
-    const settlement = flagSource.typeId === FLAG_ENTITY
-      ? findSettlementByFlagEntity(data, flagSource)
-      : findSettlementByFlag(data, flagSource);
-    if (!settlement) {
-      if (flagSource.typeId === FLAG_ENTITY && flagSource.isValid && !isRegisteredFlagEntity(flagSource)) {
-        handleWildFlagEntitySpawn(flagSource, player).catch((error) => {
-          player.sendMessage(`§c[Королевства] Ошибка меню флага: ${error?.message ?? error}`);
-        });
-        return;
-      }
-      player.sendMessage("§cЭтот флаг не привязан к поселению. Уберите его и поставьте заново.");
+  const data = loadData();
+  const settlement = flagSource.typeId === FLAG_ENTITY
+    ? findSettlementByFlagEntity(data, flagSource)
+    : findSettlementByFlag(data, flagSource);
+  if (!settlement) {
+    if (flagSource.typeId === FLAG_ENTITY && !isRegisteredFlagEntity(flagSource)) {
+      system.run(() => handleWildFlagEntitySpawn(flagSource, player));
       return;
     }
-
-    const sessionToken = `${player.id}:${settlement.id}:${system.currentTick}`;
-    settlementMenuSessions.set(player.id, { settlementId: settlement.id, token: sessionToken, openedAt: system.currentTick });
-
+    player.sendMessage("§cЭтот флаг не привязан к поселению. Уберите его и поставьте заново.");
+    return;
+  }
+  const sessionToken = `${player.id}:${settlement.id}:${system.currentTick}`;
+  settlementMenuSessions.set(player.id, { settlementId: settlement.id, token: sessionToken, openedAt: system.currentTick });
+  system.run(() => {
     openSettlementMenu(player, settlement.id, SETTLEMENT_MENU_PAGE.MAIN, false, sessionToken).catch((error) => {
       player.sendMessage(`§cНе удалось открыть меню флага: ${error?.message ?? error}`);
     });
@@ -809,22 +810,14 @@ async function handleWildFlagEntitySpawn(entity, knownPlayer) {
   const territoryCenter = blockPosition(entity.location);
   const dimensionId = getDimensionId(entity.dimension);
   const placementKey = placementLockKey(dimensionId, territoryCenter);
-
-  const player = knownPlayer ?? findRecentFlagPlacer() ?? findNearestPlayer(entity, 24);
-  if (!player) {
-    entity.addTag(PENDING_SETUP_TAG);
+  if (activeFlagPlacements.has(placementKey)) {
+    removeDuplicateFlagEntity(entity, territoryCenter, dimensionId);
     return;
   }
 
-  if (activeFlagPlacements.has(placementKey)) {
-    if (knownPlayer) {
-      await runSettlementCreationFlow(player, {
-        territoryCenter,
-        dimensionId,
-        flagEntity: entity,
-        flagItemConsumed: true
-      });
-    }
+  const player = knownPlayer ?? findNearestPlayer(entity, 12);
+  if (!player) {
+    entity.addTag(PENDING_SETUP_TAG);
     return;
   }
 
@@ -836,7 +829,7 @@ async function handleWildFlagEntitySpawn(entity, knownPlayer) {
   }
 
   if (!lockPlacement(placementKey)) {
-    system.runTimeout(() => handleWildFlagEntitySpawn(entity, player), 5);
+    removeDuplicateFlagEntity(entity, territoryCenter, dimensionId);
     return;
   }
 
@@ -846,19 +839,12 @@ async function handleWildFlagEntitySpawn(entity, knownPlayer) {
   if (!entity.hasTag(PENDING_SETUP_TAG)) entity.addTag(PENDING_SETUP_TAG);
   player.sendMessage("§a[Королевства] Открываю меню создания поселения...");
 
-  try {
-    await runSettlementCreationFlow(player, {
-      territoryCenter,
-      dimensionId,
-      flagEntity: entity,
-      flagItemConsumed: true
-    });
-  } catch (error) {
-    player.sendMessage(`§c[Королевства] Ошибка создания поселения: ${error?.message ?? error}`);
-    cleanupFailedPlacement(player, entity, true);
-  } finally {
-    activeFlagPlacements.delete(placementKey);
-  }
+  await runSettlementCreationFlow(player, {
+    territoryCenter,
+    dimensionId,
+    flagEntity: entity,
+    flagItemConsumed: true
+  });
 }
 
 async function runSettlementCreationFlow(player, context) {
@@ -1202,6 +1188,9 @@ function assertSettlementMenuSession(player, settlementId, sessionToken) {
 
 async function openSettlementMenu(player, settlementId, page = SETTLEMENT_MENU_PAGE.MAIN, animate = false, sessionToken) {
   if (!player?.isValid) return;
+  const session = settlementMenuSessions.get(player.id);
+  if (!session || session.settlementId !== settlementId) return;
+  if (sessionToken && session.token !== sessionToken) return;
 
   const data = loadData();
   const settlement = getSettlement(data, settlementId);
@@ -2974,7 +2963,7 @@ function notifyPlayerAboutAddon(player) {
   if (loadedNoticeShown.has(playerName)) return;
   loadedNoticeShown.add(playerName);
 
-  player.sendMessage("§6[KW Build] §fv1.13.5 §7— скрипт активен");
+  player.sendMessage("§6[KW Build] §fv1.13.6 §7— скрипт активен");
   player.sendMessage(`§7Флаг — сущность. Кликните предметом по блоку. Нужно ${formatCopperValue(CREATION_COST)}.`);
 }
 
@@ -3037,20 +3026,11 @@ function normalizeWorldData(data) {
 }
 
 function loadData() {
+  const raw = world.getDynamicProperty(STORE_KEY);
+  if (typeof raw !== "string" || !raw) return emptyData();
+
   try {
-    const loaded = loadWorldData(world);
-    if (!loaded) return emptyData();
-
-    const migrateLegacy = loaded.__legacyMigrationPending === true;
-    if (migrateLegacy) delete loaded.__legacyMigrationPending;
-
-    const data = normalizeWorldData(loaded);
-
-    if (migrateLegacy) {
-      system.run(() => saveData(data));
-    }
-
-    return data;
+    return normalizeWorldData(JSON.parse(raw));
   } catch (error) {
     world.sendMessage(`§c[Королевства] Ошибка чтения данных: ${error}`);
     return emptyData();
@@ -3059,7 +3039,13 @@ function loadData() {
 
 function saveData(data) {
   try {
-    saveWorldData(world, data);
+    data.version = 1;
+    const serialized = JSON.stringify(data);
+    if (serialized.length > STORE_LIMIT) {
+      world.sendMessage("§c[Королевства] Слишком много данных для одного мира. Удалите часть старых поселений или перенесите хранилище в несколько ключей.");
+      return false;
+    }
+    world.setDynamicProperty(STORE_KEY, serialized);
     return true;
   } catch (error) {
     world.sendMessage(`§c[Королевства] Ошибка сохранения: ${error.message ?? error}`);
