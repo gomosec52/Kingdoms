@@ -1,0 +1,23 @@
+{
+  "format_version": "1.20.10",
+  "minecraft:recipe_shapeless": {
+    "description": {
+      "identifier": "kingdoms:silver_roll_from_coins"
+    },
+    "tags": ["crafting_table"],
+    "ingredients": [
+      { "item": "kingdoms:coin_silver" },
+      { "item": "kingdoms:coin_silver" },
+      { "item": "kingdoms:coin_silver" },
+      { "item": "kingdoms:coin_silver" },
+      { "item": "kingdoms:coin_silver" },
+      { "item": "kingdoms:coin_silver" },
+      { "item": "kingdoms:coin_silver" },
+      { "item": "kingdoms:coin_silver" }
+    ],
+    "result": {
+      "item": "kingdoms:coin_roll_silver",
+      "count": 1
+    }
+  }
+}

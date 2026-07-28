@@ -1,0 +1,23 @@
+{
+  "format_version": "1.20.10",
+  "minecraft:recipe_shapeless": {
+    "description": {
+      "identifier": "kingdoms:copper_roll_from_coins"
+    },
+    "tags": ["crafting_table"],
+    "ingredients": [
+      { "item": "kingdoms:coin_copper" },
+      { "item": "kingdoms:coin_copper" },
+      { "item": "kingdoms:coin_copper" },
+      { "item": "kingdoms:coin_copper" },
+      { "item": "kingdoms:coin_copper" },
+      { "item": "kingdoms:coin_copper" },
+      { "item": "kingdoms:coin_copper" },
+      { "item": "kingdoms:coin_copper" }
+    ],
+    "result": {
+      "item": "kingdoms:coin_roll_copper",
+      "count": 1
+    }
+  }
+}

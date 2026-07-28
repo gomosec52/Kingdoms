@@ -1,19 +1,20 @@
 {
-  "format_version": "1.21.0",
-  "minecraft:recipe_shapeless": {
+  "format_version": "1.20.10",
+  "minecraft:recipe_shaped": {
     "description": {
       "identifier": "kingdoms:flag_recipe"
     },
     "tags": ["crafting_table"],
-    "unlock": [
-      { "item": "minecraft:white_wool" },
-      { "item": "kingdoms:coin_copper" }
+    "pattern": [
+      "WCW",
+      "CSC",
+      " W "
     ],
-    "ingredients": [
-      { "item": "minecraft:white_wool", "count": 3 },
-      { "item": "minecraft:stick" },
-      { "item": "kingdoms:coin_copper", "count": 4 }
-    ],
+    "key": {
+      "W": { "item": "minecraft:white_wool" },
+      "S": { "item": "minecraft:stick" },
+      "C": { "item": "kingdoms:coin_copper" }
+    },
     "result": {
       "item": "kingdoms:flag",
       "count": 1

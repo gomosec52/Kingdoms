@@ -1,19 +1,16 @@
 {
-  "format_version": "1.21.0",
+  "format_version": "1.20.10",
   "minecraft:recipe_shapeless": {
     "description": {
       "identifier": "kingdoms:silver_to_copper"
     },
     "tags": ["crafting_table"],
-    "unlock": [
-      { "item": "kingdoms:coin_silver" }
-    ],
     "ingredients": [
       { "item": "kingdoms:coin_silver" }
     ],
     "result": {
-      "item": "kingdoms:coin_copper",
-      "count": 32
+      "item": "kingdoms:coin_roll_copper",
+      "count": 4
     }
   }
 }

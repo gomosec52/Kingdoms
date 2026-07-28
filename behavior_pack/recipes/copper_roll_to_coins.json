@@ -2,15 +2,15 @@
   "format_version": "1.20.10",
   "minecraft:recipe_shapeless": {
     "description": {
-      "identifier": "kingdoms:gold_to_silver"
+      "identifier": "kingdoms:copper_roll_to_coins"
     },
     "tags": ["crafting_table"],
     "ingredients": [
-      { "item": "kingdoms:coin_gold" }
+      { "item": "kingdoms:coin_roll_copper" }
     ],
     "result": {
-      "item": "kingdoms:coin_roll_silver",
-      "count": 4
+      "item": "kingdoms:coin_copper",
+      "count": 8
     }
   }
 }
