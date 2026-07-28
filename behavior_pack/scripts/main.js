@@ -542,21 +542,29 @@ function handleFlagInteraction(player, flagSource) {
   if (system.currentTick - lastInteractionTick < 10) return;
   flagInteractionCooldown.set(cooldownKey, system.currentTick);
 
-  const data = loadData();
-  const settlement = flagSource.typeId === FLAG_ENTITY
-    ? findSettlementByFlagEntity(data, flagSource)
-    : findSettlementByFlag(data, flagSource);
-  if (!settlement) {
-    if (flagSource.typeId === FLAG_ENTITY && !isRegisteredFlagEntity(flagSource)) {
-      system.run(() => handleWildFlagEntitySpawn(flagSource, player));
+  system.run(() => {
+    if (!player?.isValid) return;
+
+    const data = loadData();
+    const settlement = flagSource.typeId === FLAG_ENTITY
+      ? findSettlementByFlagEntity(data, flagSource)
+      : findSettlementByFlag(data, flagSource);
+    if (!settlement) {
+      if (flagSource.typeId === FLAG_ENTITY && flagSource.isValid && !isRegisteredFlagEntity(flagSource)) {
+        handleWildFlagEntitySpawn(flagSource, player);
+        return;
+      }
+      player.sendMessage("§cЭтот флаг не привязан к поселению. Уберите его и поставьте заново.");
       return;
     }
-    player.sendMessage("§cЭтот флаг не привязан к поселению. Уберите его и поставьте заново.");
-    return;
-  }
-  const sessionToken = `${player.id}:${settlement.id}:${system.currentTick}`;
-  settlementMenuSessions.set(player.id, { settlementId: settlement.id, token: sessionToken, openedAt: system.currentTick });
-  system.run(() => openSettlementMenu(player, settlement.id, SETTLEMENT_MENU_PAGE.MAIN, false, sessionToken));
+
+    const sessionToken = `${player.id}:${settlement.id}:${system.currentTick}`;
+    settlementMenuSessions.set(player.id, { settlementId: settlement.id, token: sessionToken, openedAt: system.currentTick });
+
+    openSettlementMenu(player, settlement.id, SETTLEMENT_MENU_PAGE.MAIN, false, sessionToken).catch((error) => {
+      player.sendMessage(`§cНе удалось открыть меню флага: ${error?.message ?? error}`);
+    });
+  });
 }
 
 world.beforeEvents.playerBreakBlock?.subscribe((event) => {
@@ -1171,9 +1179,6 @@ function assertSettlementMenuSession(player, settlementId, sessionToken) {
 
 async function openSettlementMenu(player, settlementId, page = SETTLEMENT_MENU_PAGE.MAIN, animate = false, sessionToken) {
   if (!player?.isValid) return;
-  const session = settlementMenuSessions.get(player.id);
-  if (!session || session.settlementId !== settlementId) return;
-  if (sessionToken && session.token !== sessionToken) return;
 
   const data = loadData();
   const settlement = getSettlement(data, settlementId);
@@ -2946,7 +2951,7 @@ function notifyPlayerAboutAddon(player) {
   if (loadedNoticeShown.has(playerName)) return;
   loadedNoticeShown.add(playerName);
 
-  player.sendMessage("§6[KW Build] §fv1.13.2");
+  player.sendMessage("§6[KW Build] §fv1.13.3");
   player.sendMessage(`§7Флаг — сущность. Кликните предметом по блоку. Нужно ${formatCopperValue(CREATION_COST)}.`);
 }
 

@@ -169,6 +169,8 @@ function saveGlobalWorldData(world, globalPayload) {
 }
 
 export function loadWorldData(world) {
+  const legacyRaw = readProperty(world, LEGACY_STORE_KEY);
+
   const metaRaw = readProperty(world, META_STORE_KEY);
   if (metaRaw) {
     try {
@@ -183,20 +185,22 @@ export function loadWorldData(world) {
         if (Array.isArray(shard)) settlements.push(...shard);
       }
 
-      const global = loadGlobalWorldData(world);
-
-      return {
-        version: DATA_VERSION,
-        ...extractCounters(meta),
-        settlements,
-        ...global
-      };
+      if (settlements.length === 0 && legacyRaw) {
+        console.warn("[Kingdoms] Sharded settlements empty, recovering from legacy storage.");
+      } else {
+        const global = loadGlobalWorldData(world);
+        return {
+          version: DATA_VERSION,
+          ...extractCounters(meta),
+          settlements,
+          ...global
+        };
+      }
     } catch (error) {
       console.warn(`[Kingdoms] Sharded load failed: ${error}`);
     }
   }
 
-  const legacyRaw = readProperty(world, LEGACY_STORE_KEY);
   if (legacyRaw) {
     try {
       const legacy = parseJson(legacyRaw, "legacy");
@@ -243,7 +247,6 @@ export function saveWorldData(world, data) {
     }
   }
 
-  writeProperty(world, META_STORE_KEY, metaSerialized);
   saveGlobalWorldData(world, globalPayload);
 
   for (let index = 0; index < settlementShards.length; index += 1) {
@@ -255,6 +258,8 @@ export function saveWorldData(world, data) {
     writeProperty(world, settlementShardKey(index), undefined);
   }
 
+  // Meta and legacy cleanup happen last so a failed shard write cannot hide data behind an empty meta snapshot.
+  writeProperty(world, META_STORE_KEY, metaSerialized);
   writeProperty(world, LEGACY_STORE_KEY, undefined);
   return {
     settlementShards: settlementShards.length,
