@@ -48,6 +48,7 @@ import {
   chunkOverlapAt,
   getTerritoryChunkCount,
   expandTerritoryOnVictory,
+  loseHalfTerritoryChunks,
   applyUpgradeTerritory,
   previewUpgradeTerritory,
   canCaptureChunk,
@@ -182,6 +183,7 @@ const loadedNoticeShown = new Set();
 const formBusyPlayers = new Set();
 const settlementMenuSessions = new Map();
 const pendingResidentInvites = new Map();
+const pendingAllianceOffers = new Map();
 const activeFlagPlacements = new Set();
 let directChatPrefixAvailable = false;
 let dynamicPropertiesRegistered = false;
@@ -202,6 +204,9 @@ import {
   recordWeakVictoryCooldown,
   SETTLEMENT_TYPE_NAMES,
   FLAG_DAMAGE_COOLDOWN_TICKS,
+  WAR_PREPARATION_TICKS,
+  WAR_EARLY_PEACE_MORALE_PENALTY,
+  MIN_ATTACKERS_ON_TERRITORY_FOR_FLAG_DAMAGE,
   areSettlementsAtWar,
   getAllianceSettlements,
   linkAllianceWar,
@@ -209,8 +214,22 @@ import {
   findWarInitiator,
   allianceHasActiveWars,
   getWarTargetOnlineBlockReason,
-  MIN_TARGET_ONLINE_FOR_WAR
+  MIN_TARGET_ONLINE_FOR_WAR,
+  MIN_ATTACKER_ONLINE_FOR_WAR,
+  createWarCampaign,
+  findWarCampaign,
+  findWarCampaignBetween,
+  isWarCombatActive,
+  getWarPreparationRemaining,
+  markWarFlagDamage,
+  endWarCampaign,
+  shouldPenalizeEarlyPeace,
+  ensureWarCampaigns,
+  getFlagRepairCooldownRemaining,
+  computeFlagRepairCost,
+  computeFlagRepairAmount
 } from "./war.js";
+import { bindDiplomacySystem, openCondemnationMenu } from "./diplomacy.js";
 import { processPendingTradePayouts, processPendingTradeItemReturns } from "./trade.js";
 
 bindArmySystem({
@@ -311,6 +330,32 @@ bindTerritoryBorderSystem(world, {
   getSettlement
 });
 
+bindDiplomacySystem({
+  world,
+  system,
+  ActionFormData,
+  MessageFormData,
+  loadData,
+  saveData,
+  getSettlement,
+  getPlayerName,
+  showFormDeferred,
+  assertSettlementMenuSession,
+  openDiplomacyMenu,
+  openSettlementMenu,
+  SETTLEMENT_MENU_PAGE,
+  KINGDOMS_MENU_PAGE,
+  kingdomsMenuTitle,
+  canAccessDiplomacy,
+  areAllied,
+  settlementDisplayName,
+  settlementType,
+  getMaxHp,
+  creatorPrefixFor,
+  updateFlagLabelFor,
+  scheduleRefreshSettlementBorders
+});
+
 world.beforeEvents?.worldInitialize?.subscribe((event) => {
   registerDynamicProperties(event.propertyRegistry);
 });
@@ -370,20 +415,90 @@ world.afterEvents.playerInteractWithBlock?.subscribe((event) => {
   handleFlagInteraction(event.player, event.block);
 });
 
-function getFlagDamageCooldownRemaining(player, settlementId) {
-  const key = `${player.id}:${settlementId}`;
-  const lastHitTick = flagDamageCooldown.get(key) ?? -FLAG_DAMAGE_COOLDOWN_TICKS;
+function getFlagDamageCooldownRemaining(settlementId) {
+  const lastHitTick = flagDamageCooldown.get(settlementId) ?? -FLAG_DAMAGE_COOLDOWN_TICKS;
   return Math.max(0, lastHitTick + FLAG_DAMAGE_COOLDOWN_TICKS - system.currentTick);
 }
 
-function tryApplyFlagDamage(data, settlement, attackerSettlement, player, flagEntity, rawDamage) {
-  const remaining = getFlagDamageCooldownRemaining(player, settlement.id);
+function countOnlineAllianceMembers(data, settlement) {
+  const names = new Set();
+  for (const memberSettlement of getAllianceSettlements(data, settlement)) {
+    names.add(memberSettlement.creatorName);
+    for (const residentName of Object.keys(memberSettlement.members || {})) names.add(residentName);
+  }
+
+  let count = 0;
+  for (const player of world.getPlayers()) {
+    const playerName = getPlayerName(player);
+    for (const memberName of names) {
+      if (samePlayerName(memberName, playerName)) {
+        count += 1;
+        break;
+      }
+    }
+  }
+  return count;
+}
+
+function countEnemyAttackersOnTerritory(data, defenderSettlement) {
+  let count = 0;
+  for (const player of world.getPlayers()) {
+    if (getDimensionId(player.dimension) !== defenderSettlement.dimensionId) continue;
+    const territory = findSettlementAtLocation(data, player.location, defenderSettlement.dimensionId);
+    if (!territory || territory.id !== defenderSettlement.id) continue;
+
+    const attackerSettlement = getPlayerSettlement(data, getPlayerName(player));
+    if (!attackerSettlement) continue;
+    if (!areSettlementsAtWar(data, defenderSettlement, attackerSettlement)) continue;
+    count += 1;
+  }
+  return count;
+}
+
+function canDealFlagDamage(data, defenderSettlement, attackerSettlement, player) {
+  const campaign = findWarCampaignBetween(data, defenderSettlement, attackerSettlement);
+  if (!campaign) {
+    return { ok: false, message: "§cФлаг можно бить только во время объявленной войны." };
+  }
+  if (!isWarCombatActive(campaign, system.currentTick)) {
+    const remaining = getWarPreparationRemaining(campaign, system.currentTick);
+    return {
+      ok: false,
+      message: `§cБой начнётся через ${formatCooldownTicks(remaining)}. Сейчас идёт подготовка к войне.`
+    };
+  }
+  const attackersOnTerritory = countEnemyAttackersOnTerritory(data, defenderSettlement);
+  if (attackersOnTerritory < MIN_ATTACKERS_ON_TERRITORY_FOR_FLAG_DAMAGE) {
+    return {
+      ok: false,
+      message: `§cУрон по флагу возможен только если на территории минимум ${MIN_ATTACKERS_ON_TERRITORY_FOR_FLAG_DAMAGE} атакующих (сейчас ${attackersOnTerritory}).`
+    };
+  }
+  const remaining = getFlagDamageCooldownRemaining(defenderSettlement.id);
   if (remaining > 0) {
-    player.sendMessage(`§cПодождите ${formatCooldownTicks(remaining)} перед следующим ударом по флагу.`);
+    return {
+      ok: false,
+      message: `§cФлаг недавно атаковали. Подождите ${formatCooldownTicks(remaining)}.`
+    };
+  }
+  return { ok: true, campaign };
+}
+
+function canFightInWarCombat(data, firstSettlement, secondSettlement) {
+  if (!areSettlementsAtWar(data, firstSettlement, secondSettlement)) return false;
+  const campaign = findWarCampaignBetween(data, firstSettlement, secondSettlement);
+  if (!campaign) return true;
+  return isWarCombatActive(campaign, system.currentTick);
+}
+
+function tryApplyFlagDamage(data, settlement, attackerSettlement, player, flagEntity, rawDamage) {
+  const check = canDealFlagDamage(data, settlement, attackerSettlement, player);
+  if (!check.ok) {
+    player.sendMessage(check.message);
     return;
   }
-  flagDamageCooldown.set(`${player.id}:${settlement.id}`, system.currentTick);
-  damageFlag(data, settlement, attackerSettlement, player, flagEntity, rawDamage);
+  flagDamageCooldown.set(settlement.id, system.currentTick);
+  damageFlag(data, settlement, attackerSettlement, player, flagEntity, rawDamage, check.campaign);
 }
 
 function handleFlagInteraction(player, flagSource) {
@@ -435,7 +550,13 @@ world.beforeEvents.playerBreakBlock?.subscribe((event) => {
       return;
     }
 
-    tryApplyFlagDamage(data, settlement, attackerSettlement, event.player);
+    const check = canDealFlagDamage(data, settlement, attackerSettlement, event.player);
+    if (!check.ok) {
+      event.player.sendMessage(check.message);
+      return;
+    }
+
+    tryApplyFlagDamage(data, settlement, attackerSettlement, event.player, undefined, undefined);
     return;
   }
 
@@ -532,6 +653,12 @@ world.beforeEvents.entityHurt?.subscribe((event) => {
         attacker.sendMessage("§cФлаг можно бить только врагу во время объявленной войны.");
         return;
       }
+      if (!canFightInWarCombat(freshData, settlement, attackerSettlement)) {
+        const campaign = findWarCampaignBetween(freshData, settlement, attackerSettlement);
+        const remaining = campaign ? getWarPreparationRemaining(campaign, system.currentTick) : 0;
+        attacker.sendMessage(`§cБой начнётся через ${formatCooldownTicks(remaining)}. Сейчас подготовка к войне.`);
+        return;
+      }
 
       tryApplyFlagDamage(freshData, settlement, attackerSettlement, attacker, victim, event.damage);
     });
@@ -556,15 +683,22 @@ world.beforeEvents.entityHurt?.subscribe((event) => {
 
   if (!victimTerritory && !attackerTerritory) return;
 
-  if (!victimSettlement || !attackerSettlement || !areSettlementsAtWar(data, victimSettlement, attackerSettlement)) {
+  if (!victimSettlement || !attackerSettlement || !canFightInWarCombat(data, victimSettlement, attackerSettlement)) {
     event.cancel = true;
-    attacker.sendMessage("§cНа чужой территории можно драться только во время войны между поселениями.");
+    if (victimSettlement && attackerSettlement && areSettlementsAtWar(data, victimSettlement, attackerSettlement)) {
+      const campaign = findWarCampaignBetween(data, victimSettlement, attackerSettlement);
+      const remaining = campaign ? getWarPreparationRemaining(campaign, system.currentTick) : 0;
+      attacker.sendMessage(`§cPvP начнётся через ${formatCooldownTicks(remaining)}. Сейчас подготовка к войне.`);
+    } else {
+      attacker.sendMessage("§cНа чужой территории можно драться только во время войны между поселениями.");
+    }
   }
 });
 
 system.run(() => updatePlayerPrefixDisplays());
 system.runTimeout(() => scheduleRefreshAllSettlementBorders(loadData()), 60);
 
+system.runInterval(() => checkWarActivations(), 200);
 system.runInterval(() => updateFlagLabels(), 60);
 system.runInterval(() => updateMoraleForNewDay(), 1200);
 system.runInterval(() => cleanupExpiredLootZones(), 100);
@@ -1017,6 +1151,7 @@ async function openSettlementMenu(player, settlementId, page = SETTLEMENT_MENU_P
 
   const nextType = SETTLEMENT_TYPES[settlement.typeIndex + 1];
   const upgradeLabel = formatUpgradeButtonLabel(nextType);
+  const atWar = (settlement.wars || []).length > 0;
   const form = new ActionFormData()
     .title(settlementMenuTitle(page, animate))
     .body(page === SETTLEMENT_MENU_PAGE.EXTRA ? formatExtraPageBody(settlement) : settlementInfo(data, settlement));
@@ -1036,8 +1171,9 @@ async function openSettlementMenu(player, settlementId, page = SETTLEMENT_MENU_P
       .button("Объявить войну", "textures/ui/kingdoms/icon_war")
       .button("Налог", "textures/ui/kingdoms/icon_tax")
       .button("Строительство", "textures/ui/kingdoms/icon_build")
-      .button(isResident ? "Покинуть поселение" : "Расформировать", "textures/ui/kingdoms/icon_disband")
-      .button("Далее", "textures/ui/kingdoms/icon_war");
+      .button(isResident ? "Покинуть поселение" : "Расформировать", "textures/ui/kingdoms/icon_disband");
+    if (atWar) form.button("Починить флаг", "textures/ui/kingdoms/icon_upgrade");
+    form.button("Далее", "textures/ui/kingdoms/icon_war");
   }
 
   const response = await showForm(player, form);
@@ -1056,7 +1192,7 @@ async function openSettlementMenu(player, settlementId, page = SETTLEMENT_MENU_P
     return undefined;
   }
 
-  if (selection === 9) {
+  if (selection === 9 + (atWar ? 1 : 0)) {
     return openSettlementMenu(player, settlementId, SETTLEMENT_MENU_PAGE.EXTRA, false, sessionToken);
   }
 
@@ -1082,6 +1218,9 @@ async function openSettlementMenu(player, settlementId, page = SETTLEMENT_MENU_P
       if (isResident) return deferMenu(player, () => confirmLeaveSettlement(player, settlementId, sessionToken));
       player.sendMessage("§cЭто действие недоступно.");
       return;
+    case 9:
+      if (atWar) return repairSettlementFlag(player, settlementId, sessionToken);
+      return undefined;
     default:
       return undefined;
   }
@@ -1374,6 +1513,7 @@ async function openDiplomacyMenu(player, settlementId, sessionToken) {
     .body(data.alliances.length ? body : `${body}\n\nПока нет созданных альянсов.`)
     .button("Создать альянс", "textures/ui/kingdoms/icon_alliance")
     .button(ownAlliance ? "Расформировать альянс" : "Расформировать альянс", "textures/ui/kingdoms/icon_disband")
+    .button("Осудить", "textures/ui/kingdoms/icon_war")
     .button("Список альянсов", "textures/ui/kingdoms/icon_info")
     .button("Назад", "textures/ui/kingdoms/icon_disband");
 
@@ -1381,7 +1521,8 @@ async function openDiplomacyMenu(player, settlementId, sessionToken) {
   if (response.canceled) return;
   if (response.selection === 0) return openAllianceMenu(player, settlementId, sessionToken);
   if (response.selection === 1) return dissolveAllianceMenu(player, settlementId, sessionToken);
-  if (response.selection === 2) return listAlliancesMenu(player, settlementId, sessionToken);
+  if (response.selection === 2) return openCondemnationMenu(player, settlementId, sessionToken);
+  if (response.selection === 3) return listAlliancesMenu(player, settlementId, sessionToken);
   return openSettlementMenu(player, settlementId, SETTLEMENT_MENU_PAGE.MAIN, false, sessionToken);
 }
 
@@ -1602,7 +1743,10 @@ async function openWarMenu(player, settlementId, sessionToken) {
         ? `Активные войны альянса: ${activeInitiatedWars.map((entry) => entry.name).join(", ")}`
         : "Выберите действие.",
       `Доступные цели: ${allowedTypes}.`,
-      `Цель: минимум ${MIN_TARGET_ONLINE_FOR_WAR} игрока поселения в сети, офлайн-цели недоступны.`,
+      `Подготовка к бою: ${formatCooldownTicks(WAR_PREPARATION_TICKS)} после объявления.`,
+      `Атакующих в сети: минимум ${MIN_ATTACKER_ONLINE_FOR_WAR}. Цель: минимум ${MIN_TARGET_ONLINE_FOR_WAR} в сети.`,
+      `Урон по флагу: минимум ${MIN_ATTACKERS_ON_TERRITORY_FOR_FLAG_DAMAGE} атакующих на территории, кулдаун на флаг ${formatCooldownTicks(FLAG_DAMAGE_COOLDOWN_TICKS)}.`,
+      "Прекратить войну досрочно без боя — штраф морали.",
       "Прекратить войну может только поселение, которое её объявило.",
       ...cooldownLines
     ].join("\n"))
@@ -1669,7 +1813,8 @@ async function declareWarMenu(player, settlementId, sessionToken) {
 
   const target = pick.item;
   const targetOnlineCount = countOnlineSettlementMembers(target);
-  const check = canDeclareWarOnTarget(data, settlement, target, system.currentTick, targetOnlineCount);
+  const attackerOnlineCount = countOnlineAllianceMembers(data, settlement);
+  const check = canDeclareWarOnTarget(data, settlement, target, system.currentTick, targetOnlineCount, attackerOnlineCount);
   if (!check.ok) {
     if (check.message) {
       player.sendMessage(check.message);
@@ -1684,14 +1829,27 @@ async function declareWarMenu(player, settlementId, sessionToken) {
     return declareWarMenu(player, settlementId, sessionToken);
   }
 
+  const reasonResponse = await showFormDeferred(player, new ModalFormData()
+    .title("Причина войны")
+    .textField("Причина (увидят все игроки)", "Например: незаконный захват территории", { defaultValue: "" }));
+  if (reasonResponse.canceled) return declareWarMenu(player, settlementId, sessionToken);
+
+  const reason = cleanName(getModalTextFieldValue(reasonResponse.formValues, 0));
+  if (!reason || reason.length < 5) {
+    player.sendMessage("§cУкажите причину войны (минимум 5 символов).");
+    return declareWarMenu(player, settlementId, sessionToken);
+  }
+
+  const currentTick = system.currentTick;
   linkAllianceWar(data, settlement, target);
+  createWarCampaign(data, settlement, target, reason, currentTick);
   ensureWarInitiatedAgainst(settlement);
   if (!settlement.warInitiatedAgainst.includes(target.id)) settlement.warInitiatedAgainst.push(target.id);
-  recordAllianceWarDeclaration(data, settlement, system.currentTick);
+  recordAllianceWarDeclaration(data, settlement, currentTick);
   settlement.morale = Math.max(0, settlement.morale - 6);
   target.morale = Math.max(0, target.morale - 6);
   saveData(data);
-  world.sendMessage(`§4[Война] §f${settlementDisplayName(data, settlement)} объявило войну ${settlementDisplayName(data, target)}. Победа достигается уничтожением вражеского флага.`);
+  world.sendMessage(`§4[Война] §f${settlementDisplayName(data, settlement)} объявило войну ${settlementDisplayName(data, target)}. Причина: "${reason}". Бой начнётся через ${formatCooldownTicks(WAR_PREPARATION_TICKS)}.`);
   return openWarMenu(player, settlementId, sessionToken);
 }
 
@@ -1737,6 +1895,67 @@ async function endWarMenu(player, settlementId, sessionToken) {
   return openWarMenu(player, settlementId, sessionToken);
 }
 
+function repairSettlementFlag(player, settlementId, sessionToken) {
+  if (!assertSettlementMenuSession(player, settlementId, sessionToken)) return;
+  const data = loadData();
+  const settlement = getSettlement(data, settlementId);
+  const playerName = getPlayerName(player);
+  if (!settlement || !canDeclareWar(data, playerName, settlement)) {
+    player.sendMessage("§cЧинить флаг могут создатель и Советник.");
+    return openSettlementMenu(player, settlementId, SETTLEMENT_MENU_PAGE.MAIN, false, sessionToken);
+  }
+  if (!(settlement.wars || []).length) {
+    player.sendMessage("§7Починка доступна только во время войны.");
+    return openSettlementMenu(player, settlementId, SETTLEMENT_MENU_PAGE.MAIN, false, sessionToken);
+  }
+
+  const maxHp = getMaxHp(settlement);
+  if ((settlement.hp ?? maxHp) >= maxHp) {
+    player.sendMessage("§7Флаг уже в полном порядке.");
+    return openSettlementMenu(player, settlementId, SETTLEMENT_MENU_PAGE.MAIN, false, sessionToken);
+  }
+
+  const repairCooldown = getFlagRepairCooldownRemaining(settlement, system.currentTick);
+  if (repairCooldown > 0) {
+    player.sendMessage(`§cПочинка флага доступна через ${formatCooldownTicks(repairCooldown)}.`);
+    return openSettlementMenu(player, settlementId, SETTLEMENT_MENU_PAGE.MAIN, false, sessionToken);
+  }
+
+  const cost = computeFlagRepairCost(settlement, maxHp);
+  if (!takeCopperValueWithNotice(player, cost)) {
+    player.sendMessage(`§cДля починки нужно ${formatCopperValue(cost)}.`);
+    return openSettlementMenu(player, settlementId, SETTLEMENT_MENU_PAGE.MAIN, false, sessionToken);
+  }
+
+  const repairAmount = computeFlagRepairAmount(maxHp);
+  settlement.hp = Math.min(maxHp, (settlement.hp ?? maxHp) + repairAmount);
+  settlement.lastFlagRepairTick = system.currentTick;
+  saveData(data);
+  updateFlagLabelFor(settlement, data);
+  player.sendMessage(`§aФлаг восстановлен на ${repairAmount} HP. Сейчас ${settlement.hp}/${maxHp}.`);
+  return openSettlementMenu(player, settlementId, SETTLEMENT_MENU_PAGE.MAIN, false, sessionToken);
+}
+
+function checkWarActivations() {
+  const data = loadData();
+  ensureWarCampaigns(data);
+  let changed = false;
+
+  for (const campaign of data.warCampaigns) {
+    if (campaign.ended || campaign.combatAnnounced) continue;
+    if (system.currentTick < campaign.activeTick) continue;
+
+    campaign.combatAnnounced = true;
+    changed = true;
+    const initiator = getSettlement(data, campaign.initiatorSettlementId);
+    const target = getSettlement(data, campaign.targetSettlementId);
+    if (!initiator || !target) continue;
+    world.sendMessage(`§4[Война] §fБой начался: ${settlementDisplayName(data, initiator)} против ${settlementDisplayName(data, target)}. Причина: "${campaign.reason}".`);
+  }
+
+  if (changed) saveData(data);
+}
+
 function ensureWarInitiatedAgainst(settlement) {
   if (!Array.isArray(settlement.warInitiatedAgainst)) settlement.warInitiatedAgainst = [];
 }
@@ -1746,6 +1965,12 @@ function endWarBetween(data, initiator, targetId) {
   if (!target || !isAtWar(initiator, targetId)) return false;
   ensureWarInitiatedAgainst(initiator);
   if (!initiator.warInitiatedAgainst.includes(targetId)) return false;
+
+  const campaign = endWarCampaign(data, initiator.id, targetId);
+  if (campaign && shouldPenalizeEarlyPeace(campaign, system.currentTick)) {
+    initiator.morale = Math.max(0, (initiator.morale ?? 75) - WAR_EARLY_PEACE_MORALE_PENALTY);
+    world.sendMessage(`§e[Война] §f${initiator.name} прекращает войну без боя и теряет ${WAR_EARLY_PEACE_MORALE_PENALTY} морали.`);
+  }
 
   unlinkAllianceWar(data, initiator, targetId);
   initiator.warInitiatedAgainst = initiator.warInitiatedAgainst.filter((id) => id !== targetId);
@@ -2189,7 +2414,7 @@ function captureSettlementSnapshot(settlement) {
   };
 }
 
-function damageFlag(data, target, attackerSettlement, player, flagEntity, rawDamage) {
+function damageFlag(data, target, attackerSettlement, player, flagEntity, rawDamage, campaign) {
   if (!getSettlement(data, target.id)) {
     removeAllSettlementFlags(flagEntity, captureSettlementSnapshot(target));
     return;
@@ -2201,18 +2426,16 @@ function damageFlag(data, target, attackerSettlement, player, flagEntity, rawDam
     : Math.max(10, Math.ceil(settlementType(attackerSettlement).hp * 0.035));
   target.hp = Math.max(0, target.hp - damage);
   target.morale = Math.max(0, target.morale - 2);
+  if (campaign) markWarFlagDamage(campaign);
 
   if (target.hp <= 0) {
     target.hp = 0;
-    const loserSnapshot = captureSettlementSnapshot(target);
     const warInitiator = findWarInitiator(data, target, attackerSettlement);
-    handleWarVictory(data, warInitiator, target, player);
+    handleWarVictory(data, warInitiator, target, player, campaign);
     if (!saveData(data)) {
       player.sendMessage("§cНе удалось сохранить результат войны: слишком много данных мира.");
     }
-    removeAllSettlementFlags(flagEntity, loserSnapshot);
-    system.run(() => removeAllSettlementFlags(undefined, loserSnapshot));
-    system.runTimeout(() => removeAllSettlementFlags(undefined, loserSnapshot), 20);
+    updateFlagLabelFor(target, data);
     return;
   }
 
@@ -2221,13 +2444,28 @@ function damageFlag(data, target, attackerSettlement, player, flagEntity, rawDam
   player.sendMessage(`§cФлаг повреждён на ${damage}. Осталось HP: ${target.hp}/${getMaxHp(target)}.`);
 }
 
-function handleWarVictory(data, winner, loser, attackerPlayer) {
+function applyWarDefeat(data, loser) {
+  const beforeType = settlementType(loser).name;
+  if (loser.typeIndex > 0) {
+    loser.typeIndex -= 1;
+    loser.creatorPrefix = creatorPrefixFor(loser.typeIndex);
+  }
+  loser.hp = getMaxHp(loser);
+  const lostChunks = loseHalfTerritoryChunks(loser);
+  loser.morale = Math.max(0, (loser.morale ?? 75) - 25);
+  loser.defeatRecoveryUntil = system.currentTick + 24 * 60 * 60 * 20;
+  scheduleRefreshSettlementBorders(data, loser);
+  return { beforeType, lostChunks };
+}
+
+function handleWarVictory(data, winner, loser, attackerPlayer, campaign) {
   if (!winner || !loser || !getSettlement(data, loser.id)) return;
 
   const winnerLabel = settlementDisplayName(data, winner);
   const loserLabel = settlementDisplayName(data, loser);
 
   unlinkAllianceWar(data, winner, loser.id);
+  endWarCampaign(data, winner.id, loser.id);
   if (Array.isArray(winner.warInitiatedAgainst)) {
     winner.warInitiatedAgainst = winner.warInitiatedAgainst.filter((id) => id !== loser.id);
   }
@@ -2235,11 +2473,12 @@ function handleWarVictory(data, winner, loser, attackerPlayer) {
   ensureSettlementChunks(winner, settlementType(winner).radius);
   ensureSettlementChunks(loser, settlementType(loser).radius);
   const addedChunks = expandTerritoryOnVictory(data, winner, loser);
+  const defeat = applyWarDefeat(data, loser);
 
   if (addedChunks <= 0) {
     const owner = world.getPlayers().find((online) => samePlayerName(getPlayerName(online), winner.creatorName));
     if (owner) giveCopperValue(owner, buildingCostCopper(settlementType(loser).defeatReward));
-    world.sendMessage(`§6[Королевства] §fТерритория победителя не расширилась — нет свободных соседних чанков. Создатель получает награду монетами.`);
+    world.sendMessage(`§6[Королевства] §fТерритория победителя не расширилась — создатель получает награду монетами.`);
   } else {
     world.sendMessage(`§6[Королевства] §fТерритория ${winnerLabel} расширилась на ${addedChunks} чанк(ов).`);
   }
@@ -2259,14 +2498,15 @@ function handleWarVictory(data, winner, loser, attackerPlayer) {
     expiresTick: system.currentTick + LOOT_WINDOW_TICKS
   });
 
-  world.sendMessage(`§4[Война] §f${winnerLabel} победило. Поселение ${loser.name} распалось. Победители могут мародёрить бывшую территорию 5 минут.`);
+  const reasonSuffix = campaign?.reason ? ` Причина войны: "${campaign.reason}".` : "";
+  world.sendMessage(`§4[Война] §f${winnerLabel} победило. ${loserLabel} понижено (${defeat.beforeType} → ${settlementType(loser).name}), потеряно ${defeat.lostChunks} чанк(ов). Мародёрство 5 минут.${reasonSuffix}`);
 
-  disbandSettlement(data, loser.id, `проиграло войну против ${winner.name}`, false);
+  updateFlagLabelFor(loser, data);
   updateFlagLabelFor(winner, data);
   scheduleRefreshSettlementBorders(data, winner);
 
   if (attackerPlayer?.isValid) {
-    attackerPlayer.sendMessage(`§a${winnerLabel} победило. Флаг ${loserLabel} уничтожен.`);
+    attackerPlayer.sendMessage(`§a${winnerLabel} победило. ${loserLabel} откатилось на тип ниже.`);
   }
 }
 
@@ -2714,9 +2954,13 @@ function loadData() {
       if (typeof settlement.territoryBonus !== "number") settlement.territoryBonus = 0;
       ensureSettlementChunks(settlement, settlementType(settlement).radius);
       if (!Array.isArray(settlement.capturedChunks)) settlement.capturedChunks = [];
+      if (typeof settlement.condemnationDemotesApplied !== "number") settlement.condemnationDemotesApplied = 0;
     }
     if (!Array.isArray(data.pendingPlayerPayouts)) data.pendingPlayerPayouts = [];
     if (typeof data.nextTradeOfferIdValue !== "number") data.nextTradeOfferIdValue = 1;
+    ensureWarCampaigns(data);
+    if (typeof data.nextWarCampaignIdValue !== "number") data.nextWarCampaignIdValue = 1;
+    if (!Array.isArray(data.condemnations)) data.condemnations = [];
     for (const zone of data.lootZones) {
       if (!Array.isArray(zone.winnerSettlementIds) || !zone.winnerSettlementIds.length) {
         zone.winnerSettlementIds = zone.winnerSettlementId ? [zone.winnerSettlementId] : [];
@@ -2747,9 +2991,12 @@ function emptyData() {
     alliances: [],
     lootZones: [],
     spawnGuards: [],
+    warCampaigns: [],
+    condemnations: [],
     nextSettlementIdValue: 1,
     nextAllianceIdValue: 1,
-    nextSpawnGuardIdValue: 1
+    nextSpawnGuardIdValue: 1,
+    nextWarCampaignIdValue: 1
   };
 }
 

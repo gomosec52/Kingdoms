@@ -285,3 +285,36 @@ export function releaseChunk(settlement, cx, cz) {
     settlement.capturedChunks = settlement.capturedChunks.filter((entry) => entry !== key);
   }
 }
+
+export function loseHalfTerritoryChunks(settlement) {
+  ensureSettlementChunks(settlement, 0);
+  const flagChunk = chunkFromLocation(settlement.flag);
+  const flagKey = chunkKey(flagChunk.cx, flagChunk.cz);
+  const captured = [...(settlement.capturedChunks || [])];
+  const base = [...(settlement.chunks || [])];
+  const allKeys = new Set([...base, ...captured]);
+  const toRemoveCount = Math.floor(allKeys.size / 2);
+  if (toRemoveCount <= 0) return 0;
+
+  const removable = [];
+  for (const key of captured) {
+    if (key !== flagKey) removable.push({ key, priority: 0, dist: 0 });
+  }
+  for (const key of base) {
+    if (key === flagKey || captured.includes(key)) continue;
+    const { cx, cz } = parseChunkKey(key);
+    const dist = Math.hypot(cx * CHUNK_SIZE + 8 - settlement.flag.x, cz * CHUNK_SIZE + 8 - settlement.flag.z);
+    removable.push({ key, priority: 1, dist });
+  }
+
+  removable.sort((left, right) => {
+    if (left.priority !== right.priority) return left.priority - right.priority;
+    return right.dist - left.dist;
+  });
+
+  const removed = new Set(removable.slice(0, toRemoveCount).map((entry) => entry.key));
+  settlement.capturedChunks = captured.filter((key) => !removed.has(key));
+  settlement.chunks = base.filter((key) => !removed.has(key));
+  if (!settlement.chunks.includes(flagKey)) settlement.chunks.push(flagKey);
+  return removed.size;
+}

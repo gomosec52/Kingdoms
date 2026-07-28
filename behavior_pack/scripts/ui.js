@@ -9,6 +9,7 @@ export const KINGDOMS_MENU_PAGE = {
   TRADE_COINS: "trade_coins",
   RESIDENTS: "residents",
   DIPLOMACY: "diplomacy",
+  CONDEMN: "condemn",
   CREATE: "create",
   CONSTRUCTION: "construction",
   PICK: "pick"

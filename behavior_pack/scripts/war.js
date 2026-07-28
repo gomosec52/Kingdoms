@@ -14,7 +14,16 @@ export const WEAK_WAR_COOLDOWN_TICKS = 48 * 60 * 60 * 20;
 export const WEAK_VICTORY_TYPE_GAP = 2;
 export const WEAK_ATTACKER_TYPE_GAP = 2;
 export const MIN_TARGET_ONLINE_FOR_WAR = 3;
-export const FLAG_DAMAGE_COOLDOWN_TICKS = 10 * 20;
+export const MIN_ATTACKER_ONLINE_FOR_WAR = 2;
+export const MIN_ATTACKERS_ON_TERRITORY_FOR_FLAG_DAMAGE = 2;
+export const WAR_PREPARATION_TICKS = 45 * 60 * 20;
+export const FLAG_DAMAGE_COOLDOWN_TICKS = 15 * 20;
+export const WAR_EARLY_PEACE_MORALE_PENALTY = 15;
+export const FLAG_REPAIR_COOLDOWN_TICKS = 2 * 60 * 20;
+export const FLAG_REPAIR_HP_FRACTION = 0.15;
+export const CONDEMNATION_TTL_TICKS = 2 * 24 * 60 * 60 * 20;
+export const CONDEMNATION_DEMOTE_THRESHOLD_1 = 8;
+export const CONDEMNATION_DEMOTE_THRESHOLD_2 = 12;
 
 export function canTargetSettlementType(attackerTypeIndex, targetTypeIndex) {
   if (targetTypeIndex < 0 || targetTypeIndex > MAX_SETTLEMENT_TYPE_INDEX) return false;
@@ -94,10 +103,23 @@ export function getWarTargetOnlineBlockReason(attacker, target, onlineCount) {
   return { ok: true };
 }
 
-export function canDeclareWarOnTarget(data, settlement, target, currentTick, targetOnlineCount = MIN_TARGET_ONLINE_FOR_WAR) {
+export function getWarAttackerOnlineBlockReason(onlineCount) {
+  if (onlineCount < MIN_ATTACKER_ONLINE_FOR_WAR) {
+    return {
+      ok: false,
+      reason: "insufficient_attackers",
+      message: `§cДля объявления войны в вашем альянсе должно быть минимум ${MIN_ATTACKER_ONLINE_FOR_WAR} игрока в сети (сейчас ${onlineCount}).`
+    };
+  }
+  return { ok: true };
+}
+
+export function canDeclareWarOnTarget(data, settlement, target, currentTick, targetOnlineCount = MIN_TARGET_ONLINE_FOR_WAR, attackerOnlineCount = MIN_ATTACKER_ONLINE_FOR_WAR) {
   if (!canTargetSettlementType(settlement.typeIndex, target.typeIndex)) {
     return { ok: false, reason: "type" };
   }
+  const attackerOnlineCheck = getWarAttackerOnlineBlockReason(attackerOnlineCount);
+  if (!attackerOnlineCheck.ok) return attackerOnlineCheck;
   const onlineCheck = getWarTargetOnlineBlockReason(settlement, target, targetOnlineCount);
   if (!onlineCheck.ok) return onlineCheck;
   return getWarBlockForTarget(data, settlement, target, currentTick);
@@ -155,6 +177,86 @@ export function areSettlementsAtWar(data, first, second) {
   return false;
 }
 
+export function ensureWarCampaigns(data) {
+  if (!Array.isArray(data.warCampaigns)) data.warCampaigns = [];
+}
+
+export function findWarCampaign(data, initiatorSettlementId, targetSettlementId) {
+  ensureWarCampaigns(data);
+  return data.warCampaigns.find((entry) =>
+    entry.initiatorSettlementId === initiatorSettlementId
+    && entry.targetSettlementId === targetSettlementId
+    && !entry.ended);
+}
+
+export function findWarCampaignBetween(data, first, second) {
+  if (!first || !second) return undefined;
+  ensureWarCampaigns(data);
+  const firstSide = getAllianceSettlements(data, first);
+  const secondIds = new Set(getAllianceSettlements(data, second).map((entry) => entry.id));
+
+  return data.warCampaigns.find((entry) => {
+    if (entry.ended) return false;
+    const initiatorInFirst = firstSide.some((ally) => ally.id === entry.initiatorSettlementId);
+    const targetMatches = secondIds.has(entry.targetSettlementId)
+      || firstSide.some((ally) => ally.id === entry.targetSettlementId);
+    const initiatorInSecond = getAllianceSettlements(data, second).some((ally) => ally.id === entry.initiatorSettlementId);
+    if (initiatorInFirst && secondIds.has(entry.targetSettlementId)) return true;
+    if (initiatorInSecond && firstSide.some((ally) => ally.id === entry.targetSettlementId)) return true;
+    return false;
+  });
+}
+
+export function createWarCampaign(data, initiator, target, reason, currentTick) {
+  ensureWarCampaigns(data);
+  const campaign = {
+    id: nextWarCampaignId(data),
+    initiatorSettlementId: initiator.id,
+    targetSettlementId: target.id,
+    reason: String(reason ?? "").trim(),
+    declaredTick: currentTick,
+    activeTick: currentTick + WAR_PREPARATION_TICKS,
+    flagDamageDealt: false,
+    combatAnnounced: false,
+    ended: false
+  };
+  data.warCampaigns.push(campaign);
+  return campaign;
+}
+
+export function nextWarCampaignId(data) {
+  if (typeof data.nextWarCampaignIdValue !== "number") data.nextWarCampaignIdValue = 1;
+  const id = data.nextWarCampaignIdValue;
+  data.nextWarCampaignIdValue = id + 1;
+  return id;
+}
+
+export function isWarCombatActive(campaign, currentTick) {
+  if (!campaign || campaign.ended) return false;
+  return currentTick >= campaign.activeTick;
+}
+
+export function getWarPreparationRemaining(campaign, currentTick) {
+  if (!campaign || campaign.ended) return 0;
+  return Math.max(0, campaign.activeTick - currentTick);
+}
+
+export function markWarFlagDamage(campaign) {
+  if (campaign) campaign.flagDamageDealt = true;
+}
+
+export function endWarCampaign(data, initiatorSettlementId, targetSettlementId) {
+  ensureWarCampaigns(data);
+  const campaign = findWarCampaign(data, initiatorSettlementId, targetSettlementId);
+  if (campaign) campaign.ended = true;
+  return campaign;
+}
+
+export function shouldPenalizeEarlyPeace(campaign, currentTick) {
+  if (!campaign) return false;
+  return !campaign.flagDamageDealt || currentTick < campaign.activeTick;
+}
+
 export function linkAllianceWar(data, attackerSideLeader, target) {
   const attackers = getAllianceSettlements(data, attackerSideLeader);
   for (const member of attackers) {
@@ -185,6 +287,12 @@ function getSettlementById(data, settlementId) {
 
 export function findWarInitiator(data, loser, attackerSide) {
   const attackers = getAllianceSettlements(data, attackerSide);
+  const campaign = data.warCampaigns?.find((entry) =>
+    !entry.ended && entry.targetSettlementId === loser.id
+    && attackers.some((member) => member.id === entry.initiatorSettlementId));
+  if (campaign) {
+    return getSettlementById(data, campaign.initiatorSettlementId) ?? attackerSide;
+  }
   return attackers.find((member) => (member.warInitiatedAgainst || []).includes(loser.id)) ?? attackerSide;
 }
 
@@ -199,4 +307,22 @@ export function ensureWarCooldownData(settlement) {
   if (!settlement.weakWarCooldownUntil || typeof settlement.weakWarCooldownUntil !== "object") {
     settlement.weakWarCooldownUntil = {};
   }
+  if (typeof settlement.lastFlagRepairTick !== "number") {
+    settlement.lastFlagRepairTick = -FLAG_REPAIR_COOLDOWN_TICKS;
+  }
+}
+
+export function getFlagRepairCooldownRemaining(settlement, currentTick) {
+  const last = settlement.lastFlagRepairTick ?? -FLAG_REPAIR_COOLDOWN_TICKS;
+  return Math.max(0, last + FLAG_REPAIR_COOLDOWN_TICKS - currentTick);
+}
+
+export function computeFlagRepairCost(settlement, maxHp) {
+  const missing = Math.max(0, maxHp - (settlement.hp ?? maxHp));
+  if (missing <= 0) return 0;
+  return Math.max(1, Math.ceil(missing / 4));
+}
+
+export function computeFlagRepairAmount(maxHp) {
+  return Math.max(1, Math.ceil(maxHp * FLAG_REPAIR_HP_FRACTION));
 }
