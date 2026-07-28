@@ -61,12 +61,13 @@ let deps;
 export function bindMintSystem(dependencies) {
   deps = dependencies;
 
-  deps.system.beforeEvents?.startup?.subscribe(({ blockComponentRegistry }) => {
-    blockComponentRegistry.registerCustomComponent("kingdoms:mint_interact", {
-      onPlayerInteract(event) {
-        if (!event.player) return;
-        deps.system.run(() => handleMintInteract(event.player, event.block));
-      }
+  deps.world.afterEvents?.playerInteractWithBlock?.subscribe((event) => {
+    const blockId = event.block?.typeId;
+    if (blockId !== MINT_BLOCK_T1 && blockId !== MINT_BLOCK_T2) return;
+    deps.system.run(() => {
+      Promise.resolve(handleMintInteract(event.player, event.block)).catch((error) => {
+        event.player?.sendMessage(`§c[Королевства] Ошибка чеканного двора: ${error?.message ?? error}`);
+      });
     });
   });
 
@@ -271,6 +272,8 @@ function tryGiveMintItem(player, typeId, amount = 1) {
 }
 
 export function processPendingMintItemPayouts() {
+  if (!deps?.loadData || !deps?.world) return;
+
   const data = deps.loadData();
   ensurePendingMintItems(data);
   if (!data.pendingPlayerItemPayouts.length) return;

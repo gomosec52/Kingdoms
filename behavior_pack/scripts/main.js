@@ -422,7 +422,11 @@ world.afterEvents.playerSpawn?.subscribe((event) => {
     updatePlayerPrefixDisplays();
     notifyPlayerAboutPrefixes(player);
     notifyPlayerAboutAddon(player);
-    processPendingMintItemPayouts();
+    try {
+      processPendingMintItemPayouts();
+    } catch (error) {
+      console.warn(`[Kingdoms] Выплаты чеканного двора: ${error?.message ?? error}`);
+    }
   });
 });
 
@@ -2946,7 +2950,7 @@ function notifyPlayerAboutAddon(player) {
   if (loadedNoticeShown.has(playerName)) return;
   loadedNoticeShown.add(playerName);
 
-  player.sendMessage("§6[KW Build] §fv1.12.20 §7— ядро v1.12.17 + чеканный двор");
+  player.sendMessage("§6[KW Build] §fv1.12.21 §7— ядро v1.12.17 + чеканный двор");
   player.sendMessage(`§7Флаг — сущность. Кликните предметом по блоку. Нужно ${formatCopperValue(CREATION_COST)}.`);
 }
 
