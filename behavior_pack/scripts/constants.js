@@ -8,4 +8,5 @@ export const PENDING_SETUP_TAG = "kingdoms_pending_setup";
 export const COIN_COPPER = "kingdoms:coin_copper";
 export const COIN_SILVER = "kingdoms:coin_silver";
 export const COIN_GOLD = "kingdoms:coin_gold";
+export const COIN_EXCHANGE_COMPONENT = "kingdoms:coin_exchange";
 export const SPAWN_GUARD_BLOCK = "kingdoms:spawn_guard";

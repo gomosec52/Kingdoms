@@ -2,9 +2,9 @@
   "format_version": 2,
   "header": {
     "name": "KW Build",
-    "description": "v1.12.44 — remove coin rolls, simple exchange",
+    "description": "v1.12.45 — fix coin exchange 32:1",
     "uuid": "35da6754-77fe-403f-98e0-6e6702d1c764",
-    "version": [1, 12, 44],
+    "version": [1, 12, 45],
     "min_engine_version": [1, 26, 20]
   },
   "modules": [

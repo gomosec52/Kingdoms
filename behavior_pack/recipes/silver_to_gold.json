@@ -4,10 +4,11 @@
     "description": {
       "identifier": "kingdoms:silver_to_gold"
     },
-    "tags": ["crafting_table"],
+    "tags": ["crafting_table", "stonecutter"],
     "unlock": [
       { "item": "kingdoms:coin_silver" }
     ],
+    "priority": 0,
     "ingredients": [
       { "item": "kingdoms:coin_silver", "count": 32 }
     ],

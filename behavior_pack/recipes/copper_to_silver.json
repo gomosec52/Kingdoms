@@ -4,10 +4,11 @@
     "description": {
       "identifier": "kingdoms:copper_to_silver"
     },
-    "tags": ["crafting_table"],
+    "tags": ["crafting_table", "stonecutter"],
     "unlock": [
       { "item": "kingdoms:coin_copper" }
     ],
+    "priority": 0,
     "ingredients": [
       { "item": "kingdoms:coin_copper", "count": 32 }
     ],
