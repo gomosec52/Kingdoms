@@ -628,18 +628,25 @@ world.afterEvents.playerBreakBlock?.subscribe((event) => {
   const blockId = event.brokenBlockPermutation?.type?.id;
   if (!isMintBlockId(blockId)) return;
 
+  const player = event.player;
   const data = loadData();
   const dimensionId = getDimensionId(event.dimension);
   const location = blockPosition(event.block.location);
   const record = findMintWorkshop(data, location, dimensionId);
+  const dimension = event.dimension ?? safeDimension(dimensionId);
+
   if (record) {
+    dropMintWorkshopContents(dimension, location, record);
     removeMintWorkshopLabel(record);
     data.mintWorkshops = data.mintWorkshops.filter((entry) => entry.id !== record.id);
     saveData(data);
+    if (player?.isValid) {
+      const def = MINT_SHOP_TIERS[record.tier];
+      player.sendMessage(`§e${def?.name ?? "Чеканный двор"} снят. Содержимое выпало рядом.`);
+    }
     return;
   }
 
-  const dimension = safeDimension(dimensionId);
   if (dimension) removeMintLabelsAtLocation(dimension, location);
 });
 
@@ -1619,6 +1626,41 @@ function collectMintSmeltOutput(player, block, record, def) {
   return openMintFurnaceMenu(player, block);
 }
 
+function getMintWorkshopBreakLoot(record, def) {
+  if (!record || !def) return [];
+  const loot = [{ typeId: def.blockId, amount: 1 }];
+  if (record.queuedIngots > 0) loot.push({ typeId: def.inputId, amount: record.queuedIngots });
+  if (record.state === "processing") loot.push({ typeId: def.inputId, amount: 1 });
+  if (record.state === "ready") loot.push({ typeId: def.outputId, amount: def.outputAmount });
+  return loot;
+}
+
+function dropItemStacksAt(dimension, location, stacks) {
+  if (!dimension || !location || !stacks.length) return;
+  const dropLoc = {
+    x: location.x + 0.5,
+    y: location.y + 0.5,
+    z: location.z + 0.5
+  };
+  for (const stack of stacks) {
+    let remaining = stack.amount;
+    while (remaining > 0) {
+      const amount = Math.min(64, remaining);
+      try {
+        dimension.spawnItem(new ItemStack(stack.typeId, amount), dropLoc);
+      } catch (_error) {
+        // Ignore spawn failures.
+      }
+      remaining -= amount;
+    }
+  }
+}
+
+function dropMintWorkshopContents(dimension, location, record) {
+  const def = MINT_SHOP_TIERS[record.tier];
+  dropItemStacksAt(dimension, location, getMintWorkshopBreakLoot(record, def));
+}
+
 function handleMintBlockInteract(player, block) {
   if (!player?.isValid || !block) return;
   const data = loadData();
@@ -1653,26 +1695,6 @@ function tryBreakMintWorkshop(player, block, event) {
     if (dimension) removeMintLabelsAtLocation(dimension, blockPosition(block.location));
     return;
   }
-
-  const def = MINT_SHOP_TIERS[record.tier];
-  if (record.state === "processing" && def) {
-    giveItemStack(player, new ItemStack(def.inputId, 1));
-  }
-  if (record.state === "ready" && def) {
-    giveItems(player, def.outputId, def.outputAmount);
-  }
-  if (record.queuedIngots > 0 && def) {
-    giveItems(player, def.inputId, record.queuedIngots);
-  }
-  removeMintWorkshopLabel(record);
-  data.mintWorkshops = data.mintWorkshops.filter((entry) => entry.id !== record.id);
-  saveData(data);
-  if (def) giveItemStack(player, new ItemStack(def.blockId, 1));
-  player.sendMessage(`§e${def?.name ?? "Чеканный двор"} снят.`);
-  system.run(() => {
-    const dimension = safeDimension(dimensionId);
-    if (dimension) removeMintLabelsAtLocation(dimension, blockPosition(block.location), record.id);
-  });
 }
 
 function tickMintWorkshops() {

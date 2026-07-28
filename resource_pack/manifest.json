@@ -2,9 +2,9 @@
   "format_version": 2,
   "header": {
     "name": "KW Build Resources",
-    "description": "v1.12.35 — mint label fix, war victory fixes",
+    "description": "v1.12.36 — mint break drops ingots",
     "uuid": "0319ea31-7410-4887-be2d-2d52676a4a6d",
-    "version": [1, 12, 35],
+    "version": [1, 12, 36],
     "min_engine_version": [1, 26, 20]
   },
   "modules": [
