@@ -239,6 +239,7 @@ import {
   getWarPreparationRemaining,
   markWarFlagDamage,
   endWarCampaign,
+  endWarCampaignRecord,
   shouldPenalizeEarlyPeace,
   ensureWarCampaigns,
   getFlagRepairCooldownRemaining,
@@ -621,6 +622,25 @@ world.beforeEvents.playerBreakBlock?.subscribe((event) => {
     event.cancel = true;
     event.player.sendMessage(`§cЗона мародёрства "${lootZone.name}" временно доступна только победителям.`);
   }
+});
+
+world.afterEvents.playerBreakBlock?.subscribe((event) => {
+  const blockId = event.brokenBlockPermutation?.type?.id;
+  if (!isMintBlockId(blockId)) return;
+
+  const data = loadData();
+  const dimensionId = getDimensionId(event.dimension);
+  const location = blockPosition(event.block.location);
+  const record = findMintWorkshop(data, location, dimensionId);
+  if (record) {
+    removeMintWorkshopLabel(record);
+    data.mintWorkshops = data.mintWorkshops.filter((entry) => entry.id !== record.id);
+    saveData(data);
+    return;
+  }
+
+  const dimension = safeDimension(dimensionId);
+  if (dimension) removeMintLabelsAtLocation(dimension, location);
 });
 
 world.beforeEvents.playerPlaceBlock?.subscribe((event) => {
@@ -1273,18 +1293,56 @@ function updateMintWorkshopLabel(record) {
 function removeMintWorkshopLabel(record) {
   const dimension = safeDimension(record.dimensionId);
   if (!dimension) return;
+  removeMintLabelsAtLocation(dimension, record.location, record.id);
+}
+
+function removeMintLabelsAtLocation(dimension, location, recordId) {
+  if (!dimension || !location) return;
+  const center = getMintLabelLocation({ location });
   try {
-    for (const entity of dimension.getEntities({ type: FLAG_LABEL_ENTITY, tags: [MINT_LABEL_TAG, mintWorkshopLabelTag(record.id)] })) {
-      entity.remove();
+    for (const entity of dimension.getEntities({ type: FLAG_LABEL_ENTITY, tags: [MINT_LABEL_TAG] })) {
+      if (recordId) {
+        const recordTag = mintWorkshopLabelTag(recordId);
+        if (!entity.hasTag(recordTag)) continue;
+      }
+      const pos = entity.location;
+      if (Math.abs(pos.x - center.x) <= 1.5 && Math.abs(pos.y - center.y) <= 2.5 && Math.abs(pos.z - center.z) <= 1.5) {
+        entity.remove();
+      }
     }
   } catch (_error) {
     // Best-effort cleanup.
   }
 }
 
+function cleanupOrphanMintLabels(data) {
+  ensureMintWorkshops(data);
+  const validTags = new Set(data.mintWorkshops.map((entry) => mintWorkshopLabelTag(entry.id)));
+  const dimensionIds = new Set([
+    ...data.mintWorkshops.map((entry) => entry.dimensionId),
+    ...data.settlements.map((entry) => entry.dimensionId)
+  ]);
+  for (const dimensionId of dimensionIds) {
+    const dimension = safeDimension(dimensionId);
+    if (!dimension) continue;
+    try {
+      for (const entity of dimension.getEntities({ type: FLAG_LABEL_ENTITY, tags: [MINT_LABEL_TAG] })) {
+        const tags = entity.getTags?.() ?? [];
+        const mintTags = tags.filter((tag) => String(tag).startsWith("mint_ws_"));
+        if (!mintTags.length || mintTags.some((tag) => !validTags.has(tag))) {
+          entity.remove();
+        }
+      }
+    } catch (_error) {
+      // Best-effort cleanup.
+    }
+  }
+}
+
 function refreshAllMintLabels() {
   const data = loadData();
   ensureMintWorkshops(data);
+  cleanupOrphanMintLabels(data);
   for (const record of data.mintWorkshops) {
     migrateMintWorkshopRecord(record);
     updateMintWorkshopLabel(record);
@@ -1590,7 +1648,11 @@ function tryBreakMintWorkshop(player, block, event) {
     return;
   }
 
-  if (!record) return;
+  if (!record) {
+    const dimension = safeDimension(dimensionId);
+    if (dimension) removeMintLabelsAtLocation(dimension, blockPosition(block.location));
+    return;
+  }
 
   const def = MINT_SHOP_TIERS[record.tier];
   if (record.state === "processing" && def) {
@@ -1607,6 +1669,10 @@ function tryBreakMintWorkshop(player, block, event) {
   saveData(data);
   if (def) giveItemStack(player, new ItemStack(def.blockId, 1));
   player.sendMessage(`§e${def?.name ?? "Чеканный двор"} снят.`);
+  system.run(() => {
+    const dimension = safeDimension(dimensionId);
+    if (dimension) removeMintLabelsAtLocation(dimension, blockPosition(block.location), record.id);
+  });
 }
 
 function tickMintWorkshops() {
@@ -3222,17 +3288,43 @@ function applyGlobalWarDefeat(data, loser) {
   return { beforeType };
 }
 
+function unlinkWarParticipants(data, campaign, winner, loser) {
+  if (campaign && isGlobalWarCampaign(campaign)) {
+    unlinkDirectWarPair(data, campaign.initiatorSettlementId, campaign.targetSettlementId);
+    return;
+  }
+  const initiator = campaign
+    ? getSettlement(data, campaign.initiatorSettlementId)
+    : findWarInitiator(data, loser, winner);
+  const targetId = campaign?.targetSettlementId ?? loser.id;
+  if (initiator) unlinkAllianceWar(data, initiator, targetId);
+  else unlinkAllianceWar(data, winner, loser.id);
+}
+
+function clearWarInitiatedAgainst(data, campaign) {
+  if (!campaign) return;
+  const initiator = getSettlement(data, campaign.initiatorSettlementId);
+  if (!initiator || !Array.isArray(initiator.warInitiatedAgainst)) return;
+  initiator.warInitiatedAgainst = initiator.warInitiatedAgainst.filter((id) => id !== campaign.targetSettlementId);
+}
+
+function finishWarCampaignRecord(campaign) {
+  if (!campaign || campaign.ended) return false;
+  endWarCampaignRecord(campaign);
+  return true;
+}
+
 function handleGlobalWarVictory(data, winner, loser, attackerPlayer, campaign) {
   if (!winner || !loser || !getSettlement(data, loser.id)) return;
+  if (campaign?.ended) return;
+
+  finishWarCampaignRecord(campaign);
 
   const winnerLabel = settlementDisplayName(data, winner);
   const loserLabel = settlementDisplayName(data, loser);
 
-  unlinkDirectWarPair(data, winner.id, loser.id);
-  endWarCampaign(data, campaign?.initiatorSettlementId ?? winner.id, loser.id);
-  if (Array.isArray(winner.warInitiatedAgainst)) {
-    winner.warInitiatedAgainst = winner.warInitiatedAgainst.filter((id) => id !== loser.id);
-  }
+  unlinkWarParticipants(data, campaign, winner, loser);
+  clearWarInitiatedAgainst(data, campaign);
 
   ensureSettlementChunks(winner, settlementType(winner).radius);
   ensureSettlementChunks(loser, settlementType(loser).radius);
@@ -3244,8 +3336,7 @@ function handleGlobalWarVictory(data, winner, loser, attackerPlayer, campaign) {
   winner.morale = Math.min(100, (winner.morale ?? 75) + 12);
   ensureWarCooldownData(winner);
 
-  const reasonSuffix = campaign?.reason ? ` Причина: "${campaign.reason}".` : "";
-  const scoreSuffix = campaign ? ` Счёт: ${formatGlobalWarKillScore(data, campaign)}.` : "";
+  const reasonSuffix = campaign?.reason ? ` "${campaign.reason}".` : "";
   world.sendMessage(
     `§4[Глобальная война] §f${winnerLabel} победило. ${loserLabel}: ${defeat.beforeType} → ${settlementType(loser).name}.${reasonSuffix}`
   );
@@ -3261,15 +3352,15 @@ function handleGlobalWarVictory(data, winner, loser, attackerPlayer, campaign) {
 
 function handleWarVictory(data, winner, loser, attackerPlayer, campaign) {
   if (!winner || !loser || !getSettlement(data, loser.id)) return;
+  if (campaign?.ended) return;
+
+  finishWarCampaignRecord(campaign);
 
   const winnerLabel = settlementDisplayName(data, winner);
   const loserLabel = settlementDisplayName(data, loser);
 
-  unlinkAllianceWar(data, winner, loser.id);
-  endWarCampaign(data, winner.id, loser.id);
-  if (Array.isArray(winner.warInitiatedAgainst)) {
-    winner.warInitiatedAgainst = winner.warInitiatedAgainst.filter((id) => id !== loser.id);
-  }
+  unlinkWarParticipants(data, campaign, winner, loser);
+  clearWarInitiatedAgainst(data, campaign);
 
   ensureSettlementChunks(winner, settlementType(winner).radius);
   ensureSettlementChunks(loser, settlementType(loser).radius);

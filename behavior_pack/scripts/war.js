@@ -330,6 +330,11 @@ export function endWarCampaign(data, initiatorSettlementId, targetSettlementId) 
   return campaign;
 }
 
+export function endWarCampaignRecord(campaign) {
+  if (campaign) campaign.ended = true;
+  return campaign;
+}
+
 export function shouldPenalizeEarlyPeace(campaign, currentTick) {
   if (!campaign) return false;
   return !campaign.flagDamageDealt || currentTick < campaign.activeTick;
