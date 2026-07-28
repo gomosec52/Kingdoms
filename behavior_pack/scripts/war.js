@@ -17,6 +17,10 @@ export const MIN_TARGET_ONLINE_FOR_WAR = 3;
 export const MIN_ATTACKER_ONLINE_FOR_WAR = 2;
 export const MIN_ATTACKERS_ON_TERRITORY_FOR_FLAG_DAMAGE = 2;
 export const WAR_PREPARATION_TICKS = 45 * 60 * 20;
+export const GLOBAL_WAR_MIN_ONLINE = 5;
+export const GLOBAL_WAR_KILL_POINTS_TO_WIN = 50;
+export const GLOBAL_WAR_TERRITORY_TRANSFER_FRACTION = 0.6;
+export const GLOBAL_WAR_DEMOTE_TYPES = 2;
 export const FLAG_DAMAGE_COOLDOWN_TICKS = 15 * 20;
 export const WAR_EARLY_PEACE_MORALE_PENALTY = 15;
 export const FLAG_REPAIR_COOLDOWN_TICKS = 2 * 60 * 20;
@@ -207,12 +211,13 @@ export function findWarCampaignBetween(data, first, second) {
   });
 }
 
-export function createWarCampaign(data, initiator, target, reason, currentTick) {
+export function createWarCampaign(data, initiator, target, reason, currentTick, warType = "normal") {
   ensureWarCampaigns(data);
   const campaign = {
     id: nextWarCampaignId(data),
     initiatorSettlementId: initiator.id,
     targetSettlementId: target.id,
+    warType,
     reason: String(reason ?? "").trim(),
     declaredTick: currentTick,
     activeTick: currentTick + WAR_PREPARATION_TICKS,
@@ -220,8 +225,81 @@ export function createWarCampaign(data, initiator, target, reason, currentTick) 
     combatAnnounced: false,
     ended: false
   };
+  if (warType === "global") {
+    campaign.killPoints = {
+      [String(initiator.id)]: 0,
+      [String(target.id)]: 0
+    };
+  }
   data.warCampaigns.push(campaign);
   return campaign;
+}
+
+export function createGlobalWarCampaign(data, initiator, target, reason, currentTick) {
+  return createWarCampaign(data, initiator, target, reason, currentTick, "global");
+}
+
+export function isGlobalWarCampaign(campaign) {
+  return campaign?.warType === "global";
+}
+
+export function getGlobalWarOnlineBlockReason(onlineCount, sideLabel) {
+  if (onlineCount < GLOBAL_WAR_MIN_ONLINE) {
+    return {
+      ok: false,
+      message: `§cДля глобальной войны у ${sideLabel} должно быть минимум ${GLOBAL_WAR_MIN_ONLINE} жителей в сети (сейчас ${onlineCount}).`
+    };
+  }
+  return { ok: true };
+}
+
+export function canDeclareGlobalWarOnTarget(data, initiator, target, currentTick, initiatorOnlineCount, targetOnlineCount) {
+  const initiatorCheck = getGlobalWarOnlineBlockReason(initiatorOnlineCount, "вашего поселения");
+  if (!initiatorCheck.ok) return initiatorCheck;
+  const targetCheck = getGlobalWarOnlineBlockReason(targetOnlineCount, "противника");
+  if (!targetCheck.ok) return targetCheck;
+  const cooldownRemaining = getWarDeclareCooldownRemaining(initiator, currentTick);
+  if (cooldownRemaining > 0) {
+    return { ok: false, reason: "global", remaining: cooldownRemaining };
+  }
+  return { ok: true };
+}
+
+export function linkDirectWar(initiator, target) {
+  if (!Array.isArray(initiator.wars)) initiator.wars = [];
+  if (!Array.isArray(target.wars)) target.wars = [];
+  if (!initiator.wars.includes(target.id)) initiator.wars.push(target.id);
+  if (!target.wars.includes(initiator.id)) target.wars.push(initiator.id);
+}
+
+export function unlinkDirectWarPair(data, firstId, secondId) {
+  const first = getSettlementById(data, firstId);
+  const second = getSettlementById(data, secondId);
+  if (first) first.wars = (first.wars || []).filter((id) => id !== secondId);
+  if (second) second.wars = (second.wars || []).filter((id) => id !== firstId);
+}
+
+export function getGlobalWarKillPoints(campaign, settlementId) {
+  if (!isGlobalWarCampaign(campaign)) return 0;
+  return campaign.killPoints?.[String(settlementId)] ?? 0;
+}
+
+export function addGlobalWarKillPoint(campaign, settlementId) {
+  if (!isGlobalWarCampaign(campaign)) return 0;
+  if (!campaign.killPoints) campaign.killPoints = {};
+  const key = String(settlementId);
+  campaign.killPoints[key] = (campaign.killPoints[key] ?? 0) + 1;
+  return campaign.killPoints[key];
+}
+
+export function formatGlobalWarKillScore(data, campaign) {
+  const initiator = getSettlementById(data, campaign.initiatorSettlementId);
+  const target = getSettlementById(data, campaign.targetSettlementId);
+  const left = getGlobalWarKillPoints(campaign, campaign.initiatorSettlementId);
+  const right = getGlobalWarKillPoints(campaign, campaign.targetSettlementId);
+  const leftName = initiator?.name ?? "?";
+  const rightName = target?.name ?? "?";
+  return `${leftName} ${left}/${GLOBAL_WAR_KILL_POINTS_TO_WIN} — ${right}/${GLOBAL_WAR_KILL_POINTS_TO_WIN} ${rightName}`;
 }
 
 export function nextWarCampaignId(data) {

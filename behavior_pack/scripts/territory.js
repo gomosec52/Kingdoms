@@ -318,3 +318,51 @@ export function loseHalfTerritoryChunks(settlement) {
   if (!settlement.chunks.includes(flagKey)) settlement.chunks.push(flagKey);
   return removed.size;
 }
+
+export function transferDefeatedSettlementChunks(data, winner, loser, fraction = 0.6) {
+  ensureSettlementChunks(winner, 0);
+  ensureSettlementChunks(loser, 0);
+
+  const flagChunk = chunkFromLocation(loser.flag);
+  const flagKey = chunkKey(flagChunk.cx, flagChunk.cz);
+  const captured = [...(loser.capturedChunks || [])];
+  const base = [...(loser.chunks || [])];
+  const allKeys = new Set([...base, ...captured]);
+  const transferCount = Math.floor(allKeys.size * fraction);
+  if (transferCount <= 0) return 0;
+
+  const transferable = [];
+  for (const key of captured) {
+    if (key !== flagKey) transferable.push({ key, priority: 0, dist: 0 });
+  }
+  for (const key of base) {
+    if (key === flagKey || captured.includes(key)) continue;
+    const { cx, cz } = parseChunkKey(key);
+    const dist = Math.hypot(cx * CHUNK_SIZE + 8 - loser.flag.x, cz * CHUNK_SIZE + 8 - loser.flag.z);
+    transferable.push({ key, priority: 1, dist });
+  }
+
+  transferable.sort((left, right) => {
+    if (left.priority !== right.priority) return left.priority - right.priority;
+    return right.dist - left.dist;
+  });
+
+  const toTransfer = transferable.slice(0, transferCount).map((entry) => entry.key);
+  const transferSet = new Set(toTransfer);
+  loser.capturedChunks = captured.filter((key) => !transferSet.has(key));
+  loser.chunks = base.filter((key) => !transferSet.has(key));
+  if (!loser.chunks.includes(flagKey)) loser.chunks.push(flagKey);
+
+  if (!Array.isArray(winner.capturedChunks)) winner.capturedChunks = [];
+  const winnerKeys = getAllSettlementChunkKeys(winner);
+  let added = 0;
+  for (const key of toTransfer) {
+    const { cx, cz } = parseChunkKey(key);
+    if (winnerKeys.has(key)) continue;
+    if (findSettlementOwningChunk(data, winner.dimensionId, cx, cz, winner.id)) continue;
+    winner.capturedChunks.push(key);
+    winnerKeys.add(key);
+    added += 1;
+  }
+  return added;
+}
