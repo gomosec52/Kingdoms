@@ -34,23 +34,28 @@ function resetCondemnationDemoteTracking(settlement, data, currentTick) {
   }
 }
 
+function normalizePlayerName(name) {
+  return String(name ?? "").trim().toLowerCase();
+}
+
 export function countUniqueCondemners(data, targetSettlementId, currentTick = deps.system.currentTick) {
   purgeExpiredCondemnations(data, currentTick);
   const cutoff = currentTick - CONDEMNATION_TTL_TICKS;
-  const ids = new Set();
+  const players = new Set();
   for (const entry of data.condemnations) {
     if (entry.targetSettlementId !== targetSettlementId) continue;
     if (entry.createdTick < cutoff) continue;
-    ids.add(entry.fromSettlementId);
+    players.add(normalizePlayerName(entry.fromPlayerName));
   }
-  return ids.size;
+  return players.size;
 }
 
-export function hasRecentCondemnation(data, fromSettlementId, targetSettlementId, currentTick = deps.system.currentTick) {
+export function hasRecentCondemnationByPlayer(data, playerName, targetSettlementId, currentTick = deps.system.currentTick) {
   purgeExpiredCondemnations(data, currentTick);
   const cutoff = currentTick - CONDEMNATION_TTL_TICKS;
+  const normalized = normalizePlayerName(playerName);
   return data.condemnations.some((entry) =>
-    entry.fromSettlementId === fromSettlementId
+    normalizePlayerName(entry.fromPlayerName) === normalized
     && entry.targetSettlementId === targetSettlementId
     && entry.createdTick >= cutoff);
 }
@@ -59,10 +64,12 @@ export function formatCondemnationInfoPanel(data, currentTick = deps.system.curr
   purgeExpiredCondemnations(data, currentTick);
   const lines = [
     "§6Осуждение§r",
-    "Игроки могут осудить поселение за несправедливые действия.",
+    "Каждый игрок может осудить цель 1 раз.",
+    "Через 2 дня ваши осуждения снимаются —",
+    "можно осудить ту же цель снова.",
     "При массовом осуждении мораль сильно падает,",
-    "а при 8+ осуждениях за 2 дня — тип может снизиться.",
-    "При 12+ осуждениях — до 2 типов ниже.",
+    "а при 8+ игроков за 2 дня — тип может снизиться.",
+    "При 12+ игроках — до 2 типов ниже.",
     "",
     "§eПоселения с осуждениями (2 дня):§r"
   ];
@@ -125,8 +132,8 @@ export function recordCondemnation(data, fromSettlement, targetSettlement, playe
   if (deps.areAllied(data, fromSettlement.id, targetSettlement.id)) {
     return { ok: false, message: "§cНельзя осудить союзника." };
   }
-  if (hasRecentCondemnation(data, fromSettlement.id, targetSettlement.id, currentTick)) {
-    return { ok: false, message: "§cВаше поселение уже осуждало эту цель за последние 2 дня." };
+  if (hasRecentCondemnationByPlayer(data, playerName, targetSettlement.id, currentTick)) {
+    return { ok: false, message: "§cВы уже осуждали эту цель. Через 2 дня сможете снова." };
   }
 
   data.condemnations.push({
@@ -197,6 +204,16 @@ export async function openCondemnationMenu(player, settlementId, sessionToken) {
     return openCondemnationMenu(player, settlementId, sessionToken);
   }
 
+  const confirmFinal = await deps.showFormDeferred(player, new deps.MessageFormData()
+    .title("Подтверждение осуждения")
+    .body(`Подтвердите осуждение ${deps.settlementDisplayName(data, target)}.\n\nВаш голос действует 2 дня, затем снимается и вы сможете осудить снова.`)
+    .button1("Осудить")
+    .button2("Отмена"));
+
+  if (confirmFinal.canceled || confirmFinal.selection !== 0) {
+    return openCondemnationMenu(player, settlementId, sessionToken);
+  }
+
   const fresh = deps.loadData();
   const freshSettlement = deps.getSettlement(fresh, settlementId);
   const freshTarget = deps.getSettlement(fresh, target.id);
@@ -214,7 +231,7 @@ export async function openCondemnationMenu(player, settlementId, sessionToken) {
   deps.updateFlagLabelFor(freshTarget, fresh);
   deps.scheduleRefreshSettlementBorders(fresh, freshTarget);
 
-  let message = `§6[Дипломатия] §f${freshSettlement.name} осудило ${freshTarget.name}. Мораль цели снижена.`;
+  let message = `§6[Дипломатия] §f${playerName} осудил(а) ${freshTarget.name}. Мораль цели снижена.`;
   if (result.effect?.demoteDelta > 0) {
     message += ` Тип понижен на ${result.effect.demoteDelta}.`;
   }

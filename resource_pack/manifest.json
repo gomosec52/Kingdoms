@@ -2,12 +2,12 @@
   "format_version": 2,
   "header": {
     "name": "KW Build Resources",
-    "description": "v1.12.17 — war prep 45m, flag repair, condemnations, defeat demote",
+    "description": "v1.12.18 — condemnation per player, double confirm",
     "uuid": "0319ea31-7410-4887-be2d-2d52676a4a6d",
     "version": [
       1,
       12,
-      17
+      18
     ],
     "min_engine_version": [
       1,
@@ -22,7 +22,7 @@
       "version": [
         1,
         12,
-        17
+        18
       ]
     }
   ]
