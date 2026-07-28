@@ -744,6 +744,7 @@ system.runInterval(() => updatePlayerTerritoryMessages(), 20);
 system.runInterval(() => processPendingTradePayouts(), 40);
 system.runInterval(() => processPendingTradeItemReturns(), 40);
 system.runInterval(() => tickMintWorkshops(), 20);
+system.runInterval(() => refreshAllMintLabels(), 60);
 
 async function beginSettlementCreationFromItem(player, clickedBlock, blockFace, origin = "script") {
   if (!player || !clickedBlock) return;
@@ -3495,7 +3496,7 @@ function notifyPlayerAboutAddon(player) {
   if (loadedNoticeShown.has(playerName)) return;
   loadedNoticeShown.add(playerName);
 
-  player.sendMessage("§6[KW Build] §fv1.12.29 §7— флаг + чеканный двор (ПКМ)");
+  player.sendMessage("§6[KW Build] §fv1.12.30 §7— чеканный двор: очередь, наковальня, надпись");
   player.sendMessage(`§7Флаг — сущность. Кликните предметом по блоку. Нужно ${formatCopperValue(CREATION_COST)}.`);
 }
 
