@@ -77,6 +77,7 @@ import {
   canManageResidents,
   canOpenMintWorkshop,
   canBreakMintWorkshop,
+  getMintWorkshopDeniedMessage,
   canManagePrefixes,
   canAccessConstruction,
   canAccessTrade,
@@ -1435,11 +1436,25 @@ function canFitItemAmount(player, typeId, amount) {
   return free + partial >= amount;
 }
 
+function getMintWorkshopSettlement(data, block, record) {
+  if (record) return getSettlement(data, record.settlementId);
+  return findSettlementAt(data, block.location, getDimensionId(block.dimension));
+}
+
 async function openMintFurnaceMenu(player, block) {
   if (!player?.isValid || !block) return;
 
   tickMintWorkshops();
   const data = loadData();
+  const dimensionId = getDimensionId(block.dimension);
+  const existingRecord = findMintWorkshop(data, block.location, dimensionId);
+  const settlement = getMintWorkshopSettlement(data, block, existingRecord);
+  const playerName = getPlayerName(player);
+  if (!canOpenMintWorkshop(data, playerName, settlement)) {
+    player.sendMessage(getMintWorkshopDeniedMessage(data, playerName, settlement, "open"));
+    return;
+  }
+
   const record = ensureMintWorkshopRecord(player, block);
   if (!record) {
     player.sendMessage("§cНе удалось открыть чеканный двор.");
@@ -1447,10 +1462,9 @@ async function openMintFurnaceMenu(player, block) {
   }
 
   const def = MINT_SHOP_TIERS[record.tier];
-  const settlement = getSettlement(data, record.settlementId);
-  const playerName = getPlayerName(player);
-  if (!def || !settlement || !canOpenMintWorkshop(data, playerName, settlement)) {
-    player.sendMessage("§cЧеканный двор могут открывать только создатель и Советник поселения.");
+  const ownerSettlement = getSettlement(data, record.settlementId);
+  if (!def || !ownerSettlement || !canOpenMintWorkshop(data, playerName, ownerSettlement)) {
+    player.sendMessage(getMintWorkshopDeniedMessage(data, playerName, ownerSettlement, "open"));
     return;
   }
 
@@ -1555,12 +1569,10 @@ function handleMintBlockInteract(player, block) {
   const data = loadData();
   const dimensionId = getDimensionId(block.dimension);
   const record = findMintWorkshop(data, block.location, dimensionId);
-  const settlement = record
-    ? getSettlement(data, record.settlementId)
-    : findSettlementAt(data, block.location, dimensionId);
+  const settlement = getMintWorkshopSettlement(data, block, record);
   const playerName = getPlayerName(player);
-  if (settlement && !canOpenMintWorkshop(data, playerName, settlement)) {
-    player.sendMessage("§cЧеканный двор могут открывать только создатель и Советник поселения.");
+  if (!canOpenMintWorkshop(data, playerName, settlement)) {
+    player.sendMessage(getMintWorkshopDeniedMessage(data, playerName, settlement, "open"));
     return;
   }
   openMintFurnaceMenu(player, block).catch((error) => {
@@ -1572,14 +1584,12 @@ function tryBreakMintWorkshop(player, block, event) {
   const data = loadData();
   const dimensionId = getDimensionId(block.dimension);
   const record = findMintWorkshop(data, block.location, dimensionId);
-  const settlement = record
-    ? getSettlement(data, record.settlementId)
-    : findSettlementAt(data, block.location, dimensionId);
+  const settlement = getMintWorkshopSettlement(data, block, record);
   const playerName = getPlayerName(player);
 
-  if (settlement && !canBreakMintWorkshop(data, playerName, settlement)) {
+  if (!canBreakMintWorkshop(data, playerName, settlement)) {
     event.cancel = true;
-    player.sendMessage("§cСломать чеканный двор могут только создатель, Советник и Дворянин этого поселения.");
+    player.sendMessage(getMintWorkshopDeniedMessage(data, playerName, settlement, "break"));
     return;
   }
 
@@ -3697,7 +3707,7 @@ function notifyPlayerAboutAddon(player) {
   if (loadedNoticeShown.has(playerName)) return;
   loadedNoticeShown.add(playerName);
 
-  player.sendMessage("§6[KW Build] §fv1.12.32 §7— защита чеканного двора по ролям");
+  player.sendMessage("§6[KW Build] §fv1.12.33 §7— чеканный двор: чужаки заблокированы");
   player.sendMessage(`§7Флаг — сущность. Кликните предметом по блоку. Нужно ${formatCopperValue(CREATION_COST)}.`);
 }
 

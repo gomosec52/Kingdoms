@@ -80,18 +80,36 @@ export function getAssignablePrefixes(assignerRole, isOwner) {
   return [];
 }
 
+export function isSettlementMember(playerName, settlement) {
+  if (!settlement) return false;
+  if (isSettlementOwner(playerName, settlement)) return true;
+  return Object.keys(settlement.members || {}).some((name) => samePlayerName(name, playerName));
+}
+
 export function canManageResidents(data, playerName, settlement) {
   return isSettlementOwner(playerName, settlement) || getPlayerRole(data, playerName, settlement) === "Советник";
 }
 
 export function canOpenMintWorkshop(data, playerName, settlement) {
+  if (!isSettlementMember(playerName, settlement)) return false;
   return canManageResidents(data, playerName, settlement);
 }
 
 export function canBreakMintWorkshop(data, playerName, settlement) {
+  if (!isSettlementMember(playerName, settlement)) return false;
   if (isSettlementOwner(playerName, settlement)) return true;
   const role = getPlayerRole(data, playerName, settlement);
   return role === "Советник" || role === "Дворянин";
+}
+
+export function getMintWorkshopDeniedMessage(data, playerName, settlement, action) {
+  if (!settlement || !isSettlementMember(playerName, settlement)) {
+    return "§cЧужаки не могут взаимодействовать с чеканным двором.";
+  }
+  if (action === "open") {
+    return "§cЧеканный двор могут открывать только создатель и Советник поселения.";
+  }
+  return "§cСломать чеканный двор могут только создатель, Советник и Дворянин этого поселения.";
 }
 
 export function canManagePrefixes(data, playerName, settlement) {
