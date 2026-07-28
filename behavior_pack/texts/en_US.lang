@@ -5,3 +5,7 @@ item.kingdoms:coin_copper.name=Copper Coin
 item.kingdoms:coin_silver.name=Silver Coin
 item.kingdoms:coin_gold.name=Gold Coin
 tile.kingdoms:spawn_guard.name=Spawn Guard Core
+tile.kingdoms:mint_workshop_1.name=Mint Workshop I
+tile.kingdoms:mint_workshop_2.name=Mint Workshop II
+item.kingdoms:mint_workshop_1.name=Mint Workshop I
+item.kingdoms:mint_workshop_2.name=Mint Workshop II

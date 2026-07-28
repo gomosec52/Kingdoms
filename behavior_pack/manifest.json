@@ -2,12 +2,12 @@
   "format_version": 2,
   "header": {
     "name": "KW Build",
-    "description": "v1.12.18 — condemnation per player, double confirm",
+    "description": "v1.13.0 — mint workshop, copper ingot 9 coins",
     "uuid": "35da6754-77fe-403f-98e0-6e6702d1c764",
     "version": [
       1,
-      12,
-      18
+      13,
+      0
     ],
     "min_engine_version": [
       1,
@@ -20,9 +20,9 @@
       "type": "data",
       "uuid": "85aa1b50-3187-42b5-81e7-a79d75242d9b",
       "version": [
-        1,
-        12,
-        18
+      1,
+      13,
+      0
       ]
     },
     {
@@ -31,9 +31,9 @@
       "uuid": "ac9a2baa-958e-40dc-82e1-dc74916aded6",
       "entry": "scripts/main.js",
       "version": [
-        1,
-        12,
-        18
+      1,
+      13,
+      0
       ]
     }
   ],
@@ -41,9 +41,9 @@
     {
       "uuid": "0319ea31-7410-4887-be2d-2d52676a4a6d",
       "version": [
-        1,
-        12,
-        18
+      1,
+      13,
+      0
       ]
     },
     {

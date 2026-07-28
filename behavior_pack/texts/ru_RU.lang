@@ -5,3 +5,7 @@ item.kingdoms:coin_copper.name=Медная монета
 item.kingdoms:coin_silver.name=Серебряная монета
 item.kingdoms:coin_gold.name=Золотая монета
 tile.kingdoms:spawn_guard.name=Ядро защиты спавна
+tile.kingdoms:mint_workshop_1.name=Чеканный двор I
+tile.kingdoms:mint_workshop_2.name=Чеканный двор II
+item.kingdoms:mint_workshop_1.name=Чеканный двор I
+item.kingdoms:mint_workshop_2.name=Чеканный двор II

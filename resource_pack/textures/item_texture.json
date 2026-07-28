@@ -22,6 +22,9 @@
     },
     "kingdoms_coin_gold": {
       "textures": "textures/items/coin_gold"
+    },
+    "kingdoms_mint_workshop": {
+      "textures": "textures/items/mint_workshop"
     }
   }
 }

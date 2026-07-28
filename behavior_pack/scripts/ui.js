@@ -7,6 +7,7 @@ export const KINGDOMS_MENU_PAGE = {
   TRADE_SELL: "trade_sell",
   TRADE_MAIL: "trade_mail",
   TRADE_COINS: "trade_coins",
+  MINT: "mint",
   RESIDENTS: "residents",
   DIPLOMACY: "diplomacy",
   CONDEMN: "condemn",

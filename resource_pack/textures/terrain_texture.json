@@ -12,6 +12,12 @@
     },
     "kingdoms_territory_border": {
       "textures": "textures/blocks/territory_border"
+    },
+    "kingdoms_mint_workshop": {
+      "textures": "textures/blocks/mint_workshop"
+    },
+    "kingdoms_mint_workshop_gold": {
+      "textures": "textures/blocks/mint_workshop_gold"
     }
   }
 }
