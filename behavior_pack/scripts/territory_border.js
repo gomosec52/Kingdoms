@@ -52,12 +52,14 @@ function removeBorderBlockAt(dimension, x, y, z) {
 
 export function clearSettlementBorders(settlement) {
   const dimension = deps?.safeDimension?.(settlement?.dimensionId);
-  if (!dimension || !Array.isArray(settlement?.borderBlocks)) return;
+  if (!dimension) return;
 
-  for (const entry of settlement.borderBlocks) {
-    const [x, y, z] = entry.split(",").map(Number);
-    if (!Number.isFinite(x) || !Number.isFinite(y) || !Number.isFinite(z)) continue;
-    removeBorderBlockAt(dimension, x, y, z);
+  if (Array.isArray(settlement.borderBlocks)) {
+    for (const entry of settlement.borderBlocks) {
+      const [x, y, z] = entry.split(",").map(Number);
+      if (!Number.isFinite(x) || !Number.isFinite(y) || !Number.isFinite(z)) continue;
+      removeBorderBlockAt(dimension, x, y, z);
+    }
   }
   settlement.borderBlocks = [];
 }
