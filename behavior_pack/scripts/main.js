@@ -339,6 +339,7 @@ bindKingdomCommandSystem({
   isWarCombatActive,
   getWarPreparationRemaining,
   formatCooldownTicks,
+  isSettlementOwner,
   openWarMenuFromCommand: (player) => openSettlementMenuFromCommand(player, openWarMenu),
   openDiplomacyMenuFromCommand: (player) => openSettlementMenuFromCommand(player, openDiplomacyMenu)
 });
