@@ -11,6 +11,7 @@ import {
 import { bindCraftingFallback } from "./crafting.js";
 import { bindCoinExchangeSystem } from "./coin_exchange.js";
 import { bindTeleportCommandSystem } from "./teleport_commands.js";
+import { bindKingdomCommandSystem } from "./kingdom_commands.js";
 import {
   bindSpawnGuardSystem,
   findSpawnProtectionAt,
@@ -298,7 +299,48 @@ bindTeleportCommandSystem({
   getPlayerName,
   settlementDisplayName,
   safeDimension,
-  getDimensionId
+  getDimensionId,
+  findOnlinePlayerByName
+});
+
+function openSettlementMenuFromCommand(player, submenuOpener) {
+  if (!player?.isValid) return;
+  const data = loadData();
+  const playerName = getPlayerName(player);
+  const settlement = getPlayerSettlement(data, playerName);
+  if (!settlement) {
+    player.sendMessage("§c[Королевства] У вас нет поселения.");
+    return;
+  }
+  const sessionToken = `${player.id}:${settlement.id}:${system.currentTick}`;
+  settlementMenuSessions.set(player.id, {
+    settlementId: settlement.id,
+    token: sessionToken,
+    openedAt: system.currentTick
+  });
+  system.run(() => submenuOpener(player, settlement.id, sessionToken));
+}
+
+bindKingdomCommandSystem({
+  system,
+  world,
+  loadData,
+  getPlayerSettlement,
+  getPlayerName,
+  getSettlement,
+  settlementDisplayName,
+  getAlliance,
+  getTerritoryChunkCount,
+  countCapturedChunks,
+  getMaxCapturedChunks,
+  canAccessDiplomacy,
+  canDeclareWar,
+  findWarCampaignBetween,
+  isWarCombatActive,
+  getWarPreparationRemaining,
+  formatCooldownTicks,
+  openWarMenuFromCommand: (player) => openSettlementMenuFromCommand(player, openWarMenu),
+  openDiplomacyMenuFromCommand: (player) => openSettlementMenuFromCommand(player, openDiplomacyMenu)
 });
 
 bindSpawnGuardSystem({

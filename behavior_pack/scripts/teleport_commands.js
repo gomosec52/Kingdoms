@@ -10,12 +10,16 @@ const HOMES_PROPERTY = "kingdoms:homes";
 const TP_COOLDOWN_PROPERTY = "kingdoms:tp_cooldown_until";
 const WORLD_SPAWN_PROPERTY = "kingdoms:world_spawn";
 const TP_COOLDOWN_TICKS = 30 * 20;
+const TPA_TIMEOUT_TICKS = 60 * 20;
 
 const DONOR_TAG_10 = "kingdoms_donor_10";
 const DONOR_TAG_5 = "kingdoms_donor_5";
 
 /** @type {Record<string, any> | null} */
 let deps = null;
+
+/** @type {Map<string, { requesterId: string, requesterName: string, expiresAt: number }>} */
+const pendingTpaByTargetId = new Map();
 
 function getPlayerFromOrigin(origin) {
   const player = origin?.initiator ?? origin?.sourceEntity;
@@ -193,6 +197,126 @@ function cmdHome(player, slotName) {
   }
 }
 
+function cmdDelHome(player, slotName) {
+  const name = normalizeHomeName(slotName);
+  const homes = readHomes(player);
+  const index = homes.findIndex((home) => home.name === name);
+  if (index < 0) {
+    player.sendMessage(`§c[Королевства] Дом «${name}» не найден. /homes — список точек.`);
+    return;
+  }
+  homes.splice(index, 1);
+  writeHomes(player, homes);
+  player.sendMessage(`§a[Королевства] Дом «${name}» удалён (${homes.length}/${getMaxHomes(player)}).`);
+}
+
+function formatHomeEntry(entry) {
+  const x = Math.floor(entry.x);
+  const y = Math.floor(entry.y);
+  const z = Math.floor(entry.z);
+  return `• «${entry.name}» — ${x} ${y} ${z} (${entry.dimensionId ?? "overworld"})`;
+}
+
+function cmdHomes(player) {
+  const homes = readHomes(player);
+  const maxHomes = getMaxHomes(player);
+  if (!homes.length) {
+    player.sendMessage(`§7[Королевства] Нет сохранённых домов. /sethome [слот] — сохранить (лимит ${maxHomes}).`);
+    return;
+  }
+  player.sendMessage([
+    `§6[Королевства] Дома (${homes.length}/${maxHomes}):`,
+    ...homes.map(formatHomeEntry)
+  ].join("\n"));
+}
+
+function clearExpiredTpaRequests() {
+  const now = system.currentTick;
+  for (const [targetId, request] of pendingTpaByTargetId.entries()) {
+    if (request.expiresAt <= now) pendingTpaByTargetId.delete(targetId);
+  }
+}
+
+function findPendingTpaForTarget(player) {
+  clearExpiredTpaRequests();
+  return pendingTpaByTargetId.get(player.id);
+}
+
+function cmdTpa(player, targetName) {
+  clearExpiredTpaRequests();
+  const query = String(targetName ?? "").trim();
+  if (!query) {
+    player.sendMessage("§c[Королевства] Использование: /tpa <ник>");
+    return;
+  }
+
+  const target = deps.findOnlinePlayerByName?.(query);
+  if (!target?.isValid) {
+    player.sendMessage(`§c[Королевства] Игрок «${query}» не в сети.`);
+    return;
+  }
+  if (target.id === player.id) {
+    player.sendMessage("§c[Королевства] Нельзя отправить запрос самому себе.");
+    return;
+  }
+
+  const requesterName = deps.getPlayerName(player);
+  pendingTpaByTargetId.set(target.id, {
+    requesterId: player.id,
+    requesterName,
+    expiresAt: system.currentTick + TPA_TIMEOUT_TICKS
+  });
+
+  player.sendMessage(`§a[Королевства] Запрос телепорта отправлен игроку ${deps.getPlayerName(target)}.`);
+  target.sendMessage([
+    `§6[Королевства] ${requesterName} просит телепорт к вам.`,
+    "§e/tpaccept §7— принять, §e/tpdeny §7— отклонить (60 сек.)"
+  ].join("\n"));
+}
+
+function cmdTpAccept(player) {
+  const request = findPendingTpaForTarget(player);
+  if (!request) {
+    player.sendMessage("§c[Королевства] Нет входящих запросов телепорта.");
+    return;
+  }
+
+  pendingTpaByTargetId.delete(player.id);
+  const requester = world.getPlayers().find((online) => online.id === request.requesterId);
+  if (!requester?.isValid) {
+    player.sendMessage("§c[Королевства] Игрок уже вышел из игры.");
+    return;
+  }
+  if (blockIfCooldown(requester)) {
+    player.sendMessage(`§c[Королевства] У ${request.requesterName} активен кулдаун телепорта.`);
+    requester.sendMessage("§c[Королевства] Ваш запрос отклонён: активен кулдаун телепорта.");
+    return;
+  }
+
+  const location = player.location;
+  const dimensionId = deps.getDimensionId(player.dimension);
+  if (teleportPlayer(requester, location, dimensionId)) {
+    player.sendMessage(`§a[Королевства] ${request.requesterName} телепортирован к вам.`);
+    requester.sendMessage(`§a[Королевства] Телепорт к ${deps.getPlayerName(player)} принят.`);
+  }
+}
+
+function cmdTpDeny(player) {
+  const request = findPendingTpaForTarget(player);
+  if (!request) {
+    player.sendMessage("§c[Королевства] Нет входящих запросов телепорта.");
+    return;
+  }
+
+  pendingTpaByTargetId.delete(player.id);
+  player.sendMessage(`§7[Королевства] Запрос от ${request.requesterName} отклонён.`);
+
+  const requester = world.getPlayers().find((online) => online.id === request.requesterId);
+  if (requester?.isValid) {
+    requester.sendMessage(`§c[Королевства] ${deps.getPlayerName(player)} отклонил(а) ваш запрос телепорта.`);
+  }
+}
+
 function cmdSpawn(player) {
   if (blockIfCooldown(player)) return;
   const spawn = readWorldSpawn();
@@ -242,6 +366,33 @@ function registerTeleportCommands(initEvent) {
       description: "Сохранить точку дома",
       run: (player, slot) => cmdSetHome(player, slot),
       optionalParameters: [{ name: "slot", type: CustomCommandParamType.String }]
+    },
+    {
+      name: "kingdoms:delhome",
+      description: "Удалить сохранённый дом",
+      run: (player, slot) => cmdDelHome(player, slot),
+      optionalParameters: [{ name: "slot", type: CustomCommandParamType.String }]
+    },
+    {
+      name: "kingdoms:homes",
+      description: "Список сохранённых домов",
+      run: (player) => cmdHomes(player)
+    },
+    {
+      name: "kingdoms:tpa",
+      description: "Запрос телепорта к игроку",
+      run: (player, target) => cmdTpa(player, target),
+      mandatoryParameters: [{ name: "target", type: CustomCommandParamType.String }]
+    },
+    {
+      name: "kingdoms:tpaccept",
+      description: "Принять запрос телепорта",
+      run: (player) => cmdTpAccept(player)
+    },
+    {
+      name: "kingdoms:tpdeny",
+      description: "Отклонить запрос телепорта",
+      run: (player) => cmdTpDeny(player)
     }
   ];
 
@@ -252,9 +403,10 @@ function registerTeleportCommands(initEvent) {
         description: command.description,
         permissionLevel: CommandPermissionLevel.Any,
         cheatsRequired: false,
-        optionalParameters: command.optionalParameters
+        optionalParameters: command.optionalParameters,
+        mandatoryParameters: command.mandatoryParameters
       },
-      (origin, slot) => runAsPlayer(origin, (player) => command.run(player, slot))
+      (origin, ...args) => runAsPlayer(origin, (player) => command.run(player, ...args))
     );
   }
 
@@ -280,6 +432,11 @@ function bindChatFallback(worldRef) {
       "/spawn": () => cmdSpawn(event.sender),
       "/home": () => cmdHome(event.sender, args[1]),
       "/sethome": () => cmdSetHome(event.sender, args[1]),
+      "/delhome": () => cmdDelHome(event.sender, args[1]),
+      "/homes": () => cmdHomes(event.sender),
+      "/tpa": () => cmdTpa(event.sender, args[1]),
+      "/tpaccept": () => cmdTpAccept(event.sender),
+      "/tpdeny": () => cmdTpDeny(event.sender),
       "/setspawn": () => cmdSetSpawn(event.sender)
     };
 
