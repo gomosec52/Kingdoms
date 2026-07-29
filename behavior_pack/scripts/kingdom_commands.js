@@ -123,6 +123,59 @@ function cmdChunks(player) {
   ].join("\n"));
 }
 
+function cmdWho(player) {
+  const data = deps.loadData();
+  const online = [...deps.world.getPlayers()].sort((first, second) =>
+    deps.getPlayerName(first).localeCompare(deps.getPlayerName(second), "ru")
+  );
+
+  if (!online.length) {
+    player.sendMessage("§7[Королевства] Никого нет в сети.");
+    return;
+  }
+
+  const lines = online.map((onlinePlayer) => {
+    const name = deps.getPlayerName(onlinePlayer);
+    const settlement = deps.getPlayerSettlement(data, name);
+    if (!settlement) return `• ${name} — §7без поселения`;
+    const display = deps.settlementDisplayName(data, settlement);
+    const isOwner = deps.isSettlementOwner(name, settlement);
+    return isOwner ? `• ${name} — ${display}` : `• ${name} — ${display} §7(житель)`;
+  });
+
+  player.sendMessage([
+    `§6[Королевства] Онлайн (${online.length}):`,
+    ...lines
+  ].join("\n"));
+}
+
+function cmdHelpKingdoms(player) {
+  player.sendMessage([
+    "§6[Королевства] Справка — телепорт:",
+    "§f/base §7— к флагу своего поселения",
+    "§f/home [слот] §7— телепорт домой",
+    "§f/sethome [слот] §7— сохранить точку (лимит 2/5/10)",
+    "§f/delhome [слот] §7— удалить точку",
+    "§f/homes §7— список домов",
+    "§f/spawn §7— на спавн сервера",
+    "§f/tpa <ник> §7— запрос телепорта к игроку",
+    "§f/tpaccept §7/ §f/tpdeny §7— принять или отклонить",
+    "§f/setspawn §7— установить спавн §8(админ)"
+  ].join("\n"));
+
+  player.sendMessage([
+    "§6[Королевства] Справка — поселение:",
+    "§f/war §7— война (меню или статус)",
+    "§f/ally §7— дипломатия (меню или альянс)",
+    "§f/chunks §7— чанки территории",
+    "§f/con §7— обмен монет",
+    "§f/who §7— кто онлайн",
+    "§f/help kingdoms §7— эта справка",
+    "",
+    "§7Меню флага: ПКМ по флагу поселения."
+  ].join("\n"));
+}
+
 function registerKingdomCommands(initEvent) {
   const registry = initEvent.customCommandRegistry;
   if (!registry?.registerCommand) return;
@@ -130,7 +183,9 @@ function registerKingdomCommands(initEvent) {
   const commands = [
     { name: "kingdoms:war", description: "Меню войны или статус", run: cmdWar },
     { name: "kingdoms:ally", description: "Меню дипломатии или альянс", run: cmdAlly },
-    { name: "kingdoms:chunks", description: "Информация о чанках поселения", run: cmdChunks }
+    { name: "kingdoms:chunks", description: "Информация о чанках поселения", run: cmdChunks },
+    { name: "kingdoms:who", description: "Список игроков онлайн", run: cmdWho },
+    { name: "kingdoms:help", description: "Справка по командам Королевств", run: cmdHelpKingdoms }
   ];
 
   for (const command of commands) {
@@ -149,11 +204,20 @@ function registerKingdomCommands(initEvent) {
 function bindChatFallback(worldRef) {
   worldRef.beforeEvents?.chatSend?.subscribe((event) => {
     const text = event.message.trim();
-    const cmd = text.split(/\s+/)[0]?.toLowerCase();
+    const args = text.toLowerCase().split(/\s+/);
+    const cmd = args[0];
+
+    if (cmd === "/help" && args[1] === "kingdoms") {
+      event.cancel = true;
+      system.run(() => cmdHelpKingdoms(event.sender));
+      return;
+    }
+
     const map = {
       "/war": () => cmdWar(event.sender),
       "/ally": () => cmdAlly(event.sender),
-      "/chunks": () => cmdChunks(event.sender)
+      "/chunks": () => cmdChunks(event.sender),
+      "/who": () => cmdWho(event.sender)
     };
     if (!map[cmd]) return;
     event.cancel = true;
