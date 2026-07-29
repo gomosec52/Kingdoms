@@ -49,7 +49,6 @@ import {
   findSettlementOwningChunk,
   chunkOverlapAt,
   getTerritoryChunkCount,
-  expandTerritoryOnVictory,
   transferDefeatedSettlementChunks,
   loseHalfTerritoryChunks,
   applyUpgradeTerritory,
@@ -115,43 +114,8 @@ const TAX_COOLDOWN_TICKS = 25 * 60 * 20;
 const LOOT_WINDOW_TICKS = 5 * 60 * 20;
 const LABEL_TAG = "kingdoms_flag_label";
 const MINT_LABEL_TAG = "kingdoms_mint_label";
+const FORBIDDEN_SETTLEMENT_DIMENSIONS = new Set(["minecraft:nether", "minecraft:the_end"]);
 const MINT_QUEUE_LIMIT = 64;
-const PROTECTED_INTERACTIONS = [
-  "minecraft:chest",
-  "minecraft:trapped_chest",
-  "minecraft:barrel",
-  "minecraft:shulker_box",
-  "minecraft:white_shulker_box",
-  "minecraft:orange_shulker_box",
-  "minecraft:magenta_shulker_box",
-  "minecraft:light_blue_shulker_box",
-  "minecraft:yellow_shulker_box",
-  "minecraft:lime_shulker_box",
-  "minecraft:pink_shulker_box",
-  "minecraft:gray_shulker_box",
-  "minecraft:light_gray_shulker_box",
-  "minecraft:cyan_shulker_box",
-  "minecraft:purple_shulker_box",
-  "minecraft:blue_shulker_box",
-  "minecraft:brown_shulker_box",
-  "minecraft:green_shulker_box",
-  "minecraft:red_shulker_box",
-  "minecraft:black_shulker_box",
-  "minecraft:lever",
-  "minecraft:stone_button",
-  "minecraft:oak_button",
-  "minecraft:spruce_button",
-  "minecraft:birch_button",
-  "minecraft:jungle_button",
-  "minecraft:acacia_button",
-  "minecraft:dark_oak_button",
-  "minecraft:mangrove_button",
-  "minecraft:cherry_button",
-  "minecraft:bamboo_button",
-  "minecraft:crimson_button",
-  "minecraft:warped_button",
-  "minecraft:polished_blackstone_button"
-];
 
 const SETTLEMENT_TYPES = [
   { name: "Деревня", hp: 500, radius: 35, tax: 4, minPlayers: 1, defeatReward: 8, upgradeCost: 0 },
@@ -231,6 +195,9 @@ import {
   GLOBAL_WAR_MIN_ONLINE,
   GLOBAL_WAR_KILL_POINTS_TO_WIN,
   GLOBAL_WAR_DEMOTE_TYPES,
+  GLOBAL_WAR_TERRITORY_TRANSFER_FRACTION,
+  WAR_VICTORY_TERRITORY_TRANSFER_FRACTION,
+  FLAG_DAMAGE_MULTIPLIER,
   isGlobalWarCampaign,
   linkDirectWar,
   unlinkDirectWarPair,
@@ -251,7 +218,7 @@ import {
 } from "./war.js";
 import { bindDiplomacySystem, openCondemnationMenu } from "./diplomacy.js";
 import { processPendingTradePayouts, processPendingTradeItemReturns } from "./trade.js";
-import { bindBrProtectionSystem, isBrProtectedInteractBlock } from "./br_protection.js";
+import { bindBrProtectionSystem } from "./br_protection.js";
 
 bindArmySystem({
   world,
@@ -689,28 +656,26 @@ world.beforeEvents.playerPlaceBlock?.subscribe((event) => {
 });
 
 world.beforeEvents.playerInteractWithBlock?.subscribe((event) => {
-  const blockId = event.block.typeId;
   const data = loadData();
   const dimensionId = getDimensionId(event.block.dimension);
-  if (isBrProtectedInteractBlock(blockId, PROTECTED_INTERACTIONS) && shouldBlockSpawnInteract(data, event.player, event.block.location, dimensionId)) {
+  if (shouldBlockSpawnInteract(data, event.player, event.block.location, dimensionId)) {
     event.cancel = true;
     event.player.sendMessage("§cЗона защиты спавна: взаимодействовать с этим нельзя.");
     return;
   }
-  if (!isBrProtectedInteractBlock(blockId, PROTECTED_INTERACTIONS)) return;
 
   const playerName = getPlayerName(event.player);
-  const lootZone = findLootZoneAt(data, event.block.location, getDimensionId(event.block.dimension));
+  const lootZone = findLootZoneAt(data, event.block.location, dimensionId);
   if (lootZone && !hasLootAccess(data, lootZone, playerName)) {
     event.cancel = true;
     event.player.sendMessage(`§cЗона мародёрства "${lootZone.name}" временно доступна только победителям.`);
     return;
   }
 
-  const settlement = findSettlementAt(data, event.block.location, getDimensionId(event.block.dimension));
+  const settlement = findSettlementAt(data, event.block.location, dimensionId);
   if (settlement && !hasTerritoryAccess(data, settlement, playerName)) {
     event.cancel = true;
-    event.player.sendMessage(`§cЧужая территория: ${settlementDisplayName(data, settlement)}. Открывать и нажимать это нельзя.`);
+    event.player.sendMessage(`§cЧужая территория: ${settlementDisplayName(data, settlement)}. Взаимодействовать нельзя.`);
   }
 });
 
@@ -1785,6 +1750,10 @@ function validateNewSettlement(player, territoryCenter, dimensionId) {
   const data = loadData();
   const playerName = getPlayerName(player);
 
+  if (FORBIDDEN_SETTLEMENT_DIMENSIONS.has(dimensionId)) {
+    return "§cПоселения нельзя создавать в Аду и Крае.";
+  }
+
   if (data.settlements.some((settlement) => samePlayerName(settlement.creatorName, playerName))) {
     return "§cУ вас уже есть поселение. Один создатель может владеть только одним флагом.";
   }
@@ -1822,6 +1791,12 @@ async function beginSettlementCreation(player, block) {
   const data = loadData();
   const playerName = getPlayerName(player);
   const dimensionId = getDimensionId(block.dimension);
+
+  if (FORBIDDEN_SETTLEMENT_DIMENSIONS.has(dimensionId)) {
+    removePlacedFlag(block, player);
+    player.sendMessage("§cПоселения нельзя создавать в Аду и Крае.");
+    return;
+  }
 
   if (data.settlements.some((settlement) => settlement.creatorName === playerName)) {
     removePlacedFlag(block, player);
@@ -2035,7 +2010,6 @@ function finishSettlementUpgrade(player, data, settlement, upgradeCost, options 
       player.sendMessage(`§eТерритория пересекалась с ${settlementDisplayName(data, overlap)} — добавлено ${expansion.addedAdjacent} соседних свободных чанков.`);
     }
     saveData(data);
-    refreshSettlementBorders(data, settlement);
     scheduleRefreshSettlementBorders(data, settlement);
     world.sendMessage(`§6[Королевства] §f${settlementDisplayName(data, settlement)} улучшено за ${formatCopperValue(upgradeCost)}. Мораль выросла.`);
   } else {
@@ -3303,9 +3277,10 @@ function damageFlag(data, target, attackerSettlement, player, flagEntity, rawDam
   }
 
   const parsedDamage = Number(rawDamage);
-  const damage = Number.isFinite(parsedDamage) && parsedDamage > 0
+  const baseDamage = Number.isFinite(parsedDamage) && parsedDamage > 0
     ? Math.max(1, Math.round(parsedDamage))
     : Math.max(10, Math.ceil(settlementType(attackerSettlement).hp * 0.035));
+  const damage = Math.max(1, Math.round(baseDamage * FLAG_DAMAGE_MULTIPLIER));
   target.hp = Math.max(0, target.hp - damage);
   target.morale = Math.max(0, target.morale - 2);
   if (campaign) markWarFlagDamage(campaign);
@@ -3396,16 +3371,17 @@ function handleGlobalWarVictory(data, winner, loser, attackerPlayer, campaign) {
   ensureSettlementChunks(winner, settlementType(winner).radius);
   ensureSettlementChunks(loser, settlementType(loser).radius);
   const transferredChunks = winner.dimensionId === loser.dimensionId
-    ? transferDefeatedSettlementChunks(data, winner, loser)
+    ? transferDefeatedSettlementChunks(data, winner, loser, GLOBAL_WAR_TERRITORY_TRANSFER_FRACTION)
     : 0;
   const defeat = applyGlobalWarDefeat(data, loser);
 
   winner.morale = Math.min(100, (winner.morale ?? 75) + 12);
   ensureWarCooldownData(winner);
 
+  const transferNote = transferredChunks > 0 ? ` Захвачено ${transferredChunks} чанк(ов).` : "";
   const reasonSuffix = campaign?.reason ? ` "${campaign.reason}".` : "";
   world.sendMessage(
-    `§4[Глобальная война] §f${winnerLabel} победило. ${loserLabel}: ${defeat.beforeType} → ${settlementType(loser).name}.${reasonSuffix}`
+    `§4[Глобальная война] §f${winnerLabel} победило. ${loserLabel}: ${defeat.beforeType} → ${settlementType(loser).name}.${transferNote}${reasonSuffix}`
   );
 
   updateFlagLabelFor(loser, data);
@@ -3431,7 +3407,9 @@ function handleWarVictory(data, winner, loser, attackerPlayer, campaign) {
 
   ensureSettlementChunks(winner, settlementType(winner).radius);
   ensureSettlementChunks(loser, settlementType(loser).radius);
-  const addedChunks = expandTerritoryOnVictory(data, winner, loser);
+  const addedChunks = winner.dimensionId === loser.dimensionId
+    ? transferDefeatedSettlementChunks(data, winner, loser, WAR_VICTORY_TERRITORY_TRANSFER_FRACTION)
+    : 0;
   const defeat = applyWarDefeat(data, loser);
 
   if (addedChunks <= 0) {
@@ -3439,7 +3417,7 @@ function handleWarVictory(data, winner, loser, attackerPlayer, campaign) {
     if (owner) giveCopperValue(owner, buildingCostCopper(settlementType(loser).defeatReward));
     world.sendMessage(`§6[Королевства] §fТерритория победителя не расширилась — создатель получает награду монетами.`);
   } else {
-    world.sendMessage(`§6[Королевства] §fТерритория ${winnerLabel} расширилась на ${addedChunks} чанк(ов).`);
+    world.sendMessage(`§6[Королевства] §f${winnerLabel} захватило ${addedChunks} чанк(ов) (${Math.round(WAR_VICTORY_TERRITORY_TRANSFER_FRACTION * 100)}% территории ${loserLabel}).`);
   }
 
   winner.morale = Math.min(100, (winner.morale ?? 75) + 12);

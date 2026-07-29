@@ -6,9 +6,15 @@ import {
 } from "./territory.js";
 
 export const TERRITORY_BORDER_BLOCK = "kingdoms:territory_border";
+const BORDER_OPS_PER_TICK = 96;
+const REFRESH_DEFER_TICKS = 20;
 
 /** @type {object | undefined} */
 let deps;
+
+/** @type {Map<number, { settlementId: number, phase: string, clearIndex: number, placeIndex: number, oldBlocks: string[], positions: { x: number, z: number, axis: string }[], placed: string[], surfaceCache: Map<string, number> }>} */
+const refreshJobs = new Map();
+let refreshPumpScheduled = false;
 
 export function bindTerritoryBorderSystem(world, dependencies) {
   deps = dependencies;
@@ -18,9 +24,12 @@ export function bindTerritoryBorderSystem(world, dependencies) {
   });
 }
 
-function findSurfaceY(dimension, x, z, hintY) {
-  const start = Math.min(Math.floor(hintY) + 24, 320);
-  const end = Math.max(Math.floor(hintY) - 24, -64);
+function findSurfaceY(dimension, x, z, hintY, surfaceCache) {
+  const cacheKey = `${x},${z}`;
+  if (surfaceCache?.has(cacheKey)) return surfaceCache.get(cacheKey);
+
+  const start = Math.min(Math.floor(hintY) + 8, 320);
+  const end = Math.max(Math.floor(hintY) - 8, -64);
 
   for (let y = start; y >= end; y -= 1) {
     try {
@@ -28,13 +37,18 @@ function findSurfaceY(dimension, x, z, hintY) {
       const at = dimension.getBlock({ x, y, z });
       if (!below || !at) continue;
       if (below.typeId === "minecraft:air" || below.typeId === "minecraft:water" || below.typeId === "minecraft:flowing_water") continue;
-      if (at.typeId === "minecraft:air" || at.typeId === TERRITORY_BORDER_BLOCK) return y;
+      if (at.typeId === "minecraft:air" || at.typeId === TERRITORY_BORDER_BLOCK) {
+        surfaceCache?.set(cacheKey, y);
+        return y;
+      }
     } catch (_error) {
       // Keep scanning.
     }
   }
 
-  return Math.floor(hintY);
+  const fallback = Math.floor(hintY);
+  surfaceCache?.set(cacheKey, fallback);
+  return fallback;
 }
 
 function removeBorderBlockAt(dimension, x, y, z) {
@@ -62,42 +76,6 @@ export function clearSettlementBorders(settlement) {
     }
   }
   settlement.borderBlocks = [];
-}
-
-/** Removes border blocks on every chunk edge inside the settlement (including old interior rings after upgrade). */
-function clearStrayBorderBlocksOnChunkEdges(settlement) {
-  const dimension = deps?.safeDimension?.(settlement?.dimensionId);
-  if (!dimension) return;
-
-  const keys = getAllSettlementChunkKeys(settlement);
-  const hintY = settlement.flag?.y ?? 64;
-  const checked = new Set();
-
-  for (const key of keys) {
-    const { cx, cz } = parseChunkKey(key);
-    const edgePositions = [];
-    for (let i = 0; i < 16; i += 1) {
-      edgePositions.push(
-        { x: cx * 16 + i, z: cz * 16 },
-        { x: cx * 16 + i, z: cz * 16 + 15 },
-        { x: cx * 16, z: cz * 16 + i },
-        { x: cx * 16 + 15, z: cz * 16 + i }
-      );
-    }
-
-    for (const { x, z } of edgePositions) {
-      const columnKey = `${x},${z}`;
-      if (checked.has(columnKey)) continue;
-      checked.add(columnKey);
-
-      const y = findSurfaceY(dimension, x, z, hintY);
-      removeBorderBlockAt(dimension, x, y, z);
-
-      // Also clear one block above/below in case the surface shifted since the last refresh.
-      removeBorderBlockAt(dimension, x, y + 1, z);
-      removeBorderBlockAt(dimension, x, y - 1, z);
-    }
-  }
 }
 
 function computeBorderPositions(settlement) {
@@ -134,57 +112,119 @@ function canPlaceBorderBlock(block) {
   return block.typeId === "minecraft:air" || block.typeId === TERRITORY_BORDER_BLOCK;
 }
 
-export function refreshSettlementBorders(data, settlement) {
-  if (!settlement || !deps) return;
+function getSettlementForJob(settlementId) {
+  const data = deps?.loadData?.();
+  return data ? deps?.getSettlement?.(data, settlementId) : undefined;
+}
 
-  const dimension = deps.safeDimension(settlement.dimensionId);
-  if (!dimension) return;
+function finishRefreshJob(job) {
+  const settlement = getSettlementForJob(job.settlementId);
+  if (settlement) settlement.borderBlocks = job.placed;
+  refreshJobs.delete(job.settlementId);
+}
 
-  clearSettlementBorders(settlement);
-  clearStrayBorderBlocksOnChunkEdges(settlement);
-  if (!Array.isArray(settlement.borderBlocks)) settlement.borderBlocks = [];
+function processRefreshJobs() {
+  refreshPumpScheduled = false;
+  if (!refreshJobs.size) return;
 
-  const hintY = settlement.flag?.y ?? 64;
-  const placed = [];
-
-  for (const { x, z, axis } of computeBorderPositions(settlement)) {
-    const y = findSurfaceY(dimension, x, z, hintY);
-    try {
-      const block = dimension.getBlock({ x, y, z });
-      if (!canPlaceBorderBlock(block)) continue;
-      block.setPermutation(BlockPermutation.resolve(TERRITORY_BORDER_BLOCK, {
-        "kingdoms:stripe_axis": axis
-      }));
-      placed.push(`${x},${y},${z}`);
-    } catch (_error) {
-      // Skip blocked or unloaded positions.
+  let budget = BORDER_OPS_PER_TICK;
+  for (const job of refreshJobs.values()) {
+    const settlement = getSettlementForJob(job.settlementId);
+    if (!settlement) {
+      refreshJobs.delete(job.settlementId);
+      continue;
     }
+
+    const dimension = deps?.safeDimension?.(settlement.dimensionId);
+    if (!dimension) {
+      refreshJobs.delete(job.settlementId);
+      continue;
+    }
+
+    if (job.phase === "clear") {
+      while (job.clearIndex < job.oldBlocks.length && budget > 0) {
+        const entry = job.oldBlocks[job.clearIndex];
+        job.clearIndex += 1;
+        budget -= 1;
+        const [x, y, z] = entry.split(",").map(Number);
+        if (!Number.isFinite(x) || !Number.isFinite(y) || !Number.isFinite(z)) continue;
+        removeBorderBlockAt(dimension, x, y, z);
+      }
+      if (job.clearIndex >= job.oldBlocks.length) {
+        settlement.borderBlocks = [];
+        job.phase = "place";
+      }
+      continue;
+    }
+
+    const hintY = settlement.flag?.y ?? 64;
+    while (job.placeIndex < job.positions.length && budget > 0) {
+      const { x, z, axis } = job.positions[job.placeIndex];
+      job.placeIndex += 1;
+      budget -= 1;
+      const y = findSurfaceY(dimension, x, z, hintY, job.surfaceCache);
+      try {
+        const block = dimension.getBlock({ x, y, z });
+        if (!canPlaceBorderBlock(block)) continue;
+        block.setPermutation(BlockPermutation.resolve(TERRITORY_BORDER_BLOCK, {
+          "kingdoms:stripe_axis": axis
+        }));
+        job.placed.push(`${x},${y},${z}`);
+      } catch (_error) {
+        // Skip blocked or unloaded positions.
+      }
+    }
+
+    if (job.placeIndex >= job.positions.length) finishRefreshJob(job);
   }
 
-  settlement.borderBlocks = placed;
-  if (typeof deps.saveData === "function") deps.saveData(data);
+  if (refreshJobs.size > 0) scheduleRefreshPump();
+}
+
+function scheduleRefreshPump() {
+  if (refreshPumpScheduled) return;
+  refreshPumpScheduled = true;
+  system.runTimeout(processRefreshJobs, 1);
+}
+
+function queueSettlementBorderRefresh(settlement) {
+  if (!settlement?.id || !deps) return;
+
+  const oldBlocks = Array.isArray(settlement.borderBlocks) ? [...settlement.borderBlocks] : [];
+  refreshJobs.set(settlement.id, {
+    settlementId: settlement.id,
+    phase: "clear",
+    clearIndex: 0,
+    placeIndex: 0,
+    oldBlocks,
+    positions: computeBorderPositions(settlement),
+    placed: [],
+    surfaceCache: new Map()
+  });
+  scheduleRefreshPump();
+}
+
+/** @deprecated Prefer scheduleRefreshSettlementBorders — sync path kept for startup only. */
+export function refreshSettlementBorders(data, settlement) {
+  if (!settlement || !deps) return;
+  queueSettlementBorderRefresh(settlement);
 }
 
 export function scheduleRefreshSettlementBorders(data, settlement) {
   if (!settlement) return;
   const settlementId = settlement.id;
-
-  const runRefresh = () => {
+  system.runTimeout(() => {
     const freshData = deps?.loadData?.() ?? data;
     const freshSettlement = deps?.getSettlement?.(freshData, settlementId) ?? settlement;
-    if (freshSettlement) refreshSettlementBorders(freshData, freshSettlement);
-  };
-
-  system.run(runRefresh);
-  system.runTimeout(runRefresh, 40);
-  system.runTimeout(runRefresh, 100);
+    if (freshSettlement) queueSettlementBorderRefresh(freshSettlement);
+  }, REFRESH_DEFER_TICKS);
 }
 
 export function scheduleRefreshAllSettlementBorders(data) {
-  system.run(() => {
+  system.runTimeout(() => {
     const freshData = deps?.loadData?.() ?? data;
     for (const settlement of freshData.settlements) {
-      refreshSettlementBorders(freshData, settlement);
+      queueSettlementBorderRefresh(settlement);
     }
-  });
+  }, REFRESH_DEFER_TICKS);
 }
