@@ -161,6 +161,7 @@ let dynamicPropertiesRegistered = false;
 const recentGlobalWarKillKeys = new Map();
 
 import { bindFlagSystem, setFlagPlacementHandler, setWildFlagSpawnHandler } from "./flag.js";
+import { isInFlagCoreProtectionZone, FLAG_CORE_PROTECT_MESSAGE } from "./flag_protection.js";
 import { bindChunkCaptureSystem, cleanupChunkMarkersForSettlement } from "./chunk_flag.js";
 import { bindTerritoryBorderSystem, clearSettlementBorders, refreshSettlementBorders, scheduleRefreshAllSettlementBorders, scheduleRefreshSettlementBorders } from "./territory_border.js";
 import {
@@ -585,6 +586,17 @@ world.beforeEvents.playerBreakBlock?.subscribe((event) => {
     return;
   }
 
+  const flagCoreSettlement = findSettlementAt(data, block.location, dimensionId);
+  if (flagCoreSettlement && isInFlagCoreProtectionZone(block.location, flagCoreSettlement.flag)) {
+    const attackerSettlement = getPlayerSettlement(data, playerName);
+    const isEnemyAtWar = attackerSettlement && areSettlementsAtWar(data, flagCoreSettlement, attackerSettlement);
+    if (!isEnemyAtWar) {
+      event.cancel = true;
+      event.player.sendMessage(FLAG_CORE_PROTECT_MESSAGE);
+      return;
+    }
+  }
+
   if (isMintBlockId(block.typeId)) {
     tryBreakMintWorkshop(event.player, block, event);
     return;
@@ -649,6 +661,12 @@ world.beforeEvents.playerPlaceBlock?.subscribe((event) => {
   }
 
   const settlement = findSettlementAt(data, event.block.location, dimensionId);
+  if (settlement && isInFlagCoreProtectionZone(event.block.location, settlement.flag)) {
+    event.cancel = true;
+    event.player.sendMessage(FLAG_CORE_PROTECT_MESSAGE);
+    return;
+  }
+
   if (settlement && !hasTerritoryAccess(data, settlement, playerName)) {
     event.cancel = true;
     event.player.sendMessage(`§cЧужая территория: ${settlementDisplayName(data, settlement)}. Ставить блоки нельзя.`);
