@@ -13,11 +13,13 @@ export const WAR_DECLARE_COOLDOWN_TICKS = 24 * 60 * 60 * 20;
 export const WEAK_WAR_COOLDOWN_TICKS = 48 * 60 * 60 * 20;
 export const WEAK_VICTORY_TYPE_GAP = 2;
 export const WEAK_ATTACKER_TYPE_GAP = 2;
-export const MIN_TARGET_ONLINE_FOR_WAR = 3;
-export const MIN_ATTACKER_ONLINE_FOR_WAR = 2;
-export const MIN_ATTACKERS_ON_TERRITORY_FOR_FLAG_DAMAGE = 2;
-export const WAR_PREPARATION_TICKS = 45 * 60 * 20;
-export const GLOBAL_WAR_MIN_ONLINE = 5;
+/** ВРЕМЕННО для тестов войны — вернуть: 3 / 2 / 2 / 5 */
+export const MIN_TARGET_ONLINE_FOR_WAR = 1;
+export const MIN_ATTACKER_ONLINE_FOR_WAR = 1;
+export const MIN_ATTACKERS_ON_TERRITORY_FOR_FLAG_DAMAGE = 1;
+/** ВРЕМЕННО: 2 минуты (было 45 мин) */
+export const WAR_PREPARATION_TICKS = 2 * 60 * 20;
+export const GLOBAL_WAR_MIN_ONLINE = 1;
 export const GLOBAL_WAR_KILL_POINTS_TO_WIN = 50;
 export const GLOBAL_WAR_TERRITORY_TRANSFER_FRACTION = 0.6;
 export const GLOBAL_WAR_DEMOTE_TYPES = 2;
