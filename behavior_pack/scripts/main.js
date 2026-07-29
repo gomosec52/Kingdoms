@@ -10,6 +10,7 @@ import {
 } from "./constants.js";
 import { bindCraftingFallback } from "./crafting.js";
 import { bindCoinExchangeSystem } from "./coin_exchange.js";
+import { bindTeleportCommandSystem } from "./teleport_commands.js";
 import {
   bindSpawnGuardSystem,
   findSpawnProtectionAt,
@@ -287,6 +288,17 @@ bindCoinExchangeSystem({
   world,
   showFormDeferred,
   KINGDOMS_MENU_PAGE
+});
+
+bindTeleportCommandSystem({
+  system,
+  world,
+  loadData,
+  getPlayerSettlement,
+  getPlayerName,
+  settlementDisplayName,
+  safeDimension,
+  getDimensionId
 });
 
 bindSpawnGuardSystem({
@@ -589,7 +601,7 @@ world.beforeEvents.playerBreakBlock?.subscribe((event) => {
   const flagCoreSettlement = findSettlementAt(data, block.location, dimensionId);
   if (flagCoreSettlement && isInFlagCoreProtectionZone(block.location, flagCoreSettlement.flag)) {
     const attackerSettlement = getPlayerSettlement(data, playerName);
-    const isEnemyAtWar = attackerSettlement && areSettlementsAtWar(data, flagCoreSettlement, attackerSettlement);
+    const isEnemyAtWar = attackerSettlement && canFightInWarCombat(data, flagCoreSettlement, attackerSettlement);
     if (!isEnemyAtWar) {
       event.cancel = true;
       event.player.sendMessage(FLAG_CORE_PROTECT_MESSAGE);

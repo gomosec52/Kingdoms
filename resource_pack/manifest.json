@@ -2,16 +2,16 @@
   "format_version": 2,
   "header": {
     "name": "KW Build Resources",
-    "description": "v1.12.53 — зона защиты флага от застройки",
+    "description": "v1.12.54 — команды /base /home /spawn /sethome /setspawn",
     "uuid": "0319ea31-7410-4887-be2d-2d52676a4a6d",
-    "version": [1, 12, 53],
+    "version": [1, 12, 54],
     "min_engine_version": [1, 26, 20]
   },
   "modules": [
     {
       "type": "resources",
       "uuid": "c0ec327f-dd03-4e53-8b0f-7a0008b0946a",
-      "version": [1, 12, 53]
+      "version": [1, 12, 54]
     }
   ]
 }
