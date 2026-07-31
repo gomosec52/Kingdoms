@@ -386,29 +386,20 @@ bindSpawnGuardSystem({
   nextSpawnGuardId
 });
 
-let mintInteractComponentRegistered = false;
+let mintInteractViaEventRegistered = false;
 
-function registerMintBlockInteractComponent() {
-  if (mintInteractComponentRegistered) return;
-
-  const attach = (registry) => {
-    if (!registry?.registerCustomComponent || mintInteractComponentRegistered) return;
-    registry.registerCustomComponent("kingdoms:mint_interact", {
-      onPlayerInteract(event) {
-        const block = event.block;
-        const player = event.player;
-        if (!player || !block || !isMintBlockId(block.typeId)) return;
-        system.run(() => handleMintBlockInteract(player, block));
-      }
-    });
-    mintInteractComponentRegistered = true;
-  };
-
-  system.beforeEvents?.startup?.subscribe(({ blockComponentRegistry }) => attach(blockComponentRegistry));
-  world.beforeEvents?.worldInitialize?.subscribe(({ blockComponentRegistry }) => attach(blockComponentRegistry));
+function registerMintBlockInteractViaEvent() {
+  if (mintInteractViaEventRegistered) return;
+  mintInteractViaEventRegistered = true;
+  world.afterEvents.playerInteractWithBlock?.subscribe((event) => {
+    const block = event.block;
+    const player = event.player;
+    if (!player?.isValid || !block || !isMintBlockId(block.typeId)) return;
+    system.run(() => handleMintBlockInteract(player, block));
+  });
 }
 
-registerMintBlockInteractComponent();
+registerMintBlockInteractViaEvent();
 
 bindFlagSystem(world);
 setFlagPlacementHandler(beginSettlementCreationFromItem);

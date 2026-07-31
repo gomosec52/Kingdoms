@@ -9,13 +9,10 @@ let deps;
 export function bindSpawnGuardSystem(dependencies) {
   deps = dependencies;
 
-  deps.system.beforeEvents?.startup?.subscribe(({ blockComponentRegistry }) => {
-    blockComponentRegistry.registerCustomComponent("kingdoms:spawn_guard_interact", {
-      onPlayerInteract(event) {
-        if (!event.player) return;
-        deps.system.run(() => handleSpawnGuardInteract(event.player, event.block));
-      }
-    });
+  deps.world.afterEvents.playerInteractWithBlock?.subscribe((event) => {
+    if (event.block.typeId !== SPAWN_GUARD_BLOCK) return;
+    if (!event.player?.isValid) return;
+    deps.system.run(() => handleSpawnGuardInteract(event.player, event.block));
   });
 
   deps.world.afterEvents.playerPlaceBlock?.subscribe((event) => {

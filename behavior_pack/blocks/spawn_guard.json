@@ -22,8 +22,7 @@
           "render_method": "opaque"
         }
       },
-      "minecraft:map_color": "#2A78B0",
-      "kingdoms:spawn_guard_interact": {}
+      "minecraft:map_color": "#2A78B0"
     }
   }
 }

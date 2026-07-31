@@ -591,7 +591,7 @@ function handleWorkshopBreak(player, block, kind) {
   return false;
 }
 
-export function removeWorkshopRecordAt(block, kind) {
+function removeWorkshopRecordAt(block, kind) {
   const blockId = kind === "brewery" ? BREWERY_BLOCK : WINERY_BLOCK;
   if (block.typeId !== blockId) return;
 
