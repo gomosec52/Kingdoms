@@ -83,8 +83,6 @@ const WINERY_UPGRADE_COSTS = {
 /** @type {Record<string, any> | null} */
 let deps = null;
 
-let interactRegistered = false;
-
 function ensureWorkshops(data) {
   if (!Array.isArray(data.breweryWorkshops)) data.breweryWorkshops = [];
   if (!Array.isArray(data.wineryWorkshops)) data.wineryWorkshops = [];
@@ -616,37 +614,19 @@ export function removeWorkshopRecordAt(block, kind) {
   deps.saveData(data);
 }
 
-function registerBlockComponents() {
-  if (interactRegistered) return;
-
-  const attach = (registry) => {
-    if (!registry?.registerCustomComponent || interactRegistered) return;
-    registry.registerCustomComponent("kingdoms:brewery_interact", {
-      onPlayerInteract(event) {
-        const block = event.block;
-        const player = event.player;
-        if (!player || !block) return;
-        system.run(() => openFermentMenu(player, block, "beer").catch(() => {}));
-      }
-    });
-    registry.registerCustomComponent("kingdoms:winery_interact", {
-      onPlayerInteract(event) {
-        const block = event.block;
-        const player = event.player;
-        if (!player || !block) return;
-        system.run(() => openFermentMenu(player, block, "wine").catch(() => {}));
-      }
-    });
-    interactRegistered = true;
-  };
-
-  deps.system.beforeEvents?.startup?.subscribe(({ blockComponentRegistry }) => attach(blockComponentRegistry));
-  deps.world.beforeEvents?.worldInitialize?.subscribe(({ blockComponentRegistry }) => attach(blockComponentRegistry));
-}
-
 export function bindBrewerySystem(bindDeps) {
   deps = bindDeps;
-  registerBlockComponents();
+
+  bindDeps.world.afterEvents.playerInteractWithBlock?.subscribe((event) => {
+    const block = event.block;
+    const player = event.player;
+    if (!player?.isValid || !block) return;
+    if (block.typeId === BREWERY_BLOCK) {
+      system.run(() => openFermentMenu(player, block, "beer").catch(() => {}));
+    } else if (block.typeId === WINERY_BLOCK) {
+      system.run(() => openFermentMenu(player, block, "wine").catch(() => {}));
+    }
+  });
 
   bindDeps.system.runInterval(() => tickFermentWorkshops(), 40);
 

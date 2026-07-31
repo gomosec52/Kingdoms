@@ -30,8 +30,7 @@
         "origin": [-8, 0, -8],
         "size": [16, 9, 16]
       },
-      "minecraft:map_color": "#4a2a4a",
-      "kingdoms:winery_interact": {}
+      "minecraft:map_color": "#4a2a4a"
     }
   }
 }
