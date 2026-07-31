@@ -24,6 +24,12 @@
     },
     "kingdoms_mint_anvil_gold": {
       "textures": "textures/blocks/mint_anvil_gold"
+    },
+    "kingdoms_brewery": {
+      "textures": "textures/blocks/brewery"
+    },
+    "kingdoms_winery": {
+      "textures": "textures/blocks/winery"
     }
   }
 }

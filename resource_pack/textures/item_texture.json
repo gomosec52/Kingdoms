@@ -25,6 +25,18 @@
     },
     "kingdoms_mint_workshop": {
       "textures": "textures/items/mint_workshop"
+    },
+    "kingdoms_brewery": {
+      "textures": "textures/items/brewery"
+    },
+    "kingdoms_winery": {
+      "textures": "textures/items/winery"
+    },
+    "kingdoms_beer": {
+      "textures": "textures/items/beer"
+    },
+    "kingdoms_wine": {
+      "textures": "textures/items/wine"
     }
   }
 }

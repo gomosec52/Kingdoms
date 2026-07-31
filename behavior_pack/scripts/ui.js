@@ -14,6 +14,8 @@ export const KINGDOMS_MENU_PAGE = {
   CONDEMN: "condemn",
   CREATE: "create",
   CONSTRUCTION: "construction",
+  FERMENT_WORK: "ferment_work",
+  BREWERY_SHOP: "brewery_shop",
   PICK: "pick"
 };
 

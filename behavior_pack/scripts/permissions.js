@@ -183,6 +183,15 @@ export function canCaptureChunks(data, playerName, settlement) {
   return isSettlementOwner(playerName, settlement) || getPlayerRole(data, playerName, settlement) === "Советник";
 }
 
+/** Пивоварня / виноделие: все жители, кроме Крестьянина (создатель всегда может). */
+export function canUseBreweryWinery(data, playerName, settlement) {
+  if (!settlement || !isSettlementMember(playerName, settlement)) return false;
+  if (isSettlementOwner(playerName, settlement)) return true;
+  const role = getPlayerRole(data, playerName, settlement);
+  if (!role || role === "Крестьянин") return false;
+  return true;
+}
+
 function samePlayerName(first, second) {
   return String(first ?? "").trim().toLowerCase() === String(second ?? "").trim().toLowerCase();
 }

@@ -12,6 +12,7 @@ import { bindCraftingFallback } from "./crafting.js";
 import { bindCoinExchangeSystem } from "./coin_exchange.js";
 import { bindTeleportCommandSystem } from "./teleport_commands.js";
 import { bindKingdomCommandSystem } from "./kingdom_commands.js";
+import { bindBrewerySystem, openBreweryShopMenu, handleWorkshopBreak, removeWorkshopRecordAt, BREWERY_BLOCK_ID, WINERY_BLOCK_ID } from "./brewery.js";
 import {
   bindSpawnGuardSystem,
   findSpawnProtectionAt,
@@ -94,7 +95,8 @@ import {
   canCommandArmy,
   getMaxSummonCount,
   isSettlementOwner,
-  canCaptureChunks
+  canCaptureChunks,
+  canUseBreweryWinery
 } from "./permissions.js";
 import { bindTradeSystem, ensureSettlementTradeData, openTradeHub } from "./trade.js";
 import {
@@ -342,6 +344,32 @@ bindKingdomCommandSystem({
   isSettlementOwner,
   openWarMenuFromCommand: (player) => openSettlementMenuFromCommand(player, openWarMenu),
   openDiplomacyMenuFromCommand: (player) => openSettlementMenuFromCommand(player, openDiplomacyMenu)
+});
+
+bindBrewerySystem({
+  system,
+  world,
+  loadData,
+  saveData,
+  getSettlement,
+  getPlayerName,
+  findSettlementAt,
+  hasTerritoryAccess,
+  blockPosition,
+  getDimensionId,
+  setBlockToAir,
+  giveItemStack,
+  giveItems,
+  countItem,
+  takeItem,
+  takeMixedCost,
+  reportCostShortage,
+  canFitItemAmount,
+  canUseBreweryWinery,
+  assertSettlementMenuSession,
+  showFormDeferred,
+  openSettlementMenu,
+  SETTLEMENT_MENU_PAGE
 });
 
 bindSpawnGuardSystem({
@@ -657,6 +685,15 @@ world.beforeEvents.playerBreakBlock?.subscribe((event) => {
     return;
   }
 
+  if (block.typeId === BREWERY_BLOCK_ID || block.typeId === WINERY_BLOCK_ID) {
+    const kind = block.typeId === BREWERY_BLOCK_ID ? "brewery" : "winery";
+    if (handleWorkshopBreak(event.player, block, kind)) {
+      event.cancel = true;
+      event.player.sendMessage("§cПивоварню и виноделие могут ломать жители, кроме Крестьянина.");
+      return;
+    }
+  }
+
   const settlement = findSettlementAt(data, block.location, getDimensionId(block.dimension));
   if (settlement && !hasTerritoryAccess(data, settlement, playerName)) {
     event.cancel = true;
@@ -673,9 +710,21 @@ world.beforeEvents.playerBreakBlock?.subscribe((event) => {
 
 world.afterEvents.playerBreakBlock?.subscribe((event) => {
   const blockId = event.brokenBlockPermutation?.type?.id;
-  if (!isMintBlockId(blockId)) return;
+  if (!blockId) return;
 
   const player = event.player;
+
+  if (blockId === BREWERY_BLOCK_ID || blockId === WINERY_BLOCK_ID) {
+    const kind = blockId === BREWERY_BLOCK_ID ? "brewery" : "winery";
+    removeWorkshopRecordAt({ typeId: blockId, location: event.block.location, dimension: event.dimension }, kind);
+    if (player?.isValid) {
+      player.sendMessage(`§e${kind === "brewery" ? "Пивоварня" : "Виноделие"} снята. Уровень сохранён для следующей установки.`);
+    }
+    return;
+  }
+
+  if (!isMintBlockId(blockId)) return;
+
   const data = loadData();
   const dimensionId = getDimensionId(event.dimension);
   const location = blockPosition(event.block.location);
@@ -1159,7 +1208,8 @@ function formatExtraPageBody(settlement) {
     "Дополнительные разделы:",
     "• Армия — рыцари и приказы",
     "• Торговля — сделки между поселениями",
-    "• Чеканный двор — покупка блока, ПКМ — плавка слитков"
+    "• Чеканный двор — покупка блока, ПКМ — плавка слитков",
+    "• Пивоварня и виноделие — покупка, улучшение, брожение"
   ].join("\n");
 }
 
@@ -1993,6 +2043,7 @@ async function openSettlementMenu(player, settlementId, page = SETTLEMENT_MENU_P
       .button("Армия", "textures/ui/kingdoms/icon_war")
       .button("Торговля", "textures/ui/kingdoms/icon_tax")
       .button("Чеканный двор", "textures/ui/kingdoms/icon_build")
+      .button("Пивоварня и виноделие", "textures/ui/kingdoms/icon_brewery")
       .button("Назад", "textures/ui/kingdoms/icon_disband");
   } else {
     form
@@ -2020,7 +2071,8 @@ async function openSettlementMenu(player, settlementId, page = SETTLEMENT_MENU_P
     if (selection === 0) return deferMenu(player, () => openArmyMenu(player, settlementId, sessionToken));
     if (selection === 1) return deferMenu(player, () => openTradeHub(player, settlementId, sessionToken));
     if (selection === 2) return deferMenu(player, () => openMintShopMenu(player, settlementId, sessionToken));
-    if (selection === 3) {
+    if (selection === 3) return deferMenu(player, () => openBreweryShopMenu(player, settlementId, sessionToken));
+    if (selection === 4) {
       return openSettlementMenu(player, settlementId, SETTLEMENT_MENU_PAGE.MAIN, false, sessionToken);
     }
     return undefined;
@@ -3965,6 +4017,14 @@ function loadData() {
     if (typeof data.nextMintWorkshopIdValue !== "number") {
       data.nextMintWorkshopIdValue = data.mintWorkshops.reduce((max, entry) => Math.max(max, entry.id || 0), 0) + 1;
     }
+    if (!Array.isArray(data.breweryWorkshops)) data.breweryWorkshops = [];
+    if (!Array.isArray(data.wineryWorkshops)) data.wineryWorkshops = [];
+    if (typeof data.nextBreweryWorkshopIdValue !== "number") {
+      data.nextBreweryWorkshopIdValue = data.breweryWorkshops.reduce((max, entry) => Math.max(max, entry.id || 0), 0) + 1;
+    }
+    if (typeof data.nextWineryWorkshopIdValue !== "number") {
+      data.nextWineryWorkshopIdValue = data.wineryWorkshops.reduce((max, entry) => Math.max(max, entry.id || 0), 0) + 1;
+    }
     if (!Array.isArray(data.pendingPlayerPayouts)) data.pendingPlayerPayouts = [];
     if (typeof data.nextTradeOfferIdValue !== "number") data.nextTradeOfferIdValue = 1;
     ensureWarCampaigns(data);
@@ -4003,11 +4063,15 @@ function emptyData() {
     warCampaigns: [],
     condemnations: [],
     mintWorkshops: [],
+    breweryWorkshops: [],
+    wineryWorkshops: [],
     nextSettlementIdValue: 1,
     nextAllianceIdValue: 1,
     nextSpawnGuardIdValue: 1,
     nextWarCampaignIdValue: 1,
-    nextMintWorkshopIdValue: 1
+    nextMintWorkshopIdValue: 1,
+    nextBreweryWorkshopIdValue: 1,
+    nextWineryWorkshopIdValue: 1
   };
 }
 

@@ -2,9 +2,9 @@
   "format_version": 2,
   "header": {
     "name": "KW Build Resources",
-    "description": "v1.12.56 — /who /help kingdoms",
+    "description": "v1.12.57 — пивоварня и виноделие",
     "uuid": "0319ea31-7410-4887-be2d-2d52676a4a6d",
-    "version": [1, 12, 56],
+    "version": [1, 12, 57],
     "min_engine_version": [1, 26, 20]
   },
   "modules": [

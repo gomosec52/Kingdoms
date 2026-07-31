@@ -11,5 +11,11 @@
   },
   "kingdoms:mint_workshop_2": {
     "sound": "stone"
+  },
+  "kingdoms:brewery": {
+    "sound": "wood"
+  },
+  "kingdoms:winery": {
+    "sound": "wood"
   }
 }
