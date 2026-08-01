@@ -14,8 +14,6 @@ export const WINERY_INTERACT_COMPONENT = "kingdoms:winery_interact";
 export const BEER_ITEM = "kingdoms:beer";
 export const WINE_ITEM = "kingdoms:wine";
 
-const TRANSPARENT_ICON = "textures/ui/kingdoms/transparent";
-
 const FERMENT_TICKS = 7 * 60 * 20;
 const FILL_STEP_TICKS = 2 * 60 * 20;
 
