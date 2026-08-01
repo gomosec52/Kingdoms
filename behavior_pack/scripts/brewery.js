@@ -9,8 +9,6 @@ import { formatCooldownTicks } from "./war.js";
 
 export const BREWERY_BLOCK = "kingdoms:brewery";
 export const WINERY_BLOCK = "kingdoms:winery";
-export const BREWERY_INTERACT_COMPONENT = "kingdoms:brewery_interact";
-export const WINERY_INTERACT_COMPONENT = "kingdoms:winery_interact";
 export const BEER_ITEM = "kingdoms:beer";
 export const WINE_ITEM = "kingdoms:wine";
 
@@ -21,16 +19,6 @@ const BEER_OUTPUT_BY_TIER = [2, 3, 4, 5, 8];
 const WINE_OUTPUT_BY_TIER = [2, 3, 4, 5, 8];
 
 const MIN_SETTLEMENT_TYPE_INDEX = 1;
-
-/** UI routing markers (filtered in server_form.json). §k hides the marker in labels. */
-const BTN_BUY = "§kB§r";
-const BTN_UPG = "§kU§r";
-const BTN_BACK = "§kR§r";
-
-function shopButtonLabel(kind, text) {
-  const tag = kind === "buy" ? BTN_BUY : kind === "upg" ? BTN_UPG : BTN_BACK;
-  return `${tag}${text}`;
-}
 
 const BREWERY_BUY_COST = [
   { itemId: "kingdoms:coin_silver", amount: 18, label: "серебряные монеты" },
@@ -208,8 +196,8 @@ function formatShopBody(data, settlement) {
     `§eВиноделие§r: ${wineryPlaced}${wineryTier ? ` · ур. ${wineryTier}` : ""}`,
     `Покупка: ${formatCostList(WINERY_BUY_COST)}`,
     "",
-    `§7Уровни: пивоварня §f${breweryTier || "—"}§7, виноделие §f${wineryTier || "—"}`,
-    "§8Слева внизу — улучшения, справа — покупка блоков."
+    "§8─── Уровень (слева внизу) ───",
+    `§7Пивоварня: §f${breweryTier ? `${breweryTier} ур.` : "—"}  §7Виноделие: §f${wineryTier ? `${wineryTier} ур.` : "—"}`
   ].join("\n");
 }
 
@@ -274,39 +262,30 @@ async function openBreweryShopMenu(player, settlementId, sessionToken) {
   const actions = [];
 
   if (!brewery && !hasBlockItem(player, BREWERY_BLOCK)) {
-    form.button(shopButtonLabel("buy", "Купить пивоварню"), "textures/ui/kingdoms/icon_brewery");
+    form.button("Купить пивоварню", "textures/ui/kingdoms/icon_brewery");
     actions.push("buy_brewery");
   }
   if (!winery && !hasBlockItem(player, WINERY_BLOCK)) {
-    form.button(shopButtonLabel("buy", "Купить виноделие"), "textures/ui/kingdoms/icon_winery");
+    form.button("Купить виноделие", "textures/ui/kingdoms/icon_winery");
     actions.push("buy_winery");
   }
-  if (winery && winery.tier < 5) {
-    form.button(shopButtonLabel("upg", `Улучшить виноделие (${winery.tier}→${winery.tier + 1})`), "textures/ui/kingdoms/icon_winery");
-    actions.push("upgrade_winery");
-  }
   if (brewery && brewery.tier < 5) {
-    form.button(shopButtonLabel("upg", `Улучшить пивоварню (${brewery.tier}→${brewery.tier + 1})`), "textures/ui/kingdoms/icon_brewery");
+    form.button(`Улучшить пивоварню (${brewery.tier}→${brewery.tier + 1})`, "textures/ui/kingdoms/icon_brewery");
     actions.push("upgrade_brewery");
   }
+  if (winery && winery.tier < 5) {
+    form.button(`Улучшить виноделие (${winery.tier}→${winery.tier + 1})`, "textures/ui/kingdoms/icon_winery");
+    actions.push("upgrade_winery");
+  }
 
-  form.button(shopButtonLabel("back", "Назад"), "textures/ui/kingdoms/icon_disband");
+  form.button("Назад", "textures/ui/kingdoms/icon_disband");
   actions.push("back");
 
   const response = await deps.showFormDeferred(player, form);
-  if (response.canceled) {
+  if (response.canceled || actions[response.selection] === "back") {
     return deps.openSettlementMenu(player, settlementId, deps.SETTLEMENT_MENU_PAGE.EXTRA, false, sessionToken);
   }
-
-  const selection = Number(response.selection);
-  if (Number.isNaN(selection) || selection < 0 || selection >= actions.length) {
-    return openBreweryShopMenu(player, settlementId, sessionToken);
-  }
-
-  const action = actions[selection];
-  if (action === "back") {
-    return deps.openSettlementMenu(player, settlementId, deps.SETTLEMENT_MENU_PAGE.EXTRA, false, sessionToken);
-  }
+  const action = actions[response.selection];
   if (action === "buy_brewery") return purchaseWorkshopBlock(player, settlementId, sessionToken, "brewery");
   if (action === "buy_winery") return purchaseWorkshopBlock(player, settlementId, sessionToken, "winery");
   if (action === "upgrade_brewery") return upgradeWorkshop(player, settlementId, sessionToken, "brewery");
@@ -427,15 +406,10 @@ function tryConsumeWineIngredients(player) {
 async function openFermentMenu(player, block, kind) {
   tickFermentWorkshops();
   const data = deps.loadData();
-  ensureWorkshops(data);
   const dimensionId = deps.getDimensionId(block.dimension);
-  const playerName = deps.getPlayerName(player);
-  let record = kind === "beer"
+  const record = kind === "beer"
     ? findBreweryWorkshop(data, block.location, dimensionId)
     : findWineryWorkshop(data, block.location, dimensionId);
-  if (!record) {
-    record = tryEnsureWorkshopRecord(data, block, kind, playerName);
-  }
   if (!record) {
     player.sendMessage("§cБлок не привязан к поселению.");
     return;
@@ -479,106 +453,6 @@ async function openFermentMenu(player, block, kind) {
   if (actions[response.selection] === "collect") {
     return collectFerment(player, block, kind, record);
   }
-}
-
-function createWorkshopRecord(data, settlement, block, kind, placedBy) {
-  const blockId = kind === "brewery" ? BREWERY_BLOCK : WINERY_BLOCK;
-  if (block.typeId !== blockId) return undefined;
-
-  const list = kind === "brewery" ? data.breweryWorkshops : data.wineryWorkshops;
-  const tierField = kind === "brewery" ? "breweryTier" : "wineryTier";
-  const startTier = Math.max(1, Math.min(5, Number(settlement[tierField]) || 1));
-  const record = {
-    id: nextWorkshopId(data, kind),
-    settlementId: settlement.id,
-    tier: startTier,
-    dimensionId: deps.getDimensionId(block.dimension),
-    location: deps.blockPosition(block.location),
-    state: "idle",
-    startTick: 0,
-    finishTick: 0,
-    placedBy
-  };
-  list.push(record);
-  return record;
-}
-
-function tryEnsureWorkshopRecord(data, block, kind, playerName) {
-  const dimensionId = deps.getDimensionId(block.dimension);
-  const existingAtBlock = kind === "beer"
-    ? findBreweryWorkshop(data, block.location, dimensionId)
-    : findWineryWorkshop(data, block.location, dimensionId);
-  if (existingAtBlock) return existingAtBlock;
-
-  const settlement = deps.findSettlementAt(data, block.location, dimensionId);
-  if (!settlement || !deps.hasTerritoryAccess(data, settlement, playerName)) return undefined;
-
-  const workshopKind = kind === "beer" ? "brewery" : "winery";
-  const existingForSettlement = workshopKind === "brewery"
-    ? findBreweryForSettlement(data, settlement.id)
-    : findWineryForSettlement(data, settlement.id);
-  if (existingForSettlement) {
-    const atBlock = workshopLocationKey(existingForSettlement.location, existingForSettlement.dimensionId)
-      === workshopLocationKey(block.location, dimensionId);
-    if (atBlock) return existingForSettlement;
-
-    // Orphan block on territory: re-link record to this location.
-    existingForSettlement.location = deps.blockPosition(block.location);
-    existingForSettlement.dimensionId = dimensionId;
-    deps.saveData(data);
-    return existingForSettlement;
-  }
-
-  ensureWorkshops(data);
-  const record = createWorkshopRecord(data, settlement, block, workshopKind, playerName);
-  if (record) deps.saveData(data);
-  return record;
-}
-
-function handleWorkshopBlockInteract(player, block, kind) {
-  if (!player?.isValid || !block) return;
-
-  const location = deps.blockPosition(block.location);
-  let liveBlock = block;
-  try {
-    liveBlock = player.dimension.getBlock(location) ?? block;
-  } catch {
-    // keep passed block
-  }
-
-  const data = deps.loadData();
-  ensureWorkshops(data);
-  const playerName = deps.getPlayerName(player);
-  const record = tryEnsureWorkshopRecord(data, liveBlock, kind, playerName);
-  if (!record) {
-    player.sendMessage("§cБлок не привязан к поселению. Поставьте его на своей территории.");
-    return;
-  }
-
-  openFermentMenu(player, liveBlock, kind).catch((error) => {
-    player.sendMessage(`§c[Королевства] Ошибка меню: ${error?.message ?? error}`);
-  });
-}
-
-let workshopComponentsRegistered = false;
-
-function registerWorkshopBlockComponents(initEvent) {
-  const registry = initEvent.blockComponentRegistry;
-  if (workshopComponentsRegistered || !registry?.registerCustomComponent) return;
-
-  registry.registerCustomComponent(BREWERY_INTERACT_COMPONENT, {
-    onPlayerInteract(event) {
-      if (!event.player) return;
-      system.run(() => handleWorkshopBlockInteract(event.player, event.block, "beer"));
-    }
-  });
-  registry.registerCustomComponent(WINERY_INTERACT_COMPONENT, {
-    onPlayerInteract(event) {
-      if (!event.player) return;
-      system.run(() => handleWorkshopBlockInteract(event.player, event.block, "wine"));
-    }
-  });
-  workshopComponentsRegistered = true;
 }
 
 function startFerment(player, block, kind, record) {
@@ -657,6 +531,8 @@ function registerPlacedWorkshop(player, block, kind) {
   ensureWorkshops(data);
   const settlement = deps.findSettlementAt(data, block.location, deps.getDimensionId(block.dimension));
   const playerName = deps.getPlayerName(player);
+  const location = deps.blockPosition(block.location);
+  const dimensionId = deps.getDimensionId(block.dimension);
 
   if (!settlement || !deps.hasTerritoryAccess(data, settlement, playerName)) {
     deps.setBlockToAir(block);
@@ -677,10 +553,22 @@ function registerPlacedWorkshop(player, block, kind) {
     return;
   }
 
-  createWorkshopRecord(data, settlement, block, kind, playerName);
+  const list = kind === "brewery" ? data.breweryWorkshops : data.wineryWorkshops;
+  const tierField = kind === "brewery" ? "breweryTier" : "wineryTier";
+  const startTier = Math.max(1, Math.min(5, Number(settlement[tierField]) || 1));
+  list.push({
+    id: nextWorkshopId(data, kind),
+    settlementId: settlement.id,
+    tier: startTier,
+    dimensionId,
+    location,
+    state: "idle",
+    startTick: 0,
+    finishTick: 0,
+    placedBy: playerName
+  });
   deps.saveData(data);
-  const tier = (kind === "brewery" ? findBreweryForSettlement : findWineryForSettlement)(data, settlement.id)?.tier ?? 1;
-  player.sendMessage(`§a${kind === "brewery" ? "Пивоварня" : "Виноделие"} установлено (ур. ${tier}).`);
+  player.sendMessage(`§a${kind === "brewery" ? "Пивоварня" : "Виноделие"} установлено (ур. ${startTier}).`);
 }
 
 function handleWorkshopBreak(player, block, kind) {
@@ -729,11 +617,15 @@ function removeWorkshopRecordAt(block, kind) {
 export function bindBrewerySystem(bindDeps) {
   deps = bindDeps;
 
-  system.beforeEvents?.startup?.subscribe((event) => {
-    registerWorkshopBlockComponents(event);
-  });
-  bindDeps.world.beforeEvents?.worldInitialize?.subscribe((event) => {
-    registerWorkshopBlockComponents(event);
+  bindDeps.world.afterEvents.playerInteractWithBlock?.subscribe((event) => {
+    const block = event.block;
+    const player = event.player;
+    if (!player?.isValid || !block) return;
+    if (block.typeId === BREWERY_BLOCK) {
+      system.run(() => openFermentMenu(player, block, "beer").catch(() => {}));
+    } else if (block.typeId === WINERY_BLOCK) {
+      system.run(() => openFermentMenu(player, block, "wine").catch(() => {}));
+    }
   });
 
   bindDeps.system.runInterval(() => tickFermentWorkshops(), 40);
@@ -762,7 +654,6 @@ export {
   openBreweryShopMenu,
   handleWorkshopBreak,
   removeWorkshopRecordAt,
-  handleWorkshopBlockInteract,
   BREWERY_BLOCK as BREWERY_BLOCK_ID,
   WINERY_BLOCK as WINERY_BLOCK_ID
 };

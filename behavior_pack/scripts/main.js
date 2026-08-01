@@ -12,7 +12,7 @@ import { bindCraftingFallback } from "./crafting.js";
 import { bindCoinExchangeSystem } from "./coin_exchange.js";
 import { bindTeleportCommandSystem } from "./teleport_commands.js";
 import { bindKingdomCommandSystem } from "./kingdom_commands.js";
-import { bindBrewerySystem, openBreweryShopMenu, handleWorkshopBreak, removeWorkshopRecordAt, handleWorkshopBlockInteract, BREWERY_BLOCK_ID, WINERY_BLOCK_ID } from "./brewery.js";
+import { bindBrewerySystem, openBreweryShopMenu, handleWorkshopBreak, removeWorkshopRecordAt, BREWERY_BLOCK_ID, WINERY_BLOCK_ID } from "./brewery.js";
 import {
   bindSpawnGuardSystem,
   findSpawnProtectionAt,
@@ -387,23 +387,6 @@ bindSpawnGuardSystem({
 });
 
 let mintInteractViaEventRegistered = false;
-let workshopInteractViaEventRegistered = false;
-
-function registerWorkshopBlockInteractViaEvent() {
-  if (workshopInteractViaEventRegistered) return;
-  workshopInteractViaEventRegistered = true;
-  world.beforeEvents.playerInteractWithBlock?.subscribe((event) => {
-    const block = event.block;
-    const player = event.player;
-    if (!player?.isValid || !block) return;
-    if (block.typeId !== BREWERY_BLOCK_ID && block.typeId !== WINERY_BLOCK_ID) return;
-    event.cancel = true;
-    const kind = block.typeId === BREWERY_BLOCK_ID ? "beer" : "wine";
-    system.run(() => handleWorkshopBlockInteract(player, block, kind));
-  });
-}
-
-registerWorkshopBlockInteractViaEvent();
 
 function registerMintBlockInteractViaEvent() {
   if (mintInteractViaEventRegistered) return;
