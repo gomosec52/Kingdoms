@@ -1526,34 +1526,18 @@
       }
     ]
   },
-  "kingdoms_slot_button_0@server_form.kingdoms_slot_button_base": {
-    "$slot_index": 0
-  },
-  "kingdoms_slot_button_1@server_form.kingdoms_slot_button_base": {
-    "$slot_index": 1
-  },
-  "kingdoms_slot_button_2@server_form.kingdoms_slot_button_base": {
-    "$slot_index": 2
-  },
-  "kingdoms_slot_button_3@server_form.kingdoms_slot_button_base": {
-    "$slot_index": 3
-  },
-  "kingdoms_slot_button_4@server_form.kingdoms_slot_button_base": {
-    "$slot_index": 4
-  },
-  "kingdoms_slot_button_base": {
+  "kingdoms_slot_button_0": {
     "type": "stack_panel",
     "orientation": "horizontal",
     "size": [
       "100%",
       27
     ],
-    "$slot_index|default": 0,
     "bindings": [
       {
         "binding_type": "collection_details",
         "binding_collection_name": "form_buttons",
-        "binding_collection_index": "$slot_index"
+        "binding_collection_index": 0
       },
       {
         "binding_type": "view",
@@ -1597,14 +1581,14 @@
                     "binding_name_override": "#texture",
                     "binding_type": "collection",
                     "binding_collection_name": "form_buttons",
-                    "binding_collection_index": "$slot_index"
+                    "binding_collection_index": 0
                   },
                   {
                     "binding_name": "#form_button_texture_file_system",
                     "binding_name_override": "#texture_file_system",
                     "binding_type": "collection",
                     "binding_collection_name": "form_buttons",
-                    "binding_collection_index": "$slot_index"
+                    "binding_collection_index": 0
                   },
                   {
                     "binding_type": "view",
@@ -1646,7 +1630,446 @@
             {
               "binding_type": "collection_details",
               "binding_collection_name": "form_buttons",
-              "binding_collection_index": "$slot_index"
+              "binding_collection_index": 0
+            }
+          ]
+        }
+      }
+    ]
+  },
+  "kingdoms_slot_button_1": {
+    "type": "stack_panel",
+    "orientation": "horizontal",
+    "size": [
+      "100%",
+      27
+    ],
+    "bindings": [
+      {
+        "binding_type": "collection_details",
+        "binding_collection_name": "form_buttons",
+        "binding_collection_index": 1
+      },
+      {
+        "binding_type": "view",
+        "source_property_name": "(not (#form_button_text = '—'))",
+        "target_property_name": "#visible"
+      }
+    ],
+    "controls": [
+      {
+        "icon_panel": {
+          "type": "panel",
+          "size": [
+            30,
+            "100%c"
+          ],
+          "bindings": [
+            {
+              "source_control_name": "icon",
+              "resolve_sibling_scope": true,
+              "binding_type": "view",
+              "source_property_name": "(not (#texture = ''))",
+              "target_property_name": "#visible"
+            }
+          ],
+          "controls": [
+            {
+              "icon": {
+                "type": "image",
+                "layer": 2,
+                "size": [
+                  24,
+                  24
+                ],
+                "offset": [
+                  0,
+                  2
+                ],
+                "bindings": [
+                  {
+                    "binding_name": "#form_button_texture",
+                    "binding_name_override": "#texture",
+                    "binding_type": "collection",
+                    "binding_collection_name": "form_buttons",
+                    "binding_collection_index": 1
+                  },
+                  {
+                    "binding_name": "#form_button_texture_file_system",
+                    "binding_name_override": "#texture_file_system",
+                    "binding_type": "collection",
+                    "binding_collection_name": "form_buttons",
+                    "binding_collection_index": 1
+                  },
+                  {
+                    "binding_type": "view",
+                    "source_property_name": "(not ((#texture = '') or (#texture = 'loading')))",
+                    "target_property_name": "#visible"
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      },
+      {
+        "form_button@common_buttons.light_text_button": {
+          "$pressed_button_name": "button.form_button_click",
+          "$default_button_texture": "textures/ui/kingdoms/button_default",
+          "$hover_button_texture": "textures/ui/kingdoms/button_hover",
+          "$pressed_button_texture": "textures/ui/kingdoms/button_pressed",
+          "$locked_button_texture": "textures/ui/kingdoms/button_default",
+          "$default_button_nine_slice_size": 0,
+          "$hover_button_nine_slice_size": 0,
+          "$pressed_button_nine_slice_size": 0,
+          "$locked_button_nine_slice_size": 0,
+          "anchor_from": "top_left",
+          "anchor_to": "top_left",
+          "size": [
+            "fill",
+            26
+          ],
+          "$button_text": "#form_button_text",
+          "$button_text_binding_type": "collection",
+          "$button_text_grid_collection_name": "form_buttons",
+          "$button_text_max_size": [
+            "100% - 6px",
+            24
+          ],
+          "layer": 4,
+          "bindings": [
+            {
+              "binding_type": "collection_details",
+              "binding_collection_name": "form_buttons",
+              "binding_collection_index": 1
+            }
+          ]
+        }
+      }
+    ]
+  },
+  "kingdoms_slot_button_2": {
+    "type": "stack_panel",
+    "orientation": "horizontal",
+    "size": [
+      "100%",
+      27
+    ],
+    "bindings": [
+      {
+        "binding_type": "collection_details",
+        "binding_collection_name": "form_buttons",
+        "binding_collection_index": 2
+      },
+      {
+        "binding_type": "view",
+        "source_property_name": "(not (#form_button_text = '—'))",
+        "target_property_name": "#visible"
+      }
+    ],
+    "controls": [
+      {
+        "icon_panel": {
+          "type": "panel",
+          "size": [
+            30,
+            "100%c"
+          ],
+          "bindings": [
+            {
+              "source_control_name": "icon",
+              "resolve_sibling_scope": true,
+              "binding_type": "view",
+              "source_property_name": "(not (#texture = ''))",
+              "target_property_name": "#visible"
+            }
+          ],
+          "controls": [
+            {
+              "icon": {
+                "type": "image",
+                "layer": 2,
+                "size": [
+                  24,
+                  24
+                ],
+                "offset": [
+                  0,
+                  2
+                ],
+                "bindings": [
+                  {
+                    "binding_name": "#form_button_texture",
+                    "binding_name_override": "#texture",
+                    "binding_type": "collection",
+                    "binding_collection_name": "form_buttons",
+                    "binding_collection_index": 2
+                  },
+                  {
+                    "binding_name": "#form_button_texture_file_system",
+                    "binding_name_override": "#texture_file_system",
+                    "binding_type": "collection",
+                    "binding_collection_name": "form_buttons",
+                    "binding_collection_index": 2
+                  },
+                  {
+                    "binding_type": "view",
+                    "source_property_name": "(not ((#texture = '') or (#texture = 'loading')))",
+                    "target_property_name": "#visible"
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      },
+      {
+        "form_button@common_buttons.light_text_button": {
+          "$pressed_button_name": "button.form_button_click",
+          "$default_button_texture": "textures/ui/kingdoms/button_default",
+          "$hover_button_texture": "textures/ui/kingdoms/button_hover",
+          "$pressed_button_texture": "textures/ui/kingdoms/button_pressed",
+          "$locked_button_texture": "textures/ui/kingdoms/button_default",
+          "$default_button_nine_slice_size": 0,
+          "$hover_button_nine_slice_size": 0,
+          "$pressed_button_nine_slice_size": 0,
+          "$locked_button_nine_slice_size": 0,
+          "anchor_from": "top_left",
+          "anchor_to": "top_left",
+          "size": [
+            "fill",
+            26
+          ],
+          "$button_text": "#form_button_text",
+          "$button_text_binding_type": "collection",
+          "$button_text_grid_collection_name": "form_buttons",
+          "$button_text_max_size": [
+            "100% - 6px",
+            24
+          ],
+          "layer": 4,
+          "bindings": [
+            {
+              "binding_type": "collection_details",
+              "binding_collection_name": "form_buttons",
+              "binding_collection_index": 2
+            }
+          ]
+        }
+      }
+    ]
+  },
+  "kingdoms_slot_button_3": {
+    "type": "stack_panel",
+    "orientation": "horizontal",
+    "size": [
+      "100%",
+      27
+    ],
+    "bindings": [
+      {
+        "binding_type": "collection_details",
+        "binding_collection_name": "form_buttons",
+        "binding_collection_index": 3
+      },
+      {
+        "binding_type": "view",
+        "source_property_name": "(not (#form_button_text = '—'))",
+        "target_property_name": "#visible"
+      }
+    ],
+    "controls": [
+      {
+        "icon_panel": {
+          "type": "panel",
+          "size": [
+            30,
+            "100%c"
+          ],
+          "bindings": [
+            {
+              "source_control_name": "icon",
+              "resolve_sibling_scope": true,
+              "binding_type": "view",
+              "source_property_name": "(not (#texture = ''))",
+              "target_property_name": "#visible"
+            }
+          ],
+          "controls": [
+            {
+              "icon": {
+                "type": "image",
+                "layer": 2,
+                "size": [
+                  24,
+                  24
+                ],
+                "offset": [
+                  0,
+                  2
+                ],
+                "bindings": [
+                  {
+                    "binding_name": "#form_button_texture",
+                    "binding_name_override": "#texture",
+                    "binding_type": "collection",
+                    "binding_collection_name": "form_buttons",
+                    "binding_collection_index": 3
+                  },
+                  {
+                    "binding_name": "#form_button_texture_file_system",
+                    "binding_name_override": "#texture_file_system",
+                    "binding_type": "collection",
+                    "binding_collection_name": "form_buttons",
+                    "binding_collection_index": 3
+                  },
+                  {
+                    "binding_type": "view",
+                    "source_property_name": "(not ((#texture = '') or (#texture = 'loading')))",
+                    "target_property_name": "#visible"
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      },
+      {
+        "form_button@common_buttons.light_text_button": {
+          "$pressed_button_name": "button.form_button_click",
+          "$default_button_texture": "textures/ui/kingdoms/button_default",
+          "$hover_button_texture": "textures/ui/kingdoms/button_hover",
+          "$pressed_button_texture": "textures/ui/kingdoms/button_pressed",
+          "$locked_button_texture": "textures/ui/kingdoms/button_default",
+          "$default_button_nine_slice_size": 0,
+          "$hover_button_nine_slice_size": 0,
+          "$pressed_button_nine_slice_size": 0,
+          "$locked_button_nine_slice_size": 0,
+          "anchor_from": "top_left",
+          "anchor_to": "top_left",
+          "size": [
+            "fill",
+            26
+          ],
+          "$button_text": "#form_button_text",
+          "$button_text_binding_type": "collection",
+          "$button_text_grid_collection_name": "form_buttons",
+          "$button_text_max_size": [
+            "100% - 6px",
+            24
+          ],
+          "layer": 4,
+          "bindings": [
+            {
+              "binding_type": "collection_details",
+              "binding_collection_name": "form_buttons",
+              "binding_collection_index": 3
+            }
+          ]
+        }
+      }
+    ]
+  },
+  "kingdoms_slot_button_4": {
+    "type": "stack_panel",
+    "orientation": "horizontal",
+    "size": [
+      "100%",
+      27
+    ],
+    "bindings": [
+      {
+        "binding_type": "collection_details",
+        "binding_collection_name": "form_buttons",
+        "binding_collection_index": 4
+      }
+    ],
+    "controls": [
+      {
+        "icon_panel": {
+          "type": "panel",
+          "size": [
+            30,
+            "100%c"
+          ],
+          "bindings": [
+            {
+              "source_control_name": "icon",
+              "resolve_sibling_scope": true,
+              "binding_type": "view",
+              "source_property_name": "(not (#texture = ''))",
+              "target_property_name": "#visible"
+            }
+          ],
+          "controls": [
+            {
+              "icon": {
+                "type": "image",
+                "layer": 2,
+                "size": [
+                  24,
+                  24
+                ],
+                "offset": [
+                  0,
+                  2
+                ],
+                "bindings": [
+                  {
+                    "binding_name": "#form_button_texture",
+                    "binding_name_override": "#texture",
+                    "binding_type": "collection",
+                    "binding_collection_name": "form_buttons",
+                    "binding_collection_index": 4
+                  },
+                  {
+                    "binding_name": "#form_button_texture_file_system",
+                    "binding_name_override": "#texture_file_system",
+                    "binding_type": "collection",
+                    "binding_collection_name": "form_buttons",
+                    "binding_collection_index": 4
+                  },
+                  {
+                    "binding_type": "view",
+                    "source_property_name": "(not ((#texture = '') or (#texture = 'loading')))",
+                    "target_property_name": "#visible"
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      },
+      {
+        "form_button@common_buttons.light_text_button": {
+          "$pressed_button_name": "button.form_button_click",
+          "$default_button_texture": "textures/ui/kingdoms/button_default",
+          "$hover_button_texture": "textures/ui/kingdoms/button_hover",
+          "$pressed_button_texture": "textures/ui/kingdoms/button_pressed",
+          "$locked_button_texture": "textures/ui/kingdoms/button_default",
+          "$default_button_nine_slice_size": 0,
+          "$hover_button_nine_slice_size": 0,
+          "$pressed_button_nine_slice_size": 0,
+          "$locked_button_nine_slice_size": 0,
+          "anchor_from": "top_left",
+          "anchor_to": "top_left",
+          "size": [
+            "fill",
+            26
+          ],
+          "$button_text": "#form_button_text",
+          "$button_text_binding_type": "collection",
+          "$button_text_grid_collection_name": "form_buttons",
+          "$button_text_max_size": [
+            "100% - 6px",
+            24
+          ],
+          "layer": 4,
+          "bindings": [
+            {
+              "binding_type": "collection_details",
+              "binding_collection_name": "form_buttons",
+              "binding_collection_index": 4
             }
           ]
         }

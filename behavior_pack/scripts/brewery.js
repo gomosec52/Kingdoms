@@ -306,8 +306,11 @@ async function openBreweryShopMenu(player, settlementId, sessionToken) {
   if (response.canceled || actions[response.selection] === "back") {
     return deps.openSettlementMenu(player, settlementId, deps.SETTLEMENT_MENU_PAGE.EXTRA, false, sessionToken);
   }
-  const action = actions[response.selection];
-  if (action === "noop") return openBreweryShopMenu(player, settlementId, sessionToken);
+  const action = actions[response.selection ?? -1];
+  if (!action || action === "noop") {
+    if (action === "noop") player.sendMessage("§7Это действие сейчас недоступно.");
+    return openBreweryShopMenu(player, settlementId, sessionToken);
+  }
   if (action === "buy_brewery") return purchaseWorkshopBlock(player, settlementId, sessionToken, "brewery");
   if (action === "buy_winery") return purchaseWorkshopBlock(player, settlementId, sessionToken, "winery");
   if (action === "upgrade_brewery") return upgradeWorkshop(player, settlementId, sessionToken, "brewery");
