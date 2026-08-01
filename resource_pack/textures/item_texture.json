@@ -4,6 +4,39 @@
   "texture_data": {
     "kingdoms_flag_item": {
       "textures": "textures/items/kingdom_flag"
+    },
+    "kingdoms_chunk_capture_flag": {
+      "textures": "textures/items/chunk_capture_flag"
+    },
+    "kingdoms:chunk_capture_flag": {
+      "textures": "textures/items/chunk_capture_flag"
+    },
+    "kingdoms:flag_item": {
+      "textures": "textures/items/kingdom_flag"
+    },
+    "kingdoms_coin_copper": {
+      "textures": "textures/items/coin_copper"
+    },
+    "kingdoms_coin_silver": {
+      "textures": "textures/items/coin_silver"
+    },
+    "kingdoms_coin_gold": {
+      "textures": "textures/items/coin_gold"
+    },
+    "kingdoms_mint_workshop": {
+      "textures": "textures/items/mint_workshop"
+    },
+    "kingdoms_brewery": {
+      "textures": "textures/items/brewery"
+    },
+    "kingdoms_winery": {
+      "textures": "textures/items/winery"
+    },
+    "kingdoms_beer": {
+      "textures": "textures/items/beer"
+    },
+    "kingdoms_wine": {
+      "textures": "textures/items/wine"
     }
   }
 }

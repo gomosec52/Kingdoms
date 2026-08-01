@@ -1,0 +1,20 @@
+{
+  "format_version": "1.10.0",
+  "minecraft:client_entity": {
+    "description": {
+      "identifier": "kingdoms:order_btn",
+      "materials": {
+        "default": "entity_alphatest"
+      },
+      "textures": {
+        "default": "textures/ui/kingdoms/transparent"
+      },
+      "geometry": {
+        "default": "geometry.kingdoms_label_marker"
+      },
+      "render_controllers": [
+        "controller.render.kingdoms_label_marker"
+      ]
+    }
+  }
+}
