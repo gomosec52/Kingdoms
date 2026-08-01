@@ -14,7 +14,6 @@ export const WINERY_INTERACT_COMPONENT = "kingdoms:winery_interact";
 export const BEER_ITEM = "kingdoms:beer";
 export const WINE_ITEM = "kingdoms:wine";
 
-const HIDDEN_MENU_SLOT = "—";
 const TRANSPARENT_ICON = "textures/ui/kingdoms/transparent";
 
 const FERMENT_TICKS = 7 * 60 * 20;
@@ -266,50 +265,39 @@ async function openBreweryShopMenu(player, settlementId, sessionToken) {
 
   const actions = [];
 
-  // Fixed slots for JSON UI: 0–1 left upgrades, 2–3 right purchases, 4 back.
-  if (winery && winery.tier < 5) {
-    form.button(`Улучшить виноделие (${winery.tier}→${winery.tier + 1})`, "textures/ui/kingdoms/icon_winery");
-    actions.push("upgrade_winery");
-  } else {
-    form.button(HIDDEN_MENU_SLOT, TRANSPARENT_ICON);
-    actions.push("noop");
-  }
-
-  if (brewery && brewery.tier < 5) {
-    form.button(`Улучшить пивоварню (${brewery.tier}→${brewery.tier + 1})`, "textures/ui/kingdoms/icon_brewery");
-    actions.push("upgrade_brewery");
-  } else {
-    form.button(HIDDEN_MENU_SLOT, TRANSPARENT_ICON);
-    actions.push("noop");
-  }
-
   if (!brewery && !hasBlockItem(player, BREWERY_BLOCK)) {
     form.button("Купить пивоварню", "textures/ui/kingdoms/icon_brewery");
     actions.push("buy_brewery");
-  } else {
-    form.button(HIDDEN_MENU_SLOT, TRANSPARENT_ICON);
-    actions.push("noop");
   }
-
   if (!winery && !hasBlockItem(player, WINERY_BLOCK)) {
     form.button("Купить виноделие", "textures/ui/kingdoms/icon_winery");
     actions.push("buy_winery");
-  } else {
-    form.button(HIDDEN_MENU_SLOT, TRANSPARENT_ICON);
-    actions.push("noop");
+  }
+  if (winery && winery.tier < 5) {
+    form.button(`Улучшить виноделие (${winery.tier}→${winery.tier + 1})`, "textures/ui/kingdoms/icon_winery");
+    actions.push("upgrade_winery");
+  }
+  if (brewery && brewery.tier < 5) {
+    form.button(`Улучшить пивоварню (${brewery.tier}→${brewery.tier + 1})`, "textures/ui/kingdoms/icon_brewery");
+    actions.push("upgrade_brewery");
   }
 
   form.button("Назад", "textures/ui/kingdoms/icon_disband");
   actions.push("back");
 
   const response = await deps.showFormDeferred(player, form);
-  if (response.canceled || actions[response.selection] === "back") {
+  if (response.canceled) {
     return deps.openSettlementMenu(player, settlementId, deps.SETTLEMENT_MENU_PAGE.EXTRA, false, sessionToken);
   }
-  const action = actions[response.selection ?? -1];
-  if (!action || action === "noop") {
-    if (action === "noop") player.sendMessage("§7Это действие сейчас недоступно.");
+
+  const selection = Number(response.selection);
+  if (Number.isNaN(selection) || selection < 0 || selection >= actions.length) {
     return openBreweryShopMenu(player, settlementId, sessionToken);
+  }
+
+  const action = actions[selection];
+  if (action === "back") {
+    return deps.openSettlementMenu(player, settlementId, deps.SETTLEMENT_MENU_PAGE.EXTRA, false, sessionToken);
   }
   if (action === "buy_brewery") return purchaseWorkshopBlock(player, settlementId, sessionToken, "brewery");
   if (action === "buy_winery") return purchaseWorkshopBlock(player, settlementId, sessionToken, "winery");
