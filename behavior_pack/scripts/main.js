@@ -396,28 +396,9 @@ function registerWorkshopBlockInteractViaEvent() {
     const block = event.block;
     const player = event.player;
     if (!player?.isValid || !block) return;
-    const isBrewery = block.typeId === BREWERY_BLOCK_ID;
-    const isWinery = block.typeId === WINERY_BLOCK_ID;
-    if (!isBrewery && !isWinery) return;
-
-    const data = loadData();
-    const dimensionId = getDimensionId(block.dimension);
-    if (shouldBlockSpawnInteract(data, player, block.location, dimensionId)) {
-      event.cancel = true;
-      player.sendMessage("§cЗона защиты спавна: взаимодействовать с этим нельзя.");
-      return;
-    }
-
-    const playerName = getPlayerName(player);
-    const settlement = findSettlementAt(data, block.location, dimensionId);
-    if (settlement && !hasTerritoryAccess(data, settlement, playerName)) {
-      event.cancel = true;
-      player.sendMessage(`§cЧужая территория: ${settlementDisplayName(data, settlement)}. Взаимодействовать нельзя.`);
-      return;
-    }
-
+    if (block.typeId !== BREWERY_BLOCK_ID && block.typeId !== WINERY_BLOCK_ID) return;
     event.cancel = true;
-    const kind = isBrewery ? "beer" : "wine";
+    const kind = block.typeId === BREWERY_BLOCK_ID ? "beer" : "wine";
     system.run(() => handleWorkshopBlockInteract(player, block, kind));
   });
 }

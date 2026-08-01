@@ -22,10 +22,10 @@ const WINE_OUTPUT_BY_TIER = [2, 3, 4, 5, 8];
 
 const MIN_SETTLEMENT_TYPE_INDEX = 1;
 
-/** UI routing prefixes (filtered in server_form.json). Not shown as stray chars in labels. */
-const BTN_BUY = "\uE101";
-const BTN_UPG = "\uE102";
-const BTN_BACK = "\uE103";
+/** UI routing markers (filtered in server_form.json). §k hides the marker in labels. */
+const BTN_BUY = "§kB§r";
+const BTN_UPG = "§kU§r";
+const BTN_BACK = "§kR§r";
 
 function shopButtonLabel(kind, text) {
   const tag = kind === "buy" ? BTN_BUY : kind === "upg" ? BTN_UPG : BTN_BACK;

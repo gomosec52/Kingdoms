@@ -1713,11 +1713,6 @@
             {
               "binding_type": "collection_details",
               "binding_collection_name": "form_buttons"
-            },
-            {
-              "binding_type": "view",
-              "source_property_name": "((((#form_button_text - '\uE101') - '\uE102') - '\uE103'))",
-              "target_property_name": "#form_button_text"
             }
           ]
         }
@@ -1730,7 +1725,7 @@
       },
       {
         "binding_type": "view",
-        "source_property_name": "(not (((#form_button_text - '\uE101') = #form_button_text) and ((#form_button_text - '\uE103') = #form_button_text)))",
+        "source_property_name": "(not (((#form_button_text - 'Купить') = #form_button_text) and ((#form_button_text - 'Назад') = #form_button_text)))",
         "target_property_name": "#visible"
       }
     ]
@@ -1846,11 +1841,6 @@
             {
               "binding_type": "collection_details",
               "binding_collection_name": "form_buttons"
-            },
-            {
-              "binding_type": "view",
-              "source_property_name": "((((#form_button_text - '\uE101') - '\uE102') - '\uE103'))",
-              "target_property_name": "#form_button_text"
             }
           ]
         }
@@ -1863,7 +1853,7 @@
       },
       {
         "binding_type": "view",
-        "source_property_name": "(not ((#form_button_text - '\uE102') = #form_button_text))",
+        "source_property_name": "(not ((#form_button_text - 'Улучшить') = #form_button_text))",
         "target_property_name": "#visible"
       }
     ]
