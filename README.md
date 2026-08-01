@@ -78,6 +78,20 @@ Bedrock-аддон для Minecraft с системой королевств: п
 - `/kingdom` — информация, войны, жители и др. (см. `kingdom_commands.js`).
 - Телепорты и дома (см. `teleport_commands.js`).
 
+## Cursor Skills (AI-ассистент)
+
+В `.cursor/skills/` установлены skills для разработки:
+
+| Skill | Назначение |
+| --- | --- |
+| `kw-build-bedrock-mod` | Конвенции этого проекта (Script API + кастомное меню) |
+| `minecraft-server-scriptapi` | `@minecraft/server` — события, компоненты, API |
+| `mcbe-json-ui-master` | JSON UI — архитектура, bindings, HUD, формы |
+| `mcbe-json-ui-server-forms` | Кастомные `server_form.json`, routing по title |
+| `mcbe-json-ui-patterns` | Переиспользуемые паттерны layout |
+
+В чате Cursor: `@kw-build-bedrock-mod` или `/kw-build-bedrock-mod`.
+
 ## Сборка `.mcaddon`
 
 Архивируйте содержимое так, чтобы внутри были папки `behavior_pack` и `resource_pack`, затем переименуйте в `KW-Build-vX.Y.Z.mcaddon`.
