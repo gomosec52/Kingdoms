@@ -22,6 +22,16 @@ const WINE_OUTPUT_BY_TIER = [2, 3, 4, 5, 8];
 
 const MIN_SETTLEMENT_TYPE_INDEX = 1;
 
+/** UI routing prefixes (filtered in server_form.json). Not shown as stray chars in labels. */
+const BTN_BUY = "\uE101";
+const BTN_UPG = "\uE102";
+const BTN_BACK = "\uE103";
+
+function shopButtonLabel(kind, text) {
+  const tag = kind === "buy" ? BTN_BUY : kind === "upg" ? BTN_UPG : BTN_BACK;
+  return `${tag}${text}`;
+}
+
 const BREWERY_BUY_COST = [
   { itemId: "kingdoms:coin_silver", amount: 18, label: "серебряные монеты" },
   { itemId: "minecraft:iron_ingot", amount: 6, label: "железные слитки" },
@@ -264,23 +274,23 @@ async function openBreweryShopMenu(player, settlementId, sessionToken) {
   const actions = [];
 
   if (!brewery && !hasBlockItem(player, BREWERY_BLOCK)) {
-    form.button("Купить пивоварню", "textures/ui/kingdoms/icon_brewery");
+    form.button(shopButtonLabel("buy", "Купить пивоварню"), "textures/ui/kingdoms/icon_brewery");
     actions.push("buy_brewery");
   }
   if (!winery && !hasBlockItem(player, WINERY_BLOCK)) {
-    form.button("Купить виноделие", "textures/ui/kingdoms/icon_winery");
+    form.button(shopButtonLabel("buy", "Купить виноделие"), "textures/ui/kingdoms/icon_winery");
     actions.push("buy_winery");
   }
   if (winery && winery.tier < 5) {
-    form.button(`Улучшить виноделие (${winery.tier}→${winery.tier + 1})`, "textures/ui/kingdoms/icon_winery");
+    form.button(shopButtonLabel("upg", `Улучшить виноделие (${winery.tier}→${winery.tier + 1})`), "textures/ui/kingdoms/icon_winery");
     actions.push("upgrade_winery");
   }
   if (brewery && brewery.tier < 5) {
-    form.button(`Улучшить пивоварню (${brewery.tier}→${brewery.tier + 1})`, "textures/ui/kingdoms/icon_brewery");
+    form.button(shopButtonLabel("upg", `Улучшить пивоварню (${brewery.tier}→${brewery.tier + 1})`), "textures/ui/kingdoms/icon_brewery");
     actions.push("upgrade_brewery");
   }
 
-  form.button("Назад", "textures/ui/kingdoms/icon_disband");
+  form.button(shopButtonLabel("back", "Назад"), "textures/ui/kingdoms/icon_disband");
   actions.push("back");
 
   const response = await deps.showFormDeferred(player, form);
@@ -417,10 +427,15 @@ function tryConsumeWineIngredients(player) {
 async function openFermentMenu(player, block, kind) {
   tickFermentWorkshops();
   const data = deps.loadData();
+  ensureWorkshops(data);
   const dimensionId = deps.getDimensionId(block.dimension);
-  const record = kind === "beer"
+  const playerName = deps.getPlayerName(player);
+  let record = kind === "beer"
     ? findBreweryWorkshop(data, block.location, dimensionId)
     : findWineryWorkshop(data, block.location, dimensionId);
+  if (!record) {
+    record = tryEnsureWorkshopRecord(data, block, kind, playerName);
+  }
   if (!record) {
     player.sendMessage("§cБлок не привязан к поселению.");
     return;
@@ -503,11 +518,15 @@ function tryEnsureWorkshopRecord(data, block, kind, playerName) {
     ? findBreweryForSettlement(data, settlement.id)
     : findWineryForSettlement(data, settlement.id);
   if (existingForSettlement) {
-    if (workshopLocationKey(existingForSettlement.location, existingForSettlement.dimensionId)
-      === workshopLocationKey(block.location, dimensionId)) {
-      return existingForSettlement;
-    }
-    return undefined;
+    const atBlock = workshopLocationKey(existingForSettlement.location, existingForSettlement.dimensionId)
+      === workshopLocationKey(block.location, dimensionId);
+    if (atBlock) return existingForSettlement;
+
+    // Orphan block on territory: re-link record to this location.
+    existingForSettlement.location = deps.blockPosition(block.location);
+    existingForSettlement.dimensionId = dimensionId;
+    deps.saveData(data);
+    return existingForSettlement;
   }
 
   ensureWorkshops(data);
@@ -519,16 +538,24 @@ function tryEnsureWorkshopRecord(data, block, kind, playerName) {
 function handleWorkshopBlockInteract(player, block, kind) {
   if (!player?.isValid || !block) return;
 
+  const location = deps.blockPosition(block.location);
+  let liveBlock = block;
+  try {
+    liveBlock = player.dimension.getBlock(location) ?? block;
+  } catch {
+    // keep passed block
+  }
+
   const data = deps.loadData();
   ensureWorkshops(data);
   const playerName = deps.getPlayerName(player);
-  const record = tryEnsureWorkshopRecord(data, block, kind, playerName);
+  const record = tryEnsureWorkshopRecord(data, liveBlock, kind, playerName);
   if (!record) {
     player.sendMessage("§cБлок не привязан к поселению. Поставьте его на своей территории.");
     return;
   }
 
-  openFermentMenu(player, block, kind).catch((error) => {
+  openFermentMenu(player, liveBlock, kind).catch((error) => {
     player.sendMessage(`§c[Королевства] Ошибка меню: ${error?.message ?? error}`);
   });
 }
