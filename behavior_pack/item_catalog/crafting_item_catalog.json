@@ -1,0 +1,24 @@
+{
+  "format_version": "1.21.60",
+  "minecraft:crafting_items_catalog": {
+    "categories": [
+      {
+        "category_name": "items",
+        "groups": [
+          {
+            "group_identifier": {
+              "icon": "kingdoms:coin_copper",
+              "name": "kingdoms:itemGroup.name.coins"
+            },
+            "items": [
+              "kingdoms:coin_copper",
+              "kingdoms:coin_silver",
+              "kingdoms:coin_gold",
+              "kingdoms:flag"
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}

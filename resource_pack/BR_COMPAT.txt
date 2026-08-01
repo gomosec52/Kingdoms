@@ -1,0 +1,7 @@
+Bedrock Reimagined compatibility
+================================
+Put this resource pack ABOVE:
+  - BR_RP / Bedrock Reimagined RP
+  - Bedrock_Reimagined_RP (Server RP) if present
+
+Kingdoms server_form.json includes BR quest form gates + Kingdoms settlement UI.
