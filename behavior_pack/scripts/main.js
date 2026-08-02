@@ -3956,7 +3956,7 @@ function notifyModActive(player) {
   if (loadedNoticeShown.has(playerName)) return;
   loadedNoticeShown.add(playerName);
 
-  player.sendMessage("§7KW — активно, префиксы — активны.");
+  player.sendMessage("§a[KW Build] Скрипты активны. Поставьте флаг — откроется меню поселения.");
 }
 
 function settlementDisplayName(data, settlement) {
