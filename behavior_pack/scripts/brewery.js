@@ -9,8 +9,6 @@ import { formatCooldownTicks } from "./war.js";
 
 export const BREWERY_BLOCK = "kingdoms:brewery";
 export const WINERY_BLOCK = "kingdoms:winery";
-export const BREWERY_INTERACT_COMPONENT = "kingdoms:brewery_interact";
-export const WINERY_INTERACT_COMPONENT = "kingdoms:winery_interact";
 export const BEER_ITEM = "kingdoms:beer";
 export const WINE_ITEM = "kingdoms:wine";
 
@@ -417,17 +415,21 @@ function tryConsumeWineIngredients(player) {
 async function openFermentMenu(player, block, kind) {
   tickFermentWorkshops();
   const data = deps.loadData();
+  ensureWorkshops(data);
   const dimensionId = deps.getDimensionId(block.dimension);
-  const record = kind === "beer"
+  const playerName = deps.getPlayerName(player);
+  let record = kind === "beer"
     ? findBreweryWorkshop(data, block.location, dimensionId)
     : findWineryWorkshop(data, block.location, dimensionId);
+  if (!record) {
+    record = tryEnsureWorkshopRecord(data, block, kind, playerName);
+  }
   if (!record) {
     player.sendMessage("§cБлок не привязан к поселению.");
     return;
   }
 
   const settlement = deps.getSettlement(data, record.settlementId);
-  const playerName = deps.getPlayerName(player);
   if (!settlement || !deps.canUseBreweryWinery(data, playerName, settlement)) {
     player.sendMessage("§cНет доступа к этому зданию.");
     return;
@@ -503,11 +505,14 @@ function tryEnsureWorkshopRecord(data, block, kind, playerName) {
     ? findBreweryForSettlement(data, settlement.id)
     : findWineryForSettlement(data, settlement.id);
   if (existingForSettlement) {
-    if (workshopLocationKey(existingForSettlement.location, existingForSettlement.dimensionId)
-      === workshopLocationKey(block.location, dimensionId)) {
-      return existingForSettlement;
-    }
-    return undefined;
+    const atBlock = workshopLocationKey(existingForSettlement.location, existingForSettlement.dimensionId)
+      === workshopLocationKey(block.location, dimensionId);
+    if (atBlock) return existingForSettlement;
+
+    existingForSettlement.location = deps.blockPosition(block.location);
+    existingForSettlement.dimensionId = dimensionId;
+    deps.saveData(data);
+    return existingForSettlement;
   }
 
   ensureWorkshops(data);
@@ -519,39 +524,38 @@ function tryEnsureWorkshopRecord(data, block, kind, playerName) {
 function handleWorkshopBlockInteract(player, block, kind) {
   if (!player?.isValid || !block) return;
 
+  const location = deps.blockPosition(block.location);
+  let liveBlock = block;
+  try {
+    liveBlock = player.dimension.getBlock(location) ?? block;
+  } catch {
+    // keep passed block
+  }
+
   const data = deps.loadData();
   ensureWorkshops(data);
   const playerName = deps.getPlayerName(player);
-  const record = tryEnsureWorkshopRecord(data, block, kind, playerName);
+  const dimensionId = deps.getDimensionId(liveBlock.dimension);
+  let record = kind === "beer"
+    ? findBreweryWorkshop(data, liveBlock.location, dimensionId)
+    : findWineryWorkshop(data, liveBlock.location, dimensionId);
+  if (!record) {
+    record = tryEnsureWorkshopRecord(data, liveBlock, kind, playerName);
+  }
   if (!record) {
     player.sendMessage("§cБлок не привязан к поселению. Поставьте его на своей территории.");
     return;
   }
 
-  openFermentMenu(player, block, kind).catch((error) => {
+  const settlement = deps.getSettlement(data, record.settlementId);
+  if (!settlement || !deps.canUseBreweryWinery(data, playerName, settlement)) {
+    player.sendMessage("§cНет доступа к этой мастерской.");
+    return;
+  }
+
+  openFermentMenu(player, liveBlock, kind).catch((error) => {
     player.sendMessage(`§c[Королевства] Ошибка меню: ${error?.message ?? error}`);
   });
-}
-
-let workshopComponentsRegistered = false;
-
-function registerWorkshopBlockComponents(initEvent) {
-  const registry = initEvent.blockComponentRegistry;
-  if (workshopComponentsRegistered || !registry?.registerCustomComponent) return;
-
-  registry.registerCustomComponent(BREWERY_INTERACT_COMPONENT, {
-    onPlayerInteract(event) {
-      if (!event.player) return;
-      system.run(() => handleWorkshopBlockInteract(event.player, event.block, "beer"));
-    }
-  });
-  registry.registerCustomComponent(WINERY_INTERACT_COMPONENT, {
-    onPlayerInteract(event) {
-      if (!event.player) return;
-      system.run(() => handleWorkshopBlockInteract(event.player, event.block, "wine"));
-    }
-  });
-  workshopComponentsRegistered = true;
 }
 
 function startFerment(player, block, kind, record) {
@@ -702,11 +706,15 @@ function removeWorkshopRecordAt(block, kind) {
 export function bindBrewerySystem(bindDeps) {
   deps = bindDeps;
 
-  system.beforeEvents?.startup?.subscribe((event) => {
-    registerWorkshopBlockComponents(event);
-  });
-  bindDeps.world.beforeEvents?.worldInitialize?.subscribe((event) => {
-    registerWorkshopBlockComponents(event);
+  bindDeps.world.afterEvents.playerInteractWithBlock?.subscribe((event) => {
+    const block = event.block;
+    const player = event.player;
+    if (!player?.isValid || !block) return;
+    if (block.typeId === BREWERY_BLOCK) {
+      bindDeps.system.run(() => handleWorkshopBlockInteract(player, block, "beer"));
+    } else if (block.typeId === WINERY_BLOCK) {
+      bindDeps.system.run(() => handleWorkshopBlockInteract(player, block, "wine"));
+    }
   });
 
   bindDeps.system.runInterval(() => tickFermentWorkshops(), 40);
@@ -735,7 +743,6 @@ export {
   openBreweryShopMenu,
   handleWorkshopBreak,
   removeWorkshopRecordAt,
-  handleWorkshopBlockInteract,
   BREWERY_BLOCK as BREWERY_BLOCK_ID,
   WINERY_BLOCK as WINERY_BLOCK_ID
 };

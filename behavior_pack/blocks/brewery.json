@@ -30,10 +30,7 @@
         "origin": [-8, 0, -8],
         "size": [16, 16, 16]
       },
-      "minecraft:map_color": "#6b4a2a",
-      "minecraft:custom_components": [
-        "kingdoms:brewery_interact"
-      ]
+      "minecraft:map_color": "#6b4a2a"
     }
   }
 }
