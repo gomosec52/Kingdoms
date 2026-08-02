@@ -1,0 +1,38 @@
+{
+  "format_version": 2,
+  "header": {
+    "name": "KW Build",
+    "description": "v1.12.66 — v1.12.62 base + safe brewery fixes (no v1.12.63 regressions)",
+    "uuid": "35da6754-77fe-403f-98e0-6e6702d1c764",
+    "version": [1, 12, 66],
+    "min_engine_version": [1, 26, 20]
+  },
+  "modules": [
+    {
+      "type": "data",
+      "uuid": "85aa1b50-3187-42b5-81e7-a79d75242d9b",
+      "version": [1, 12, 66]
+    },
+    {
+      "type": "script",
+      "language": "javascript",
+      "uuid": "ac9a2baa-958e-40dc-82e1-dc74916aded6",
+      "entry": "scripts/main.js",
+      "version": [1, 12, 66]
+    }
+  ],
+  "dependencies": [
+    {
+      "uuid": "0319ea31-7410-4887-be2d-2d52676a4a6d",
+      "version": [1, 12, 66]
+    },
+    {
+      "module_name": "@minecraft/server",
+      "version": "2.1.0"
+    },
+    {
+      "module_name": "@minecraft/server-ui",
+      "version": "2.0.0"
+    }
+  ]
+}

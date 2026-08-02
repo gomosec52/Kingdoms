@@ -1,0 +1,52 @@
+{
+  "format_version": "1.20.80",
+  "minecraft:entity": {
+    "description": {
+      "identifier": "kingdoms:flag",
+      "is_spawnable": false,
+      "is_summonable": true,
+      "is_experimental": false
+    },
+    "components": {
+      "minecraft:type_family": {
+        "family": [
+          "kingdoms_flag"
+        ]
+      },
+      "minecraft:collision_box": {
+        "width": 2.8,
+        "height": 5.0
+      },
+      "minecraft:nameable": {
+        "always_show": true,
+        "allow_name_tag_renaming": false
+      },
+      "minecraft:interact": {
+        "interactions": [
+          {
+            "interact_text": "Открыть меню"
+          }
+        ]
+      },
+      "minecraft:health": {
+        "value": 10000,
+        "max": 10000
+      },
+      "minecraft:movement": {
+        "value": 0
+      },
+      "minecraft:physics": {
+        "has_collision": true,
+        "has_gravity": false
+      },
+      "minecraft:pushable": {
+        "is_pushable": false,
+        "is_pushable_by_piston": false
+      },
+      "minecraft:knockback_resistance": {
+        "value": 1.0
+      },
+      "minecraft:fire_immune": true
+    }
+  }
+}

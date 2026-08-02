@@ -1,0 +1,39 @@
+{
+  "format_version": "1.21.90",
+  "minecraft:block": {
+    "description": {
+      "identifier": "kingdoms:winery",
+      "menu_category": {
+        "category": "construction"
+      }
+    },
+    "components": {
+      "minecraft:display_name": "Виноделие",
+      "minecraft:destructible_by_mining": {
+        "seconds_to_destroy": 4
+      },
+      "minecraft:destructible_by_explosion": {
+        "explosion_resistance": 6
+      },
+      "minecraft:geometry": "geometry.kingdoms_mint_anvil",
+      "minecraft:material_instances": {
+        "*": {
+          "texture": "kingdoms_winery",
+          "render_method": "opaque"
+        }
+      },
+      "minecraft:collision_box": {
+        "origin": [-8, 0, -8],
+        "size": [16, 16, 16]
+      },
+      "minecraft:selection_box": {
+        "origin": [-8, 0, -8],
+        "size": [16, 16, 16]
+      },
+      "minecraft:map_color": "#4a2a4a",
+      "minecraft:custom_components": [
+        "kingdoms:winery_interact"
+      ]
+    }
+  }
+}
