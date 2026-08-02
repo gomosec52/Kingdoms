@@ -14,8 +14,8 @@
         ]
       },
       "minecraft:collision_box": {
-        "width": 0.9,
-        "height": 1.8
+        "width": 2.8,
+        "height": 5.0
       },
       "minecraft:nameable": {
         "always_show": true,
@@ -46,7 +46,6 @@
       "minecraft:knockback_resistance": {
         "value": 1.0
       },
-      "minecraft:persistent": {},
       "minecraft:fire_immune": true
     }
   }

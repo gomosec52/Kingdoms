@@ -1,38 +1,38 @@
 {
   "format_version": 2,
   "header": {
-    "name": "Kingdoms Wars Behavior Pack",
-    "description": "Settlement flags, medieval kingdoms, wars, alliances, taxes, morale, and territory protection.",
-    "uuid": "7c61b36a-2ac2-4f52-b7fa-5cc8421f8c9f",
-    "version": [1, 0, 2],
+    "name": "KW Build",
+    "description": "v1.12.72 — ferment menu mug/glass fill UI",
+    "uuid": "35da6754-77fe-403f-98e0-6e6702d1c764",
+    "version": [1, 12, 72],
     "min_engine_version": [1, 26, 20]
   },
   "modules": [
     {
       "type": "data",
-      "uuid": "a5129a9d-2480-4adc-b3fd-1538cb589a46",
-      "version": [1, 0, 2]
+      "uuid": "85aa1b50-3187-42b5-81e7-a79d75242d9b",
+      "version": [1, 12, 72]
     },
     {
       "type": "script",
       "language": "javascript",
-      "uuid": "e11f5421-eef6-47cf-85cf-99c4bc723df8",
+      "uuid": "ac9a2baa-958e-40dc-82e1-dc74916aded6",
       "entry": "scripts/main.js",
-      "version": [1, 0, 2]
+      "version": [1, 12, 72]
     }
   ],
   "dependencies": [
     {
-      "uuid": "e8d3a9ca-729a-43a1-b769-1f772a8708d1",
-      "version": [1, 0, 1]
+      "uuid": "0319ea31-7410-4887-be2d-2d52676a4a6d",
+      "version": [1, 12, 72]
     },
     {
       "module_name": "@minecraft/server",
-      "version": "1.17.0"
+      "version": "2.1.0"
     },
     {
       "module_name": "@minecraft/server-ui",
-      "version": "1.3.0"
+      "version": "2.0.0"
     }
   ]
 }

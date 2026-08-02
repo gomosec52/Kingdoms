@@ -1,0 +1,21 @@
+{
+  "format_version": "1.21.40",
+  "kingdoms:spawn_guard": {
+    "sound": "stone"
+  },
+  "kingdoms:territory_border": {
+    "sound": "stone"
+  },
+  "kingdoms:mint_workshop_1": {
+    "sound": "stone"
+  },
+  "kingdoms:mint_workshop_2": {
+    "sound": "stone"
+  },
+  "kingdoms:brewery": {
+    "sound": "wood"
+  },
+  "kingdoms:winery": {
+    "sound": "wood"
+  }
+}

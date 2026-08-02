@@ -1,17 +1,17 @@
 {
   "format_version": 2,
   "header": {
-    "name": "Kingdoms Wars Resource Pack",
-    "description": "Resources for Kingdoms Wars: flag block placeholder model and textures.",
-    "uuid": "e8d3a9ca-729a-43a1-b769-1f772a8708d1",
-    "version": [1, 0, 1],
+    "name": "KW Build Resources",
+    "description": "v1.12.72 — ferment menu mug/glass fill UI",
+    "uuid": "0319ea31-7410-4887-be2d-2d52676a4a6d",
+    "version": [1, 12, 72],
     "min_engine_version": [1, 26, 20]
   },
   "modules": [
     {
       "type": "resources",
-      "uuid": "6a3b1a63-96db-40d3-a4ce-29fb9c8b98e9",
-      "version": [1, 0, 1]
+      "uuid": "c0ec327f-dd03-4e53-8b0f-7a0008b0946a",
+      "version": [1, 12, 72]
     }
   ]
 }
