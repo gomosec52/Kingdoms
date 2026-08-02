@@ -122,7 +122,9 @@ function formatCostList(cost) {
 }
 
 function getFermentFillLevel(record, now) {
-  if (!record || record.state !== "processing" || !record.startTick) return 0;
+  if (!record) return 0;
+  if (record.state === "ready") return 3;
+  if (record.state !== "processing" || !record.startTick) return 0;
   const elapsed = now - record.startTick;
   if (elapsed >= 6 * FILL_STEP_TICKS) return 3;
   if (elapsed >= 2 * FILL_STEP_TICKS) return 2;

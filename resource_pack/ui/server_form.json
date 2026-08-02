@@ -944,6 +944,9 @@
                   },
                   {
                     "brewery_layout@server_form.kingdoms_brewery_shop_content": {}
+                  },
+                  {
+                    "ferment_layout@server_form.kingdoms_ferment_content": {}
                   }
                 ]
               }
@@ -1231,7 +1234,7 @@
       },
       {
         "binding_type": "view",
-        "source_property_name": "((#title_text - 'page=brewery_shop') = #title_text)",
+        "source_property_name": "((#title_text - 'page=brewery_shop') = #title_text) and ((#title_text - 'page=ferment_work') = #title_text)",
         "target_property_name": "#visible"
       }
     ],
@@ -1911,6 +1914,404 @@
       {
         "binding_name": "#form_button_contents",
         "binding_name_override": "#collection_length"
+      }
+    ]
+  },
+  "kingdoms_ferment_mug_panel": {
+    "type": "panel",
+    "size": [
+      "100%",
+      88
+    ],
+    "controls": [
+      {
+        "beer_0": {
+          "type": "image",
+          "texture": "textures/ui/kingdoms/beer_mug_0",
+          "size": [
+            72,
+            72
+          ],
+          "anchor_from": "center",
+          "anchor_to": "center",
+          "layer": 2,
+          "bindings": [
+            {
+              "binding_name": "#title_text"
+            },
+            {
+              "binding_type": "view",
+              "source_property_name": "(not ((#title_text - 'kind=beer|') = #title_text)) and (not ((#title_text - 'fill=0|') = #title_text))",
+              "target_property_name": "#visible"
+            }
+          ]
+        }
+      },
+      {
+        "beer_1": {
+          "type": "image",
+          "texture": "textures/ui/kingdoms/beer_mug_1",
+          "size": [
+            72,
+            72
+          ],
+          "anchor_from": "center",
+          "anchor_to": "center",
+          "layer": 2,
+          "bindings": [
+            {
+              "binding_name": "#title_text"
+            },
+            {
+              "binding_type": "view",
+              "source_property_name": "(not ((#title_text - 'kind=beer|') = #title_text)) and (not ((#title_text - 'fill=1|') = #title_text))",
+              "target_property_name": "#visible"
+            }
+          ]
+        }
+      },
+      {
+        "beer_2": {
+          "type": "image",
+          "texture": "textures/ui/kingdoms/beer_mug_2",
+          "size": [
+            72,
+            72
+          ],
+          "anchor_from": "center",
+          "anchor_to": "center",
+          "layer": 2,
+          "bindings": [
+            {
+              "binding_name": "#title_text"
+            },
+            {
+              "binding_type": "view",
+              "source_property_name": "(not ((#title_text - 'kind=beer|') = #title_text)) and (not ((#title_text - 'fill=2|') = #title_text))",
+              "target_property_name": "#visible"
+            }
+          ]
+        }
+      },
+      {
+        "beer_3": {
+          "type": "image",
+          "texture": "textures/ui/kingdoms/beer_mug_3",
+          "size": [
+            72,
+            72
+          ],
+          "anchor_from": "center",
+          "anchor_to": "center",
+          "layer": 2,
+          "bindings": [
+            {
+              "binding_name": "#title_text"
+            },
+            {
+              "binding_type": "view",
+              "source_property_name": "(not ((#title_text - 'kind=beer|') = #title_text)) and (not ((#title_text - 'fill=3|') = #title_text))",
+              "target_property_name": "#visible"
+            }
+          ]
+        }
+      },
+      {
+        "wine_0": {
+          "type": "image",
+          "texture": "textures/ui/kingdoms/wine_glass_0",
+          "size": [
+            72,
+            72
+          ],
+          "anchor_from": "center",
+          "anchor_to": "center",
+          "layer": 2,
+          "bindings": [
+            {
+              "binding_name": "#title_text"
+            },
+            {
+              "binding_type": "view",
+              "source_property_name": "(not ((#title_text - 'kind=wine|') = #title_text)) and (not ((#title_text - 'fill=0|') = #title_text))",
+              "target_property_name": "#visible"
+            }
+          ]
+        }
+      },
+      {
+        "wine_1": {
+          "type": "image",
+          "texture": "textures/ui/kingdoms/wine_glass_1",
+          "size": [
+            72,
+            72
+          ],
+          "anchor_from": "center",
+          "anchor_to": "center",
+          "layer": 2,
+          "bindings": [
+            {
+              "binding_name": "#title_text"
+            },
+            {
+              "binding_type": "view",
+              "source_property_name": "(not ((#title_text - 'kind=wine|') = #title_text)) and (not ((#title_text - 'fill=1|') = #title_text))",
+              "target_property_name": "#visible"
+            }
+          ]
+        }
+      },
+      {
+        "wine_2": {
+          "type": "image",
+          "texture": "textures/ui/kingdoms/wine_glass_2",
+          "size": [
+            72,
+            72
+          ],
+          "anchor_from": "center",
+          "anchor_to": "center",
+          "layer": 2,
+          "bindings": [
+            {
+              "binding_name": "#title_text"
+            },
+            {
+              "binding_type": "view",
+              "source_property_name": "(not ((#title_text - 'kind=wine|') = #title_text)) and (not ((#title_text - 'fill=2|') = #title_text))",
+              "target_property_name": "#visible"
+            }
+          ]
+        }
+      },
+      {
+        "wine_3": {
+          "type": "image",
+          "texture": "textures/ui/kingdoms/wine_glass_3",
+          "size": [
+            72,
+            72
+          ],
+          "anchor_from": "center",
+          "anchor_to": "center",
+          "layer": 2,
+          "bindings": [
+            {
+              "binding_name": "#title_text"
+            },
+            {
+              "binding_type": "view",
+              "source_property_name": "(not ((#title_text - 'kind=wine|') = #title_text)) and (not ((#title_text - 'fill=3|') = #title_text))",
+              "target_property_name": "#visible"
+            }
+          ]
+        }
+      }
+    ]
+  },
+  "kingdoms_ferment_info_content": {
+    "type": "stack_panel",
+    "orientation": "vertical",
+    "size": [
+      "100% - 4px",
+      "100%c"
+    ],
+    "controls": [
+      {
+        "heading": {
+          "type": "label",
+          "text": "Брожение",
+          "font_size": "normal",
+          "font_scale_factor": 1.18,
+          "shadow": true,
+          "color": [
+            0.29,
+            0.13,
+            0.03
+          ],
+          "size": [
+            "100%",
+            "default"
+          ]
+        }
+      },
+      {
+        "info_text": {
+          "type": "label",
+          "text": "#form_text",
+          "font_size": "normal",
+          "font_scale_factor": 1.05,
+          "line_padding": 2,
+          "color": [
+            0.16,
+            0.08,
+            0.03
+          ],
+          "size": [
+            "100%",
+            "default"
+          ]
+        }
+      },
+      {
+        "mug@server_form.kingdoms_ferment_mug_panel": {}
+      }
+    ]
+  },
+  "kingdoms_ferment_content": {
+    "type": "stack_panel",
+    "orientation": "horizontal",
+    "size": [
+      "100%",
+      "100%"
+    ],
+    "bindings": [
+      {
+        "binding_name": "#title_text"
+      },
+      {
+        "binding_type": "view",
+        "source_property_name": "(not ((#title_text - 'page=ferment_work') = #title_text))",
+        "target_property_name": "#visible"
+      }
+    ],
+    "controls": [
+      {
+        "info_column": {
+          "type": "panel",
+          "size": [
+            235,
+            "100%"
+          ],
+          "controls": [
+            {
+              "info_back": {
+                "type": "image",
+                "texture": "textures/ui/kingdoms/info_panel",
+                "alpha": 0.92,
+                "size": [
+                  "100%",
+                  "100%"
+                ],
+                "nineslice_size": 6,
+                "layer": 1
+              }
+            },
+            {
+              "info_scroll@common.scrolling_panel": {
+                "$show_background": false,
+                "size": [
+                  "100% - 10px",
+                  "100% - 10px"
+                ],
+                "offset": [
+                  5,
+                  5
+                ],
+                "anchor_from": "top_left",
+                "anchor_to": "top_left",
+                "$scrolling_content": "server_form.kingdoms_ferment_info_content",
+                "$scroll_size": [
+                  3,
+                  "100% - 4px"
+                ],
+                "$scrolling_pane_size": [
+                  "100% - 5px",
+                  "100%"
+                ],
+                "$scrolling_pane_offset": [
+                  0,
+                  0
+                ],
+                "$scroll_bar_right_padding_size": [
+                  0,
+                  0
+                ],
+                "layer": 3
+              }
+            }
+          ]
+        }
+      },
+      {
+        "column_gap": {
+          "type": "panel",
+          "size": [
+            8,
+            "100%"
+          ]
+        }
+      },
+      {
+        "actions_column": {
+          "type": "panel",
+          "size": [
+            "fill",
+            "100%"
+          ],
+          "controls": [
+            {
+              "actions_heading": {
+                "type": "label",
+                "text": "ДЕЙСТВИЯ",
+                "font_size": "large",
+                "font_scale_factor": 0.86,
+                "shadow": true,
+                "color": [
+                  0.33,
+                  0.17,
+                  0.05
+                ],
+                "text_alignment": "center",
+                "size": [
+                  "100%",
+                  20
+                ],
+                "offset": [
+                  0,
+                  0
+                ],
+                "anchor_from": "top_middle",
+                "anchor_to": "top_middle",
+                "layer": 4
+              }
+            },
+            {
+              "button_scroll@common.scrolling_panel": {
+                "$show_background": false,
+                "size": [
+                  "100%",
+                  "100% - 25px"
+                ],
+                "offset": [
+                  0,
+                  25
+                ],
+                "anchor_from": "top_left",
+                "anchor_to": "top_left",
+                "$scrolling_content": "server_form.kingdoms_buttons_content",
+                "$scroll_size": [
+                  3,
+                  "100% - 4px"
+                ],
+                "$scrolling_pane_size": [
+                  "100% - 5px",
+                  "100%"
+                ],
+                "$scrolling_pane_offset": [
+                  0,
+                  0
+                ],
+                "$scroll_bar_right_padding_size": [
+                  0,
+                  0
+                ],
+                "layer": 4
+              }
+            }
+          ]
+        }
       }
     ]
   }
