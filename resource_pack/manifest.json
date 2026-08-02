@@ -2,9 +2,9 @@
   "format_version": 2,
   "header": {
     "name": "KW Build Resources",
-    "description": "v1.12.58 — fix brewery/winery block JSON",
+    "description": "v1.12.67 — exact v1.12.59 restore (verified working baseline)",
     "uuid": "0319ea31-7410-4887-be2d-2d52676a4a6d",
-    "version": [1, 12, 58],
+    "version": [1, 12, 67],
     "min_engine_version": [1, 26, 20]
   },
   "modules": [
