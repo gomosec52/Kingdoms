@@ -2,16 +2,16 @@
   "format_version": 2,
   "header": {
     "name": "KW Build Resources",
-    "description": "v1.12.70 — brewery block click opens ferment menu (spawn_guard pattern)",
+    "description": "v1.12.71 — brewery/winery menu via beforeEvents (passive block fix)",
     "uuid": "0319ea31-7410-4887-be2d-2d52676a4a6d",
-    "version": [1, 12, 70],
+    "version": [1, 12, 71],
     "min_engine_version": [1, 26, 20]
   },
   "modules": [
     {
       "type": "resources",
       "uuid": "c0ec327f-dd03-4e53-8b0f-7a0008b0946a",
-      "version": [1, 12, 70]
+      "version": [1, 12, 71]
     }
   ]
 }

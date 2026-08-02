@@ -355,6 +355,8 @@ bindBrewerySystem({
   getPlayerName,
   findSettlementAt,
   hasTerritoryAccess,
+  shouldBlockSpawnInteract,
+  settlementDisplayName,
   blockPosition,
   getDimensionId,
   setBlockToAir,

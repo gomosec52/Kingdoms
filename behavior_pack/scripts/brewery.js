@@ -706,15 +706,34 @@ function removeWorkshopRecordAt(block, kind) {
 export function bindBrewerySystem(bindDeps) {
   deps = bindDeps;
 
-  bindDeps.world.afterEvents.playerInteractWithBlock?.subscribe((event) => {
+  bindDeps.world.beforeEvents?.playerInteractWithBlock?.subscribe((event) => {
     const block = event.block;
     const player = event.player;
     if (!player?.isValid || !block) return;
-    if (block.typeId === BREWERY_BLOCK) {
-      bindDeps.system.run(() => handleWorkshopBlockInteract(player, block, "beer"));
-    } else if (block.typeId === WINERY_BLOCK) {
-      bindDeps.system.run(() => handleWorkshopBlockInteract(player, block, "wine"));
+    const isBrewery = block.typeId === BREWERY_BLOCK;
+    const isWinery = block.typeId === WINERY_BLOCK;
+    if (!isBrewery && !isWinery) return;
+
+    const data = bindDeps.loadData();
+    const dimensionId = bindDeps.getDimensionId(block.dimension);
+    const playerName = bindDeps.getPlayerName(player);
+
+    if (bindDeps.shouldBlockSpawnInteract?.(data, player, block.location, dimensionId)) {
+      event.cancel = true;
+      player.sendMessage("§cЗона защиты спавна: взаимодействовать с этим нельзя.");
+      return;
     }
+
+    const settlement = bindDeps.findSettlementAt(data, block.location, dimensionId);
+    if (settlement && !bindDeps.hasTerritoryAccess(data, settlement, playerName)) {
+      event.cancel = true;
+      player.sendMessage(`§cЧужая территория: ${bindDeps.settlementDisplayName(data, settlement)}. Взаимодействовать нельзя.`);
+      return;
+    }
+
+    event.cancel = true;
+    const kind = isBrewery ? "beer" : "wine";
+    bindDeps.system.run(() => handleWorkshopBlockInteract(player, block, kind));
   });
 
   bindDeps.system.runInterval(() => tickFermentWorkshops(), 40);
